@@ -1,3 +1,10 @@
+############################################################
+# module to simulate Rabi oscillations for VSi-SiC
+#
+# created: C. Bonato, 2016 (c.bonato@hw.ac.uk)
+############################################################
+
+
 import numpy as np
 import pylab as plt
 import matplotlib
@@ -8,7 +15,6 @@ reload (rabi)
 
 matplotlib.rc('xtick', labelsize=18) 
 matplotlib.rc('ytick', labelsize=18)
-#matplotlib.rc('text', usetext=True)
 
 _viridis_data = np.load ('D:/Research/bonato-lab/analysis_simulations/viridis_cmp.npy')
 viridis = ListedColormap(_viridis_data, name='viridis')
@@ -17,9 +23,15 @@ plt.register_cmap(name='viridis', cmap=viridis)
 class V1_SiC ():
 
 	def __init__(self, B_Gauss, t, T2_star = 200e-9, verbose = True):
+
+		#Zero-field splitting
 		self.ZFS = 4e6
+		# gyromagnetic ratio
 		self.g = 2*14e9
+		# magnetic field
 		self.B = B_Gauss*1e-4
+
+		# Energy levels:
 		E32m = -1.5*self.g*self.B
 		E32p = +1.5*self.g*self.B
 		E12m = self.ZFS-0.5*self.g*self.B
@@ -28,8 +40,10 @@ class V1_SiC ():
 		self.E2 = E12m
 		self.E3 = E12p
 		self.E4 = E32p
+
 		self.T2_star = T2_star
 		self.t = t
+		
 		if verbose:
 			print "### Transitions: "
 			print " 	-3/2 <--> -1/2, frq: ", abs(E12m-E32m)*1e-6, ' MHz'
