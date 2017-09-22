@@ -1,0 +1,34 @@
+ Here is the list of increments for K=1 for G=5 and F=2. The increments are over the modified Cappellaro method. In other words we have updated the phase with 0.5*arg(b_{-2^(k+1)}) for the detections in the interaction time
+ 2^k*tau  and with 0.5*arg(b_{2^k}) when the interaction time is changed from 2^k*tau to 2^(k-1)*tau. The phase is then incremented based on the measurement result according to the following lists.
+If the measurement gives u=1, with the  probability p(u=1)=(fa+fi-(fa-fi)*vis*cos(2**(K-k)phi-theta))/2, the corresponding increment in the u=1 list is used and if the measurement gives u=0, with the probability p(u=0)=1-p(u=1), then the corresponding phase in the u=0 list is used.
+The first controlled phase is set to zero and the updating is started from the second controlled phase.
+For this value of K (K=1), N=17 and the swarm optimization gives NV_H=1.832938898396727.
+
+ increments for u=1                                time (multiplied by tau)
+ 0                                                         2
+-1.677937654926609                                         2
+1.891158770624003                                          2
+1.053576027649529                                          2
+1.822138965393036                                          2
+0.4224897358186634                                         1
+-0.6771735351840502                                        1
+2.797763446211459                                          1
+-2.998058635485531                                         1
+2.495427913484939                                          1
+0.6812822263403513                                         1
+-0.2298863970872773                                        1
+
+
+increments for u=0
+0                                                           2
+1.637342257366664                                           2
+1.441172029839623                                           2
+-1.356546623586299                                          2
+1.247691663465680                                           2
+-9.6085108984705236E-002                                    1
+0.2397717224007816                                          1
+-2.781418626960850                                          1
+-0.1891815360510707                                         1
+3.056070649247218                                           1
+-2.800633217819176                                          1
+-0.3905880866928300                                         1

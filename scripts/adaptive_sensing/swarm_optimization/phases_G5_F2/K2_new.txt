@@ -1,0 +1,52 @@
+ Here is the list of increments for K=2 for G=5 and F=2. The increments are over the modified Cappellaro method. In other words we have updated the phase with 0.5*arg(b_{-2^(k+1)}) for the detections in the interaction time
+ 2^k*tau  and with 0.5*arg(b_{2^k}) when the interaction time is changed from 2^k*tau to 2^(k-1)*tau. The phase is then incremented based on the measurement result according to the following lists.
+If the measurement gives u=1, with the  probability p(u=1)=(fa+fi-(fa-fi)*vis*cos(2**(K-k)phi-theta))/2, the corresponding increment in the u=1 list is used and if the measurement gives u=0, with the probability p(u=0)=1-p(u=1), then the corresponding phase in the u=0 list is used.
+The first controlled phase is set to zero and the updating is started from the second controlled phase.
+For this value of K (K=2), N=43 and the swarm optimization gives NV_H=1.051685975862852.
+
+increments for u=1                    time (multiplied by tau)
+0                                           2^2
+1.835338077773623                           2^2
+2.084489179531990                           2^2
+1.475858376088448                           2^2
+2.152068021487482                           2^2
+-0.1071459414309532                         2
+0.3887335932578804                          2
+2.296242128252038                           2
+-2.924626466303197                          2
+6.6153149461035010E-002                     2
+0.6077180663457442                          2
+2.282854467027743                           2
+-0.7318292850460288                         1
+-6.2766829470338514E-002                    1
+-0.2280459166461419                         1
+-0.2238500727949582                         1
+0.1585164378302477                          1
+-2.848413882099443                          1
+-0.1909575365495444                         1
+-2.755645887501808                          1
+-0.2018161892860286                         1
+
+
+increments for u=0
+ 0                                            2^2
+-1.305212857952353                            2^2
+1.601242183026972                             2^2
+-0.9423363544363061                           2^2
+1.397228847738699                             2^2
+-0.3075328819340983                           2
+-8.8065734479871427E-002                      2
+0.5624526432256500                            2
+0.5059486624894443                            2
+2.812424979422545                             2
+7.3229035347909033E-002                       2
+0.3772983491485782                            2
+0.3299760835388810                            1
+-0.3480055461199423                           1
+0.3364065946041066                            1
+-7.2849437883198753E-002                      1
+-0.1616200482159864                           1
+0.1236888798968288                            1
+-4.2601384596611336E-002                      1
+0.5732928745868358                            1
+2.893009768869838                             1

@@ -1,0 +1,75 @@
+ Here is the list of increments for K=3 for G=5 and F=2. The increments are over the modified Cappellaro method. In other words we have updated the phase with 0.5*arg(b_{-2^(k+1)}) for the detections in the interaction time
+ 2^k*tau  and with 0.5*arg(b_{2^k}) when the interaction time is changed from 2^k*tau to 2^(k-1)*tau. The phase is then incremented based on the measurement result according to the following lists.
+If the measurement gives u=1, with the  probability p(u=1)=(fa+fi-(fa-fi)*vis*cos(2**(K-k)phi-theta))/2, the corresponding increment in the u=1 list is used and if 
+the measurement gives u=0, with the probability p(u=0)=1-p(u=1), then the corresponding phase in the u=0 list is used.
+The first controlled phase is set to zero and the updating is started from the second controlled phase.
+For this value of K (K=3), N=97 and the swarm optimization gives NV_H=0.5830055843403488.
+increments for u=1					time (multiplied by tau)
+0					                         2^3
+ 1.296637369310422      					 2^3
+-1.446706019532404                           2^3
+2.006278037392454                            2^3
+-1.395557703353280                           2^3
+-0.3685108244383333                          2^2
+-0.7089253805215456                          2^2
+-3.051250720684139                           2^2
+-6.3512584630655677E-002                     2^2
+-1.755035446913157                           2^2
+3.105577775785970                            2^2
+1.900571460138920                            2^2
+-5.8348450596338086E-002                      2
+-0.2982915899106775                           2
+-2.525935950599594                            2
+-0.1403226593669573                           2
+-0.2403583889920298                           2
+0.3211817125123519                            2
+-0.4776999077900528                           2
+-2.767298192458361                            2
+-0.7073825913793694                           2
+-0.2179618078110090                           1
+-8.0349094093881579E-002                      1
+-5.2521003200093563E-002                      1
+0.4067698203885444                            1
+4.4624697727245977E-002                       1
+3.9684092855486686E-002                       1
+1.249062154889746                             1
+-1.246890038972831                            1
+0.2924019382057441                            1
+-0.5593671655432306                           1
+-3.1030962164077192E-002                      1
+
+
+increments for u=0 
+ 0	                                          2^3
+2.101634647018599       					  2^3
+-0.1688089835351434                           2^3
+1.123094436688958                             2^3
+1.806152161328464                             2^3
+0.2780345670815709                            2^2
+-0.5738962141328927                           2^2
+0.1573990903712703                            2^2
+-2.7877051504649142E-002                      2^2
+-3.138071925647633                            2^2
+-0.2047640739844083                           2^2
+0.1902559168141207                            2^2
+-0.2751239405716102                           2
+4.2007369795359129E-002                       2
+0.7232750279540618                            2
+-0.6356800234707820                           2
+0.4167343884063950                            2
+3.115235596163354                             2
+-0.1353030593256386                           2
+0.3279247538715779                            2
+-2.781872898057402                            2
+0.2909890555553645                            1
+7.1217233398701119E-002                       1
+0.1328706444657204                            1
+-0.2332139320033577                           1
+0.4785199645488691                            1
+2.3533343765077319E-002                       1
+-0.4025847987048090                           1
+-2.9283955321644406E-002                      1
+-0.1443493013744308                           1
+0.3110413647558170                            1
+-0.3101524328440153                           1
+
