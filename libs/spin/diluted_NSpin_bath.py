@@ -1,4 +1,16 @@
 
+#########################################################
+# Library to simulate diluted nuclear spin baths
+# 
+# Created: 2017 
+# Cristian Bonato, c.bonato@hw.ac.uk
+# Dale Scerri, 
+#
+# Relevant Literature
+# J. Maze NJP
+# 
+#########################################################
+
 import numpy as np
 from numpy import *
 import pylab as plt
@@ -16,7 +28,7 @@ mpl.rc('xtick', labelsize=18)
 mpl.rc('ytick', labelsize=18)
 
 
-class CentralSpinExperiment ():
+class NSpinBath ():
 
 	def __init__ (self):
 
@@ -309,7 +321,7 @@ class CentralSpinExperiment ():
 		plt.title ('Dynamical Decoupling')
 		plt.show()
 
-class TimeEvol ():
+class CentralSpinExperiment ():
     
 	def __init__ (self):
 
@@ -321,6 +333,9 @@ class TimeEvol ():
 
 		# current density matrix for nuclear spin bath
 		self._curr_rho = []
+
+		# "evolution dictionary": stores data for each step
+		self._evol_dict = {}
 
 	def gaussian(self, x, mu, sig):
 		return 1./(sqrt(2.*pi)*sig)*np.exp(-np.power((x - mu)/sig, 2.)/2)
@@ -334,7 +349,8 @@ class TimeEvol ():
 		concentration 	[float]		- concnetration of nuclei with I>0
 		'''
 
-		self.exp = CentralSpinExperiment ()
+		self._curr_step = 0
+		self.exp = NSpinBath ()
 		self.Ap, self.Ao, self.Aox, self.Aoy, self.r, self.T2h, self.T2l = \
 				self.exp.generate_NSpin_distr (conc = concentration, N = nr_spins, do_sphere=True)
 		
@@ -361,6 +377,16 @@ class TimeEvol ():
 		#initial bath density matrix
 		self._curr_rho = np.eye(2**self._nr_nucl_spins)/np.trace(np.eye(2**self._nr_nucl_spins))
 
+		pd = np.real(self.get_probability_density())
+		self.values_Az_kHz = pd[0]
+		stat = self.get_overhauser_stat()
+		self._evol_dict ['0'] = {
+			#'rho': self._curr_rho,
+			'mean_OH': np.real(stat[0]),
+			'std_OH': np.real(stat[1]),
+			'prob_Az': pd[1],
+			'outcome': None,
+		}		
 
 	def _op_sd(self, Op):
 		'''
@@ -453,25 +479,37 @@ class TimeEvol ():
 
 		Output: outcome {0/1} of Ramsey experiment
 		'''
-
 		U0 = multiply(np.exp(-complex(0,1)*phi/2),self._U_op(0, tau)) - multiply(np.exp(complex(0,1)*phi/2),self._U_op(1, tau))
 		U1 = multiply(np.exp(-complex(0,1)*phi/2),self._U_op(0, tau)) + multiply(np.exp(complex(0,1)*phi/2),self._U_op(1, tau))
 		
 		#Ramsey result probabilities
 		p0 = .25*np.trace(U0.dot(self._curr_rho.dot(U0.conj().T))).real
 		p1 = .25*np.trace(U1.dot(self._curr_rho.dot(U1.conj().T))).real
-		print 'Probablity to get 0 (%): ', int(p0*100)
+		#print 'Probablity to get 0 (%): ', int(p0*100)
 
 		ms = ran.choice([1,0],p=[p1, p0])
+		print 'Ramsey outcome: ', ms
 		#evolution operator depending on Ramsey result:
 		U = multiply(np.exp(-complex(0,1)*phi/2),self._U_op(0, tau))+((-1)**(ms+1))*multiply(np.exp(complex(0,1)*phi/2),self._U_op(1, tau))
 	
 		rhoN_new = (U).dot(self._curr_rho.dot((U).conj().T))/ np.trace((U).dot(self._curr_rho.dot((U).conj().T)))
 		self._curr_rho = rhoN_new
+		
+		# update evolution dictionary
+		self._curr_step += 1
+		pd = np.real(self.get_probability_density())
+		stat = self.get_overhauser_stat()
+		self._evol_dict [str(self._curr_step)] = {
+			#'rho': self._curr_rho,
+			'mean_OH': stat[0],
+			'std_OH': stat[1],
+			'prob_Az': pd[1],
+			'outcome': ms,
+		}
 
 		return ms
 	
-	def Prob_dens(self):
+	def get_probability_density(self):
 		'''
 		(1) Calculates eigenvalues (Az) and (normalized) eigenvectors (|Az>) of the Overhauser Operator z component
 		(2) Sorts list of P(Az) = eigvec_prob[j] = Tr(|Az><Az| rho) according to sorted Az list (to plot later on)
@@ -496,44 +534,52 @@ class TimeEvol ():
 			
 		return eigvals, eigvec_prob
 	
-	
-	
-	def Nruns(self, nr_steps, phi_0, tau_0, do_plot):
-
+	def get_overhauser_stat (self, component=None):
 		'''
-		Runs full experimental sequence
+		Calculates mean and standard deviation of Overhauser field
 
 		Input:
-		nr_steps 	[integer]:	number of steps
-		tau_0 		[seconds]:	Ramsey free-evolution time
-		do_plot 	[boolean]
+		component: 1,2,3
+
+		Output:
+		mean, standard_deviation
 		'''
 
-		self.eigvals = []
-		self.eigvals_test = []
-		self.prob_dens_xaxis = []
-		self.Over_mean = [[] for j in range(3)]
-		self.Over_sd = [[] for j in range(3)]
-		self.P_Az = []
-
-		for g in range(nr_steps+1):
-
-			self.tau = tau_0 #to be optimized with adaptive protocol
-			self.phi = phi_0 #to be optimized with adaptive protocol
-
-			if (g>0):
-				outcome = self.Ramsey(self.phi, self.tau)
-				print 'Ramsey experiment  - outcome: ', outcome
-			
+		if component in [0,1,2]:
+			return self._op_mean(self._overhauser_op()[component]), self._op_sd(self._overhauser_op()[component])
+		else:
+			m = np.zeros(3)
+			s = np.zeros(3)
 			for j in range(3):
-				self.Over_mean[j].append(self._op_mean(self._overhauser_op()[j]))
-				self.Over_sd[j].append(self._op_sd(self._overhauser_op()[j]))
-			
-			self.eigvals.append(sorted(np.linalg.eig(self._curr_rho)[0],reverse=True))#sorted eigenvalues
-			
-			self.P_Az.append(self.Prob_dens()[1])
+				m[j] = np.real(self._op_mean(self._overhauser_op()[j]))
+				s[j] = np.real(self._op_sd(self._overhauser_op()[j]))
+			return m, s
 
 
+	def plot_bath_evolution (self):
+
+		y = self.values_Az_kHz
+		x = np.arange(self._curr_step+1)
+
+		[X, Y] = np.meshgrid (x,y)
+
+		# make 2D matrix with prob(Az) as function of time
+		M = np.zeros ([len(y), self._curr_step+1])
+		for j in range(self._curr_step+1):
+			M [:, j] = np.ndarray.transpose(self._evol_dict[str(j)]['prob_Az'])
+
+		plt.figure (figsize = (15, 8));
+		plt.pcolor (X, Y, M)
+		plt.xlabel ('step number', fontsize=22)
+		plt.ylabel ('Az (kHz)', fontsize=22)
+		plt.show()
+
+
+
+
+		'''
+		for j in range(nr_steps+1): 
+			self.P_Az[j]
 		if do_plot:
 		
 			ax_labels = ['x','y','z']
@@ -550,9 +596,12 @@ class TimeEvol ():
 			#Plot P(Az) = Tr(|Az><Az| rho) against corresponding eigenvalues
 			fig1 = plt.figure(figsize = (15,6))
 			ax1 = fig1.add_subplot(1, 1, 1)
-			for j in range(nr_steps+1): 
-				ax1.plot(self.Prob_dens()[0],self.P_Az[j], linewidth = 2, color=color_list[j])
-				ax1.plot(self.Prob_dens()[0],self.P_Az[j], 'o', markersize=7, color=color_list[j])
+			#P_evol = np.zeros (self._nr_nucl_spins, nr_steps+1)
+
+			#it would be nice to show a 2D plot with the evolution of the probability density over time (x axis)
+			# as a function of Az
+				ax1.plot(,self.P_Az[j], linewidth = 2, color=color_list[j])
+				ax1.plot(self.get_probability_density()[0],, 'o', markersize=7, color=color_list[j])
 
 			plt.xlabel (r'A$_z$', fontsize = 20)
 			plt.ylabel (r'P(A$_z$)', fontsize = 20)
@@ -588,7 +637,5 @@ class TimeEvol ():
 			plt.show()
 
 
-exp2 = TimeEvol()
-exp2.set_experiment(nr_spins=4)
+	'''
 
-exp2.Nruns(nr_steps=10, phi_0 = 0, tau_0=1e-6, do_plot=True)
