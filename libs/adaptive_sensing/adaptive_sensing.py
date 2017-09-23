@@ -1,3 +1,15 @@
+##########################################################################################
+#
+# Library for adaptive estimation of a constant magnetic field with high dynamic range
+#
+# Created 2014:
+# Cristian Bonato, c.bonato@hw.ac.uk
+# Machiel Blok
+#
+# Relevant Literature:
+# C. Bonato et al, Nature Nanotechnology ...
+##########################################################################################
+
 import numpy as np
 import random
 from matplotlib import rc, cm

@@ -575,67 +575,19 @@ class CentralSpinExperiment ():
 		plt.show()
 
 
+class SpinExp_cluster1 (CentralSpinExperiment):
 
+	def __init__ (self):
 
-		'''
-		for j in range(nr_steps+1): 
-			self.P_Az[j]
-		if do_plot:
-		
-			ax_labels = ['x','y','z']
+	# Pauli matrices
+	self.sx = np.array([[0,1],[1,0]])
+	self.sy = np.array([[0,-complex(0,1)],[complex(0,1),0]])
+	self.sz = np.array([[1,0],[0,-1]])
+	self.In = .5*np.array([self.sx,self.sy,self.sz])
 
-			colormap = plt.get_cmap('viridis')
-			color_list = [colormap(k) for k in np.linspace(0, 0.8, nr_steps+1)]
-			
-			#analytical values of intitial s.d. of Overhauser components to double check
-			init_over_ticks = [.5* sum(self.HFvec[j][k]**2 for j in range(self._nr_nucl_spins))**.5 \
-								for k in range(3)]
+	# current density matrix for nuclear spin bath.
+	# Now you won't keep all the elements but only the diagonal ones
+	self._curr_rho = []
 
-
-
-			#Plot P(Az) = Tr(|Az><Az| rho) against corresponding eigenvalues
-			fig1 = plt.figure(figsize = (15,6))
-			ax1 = fig1.add_subplot(1, 1, 1)
-			#P_evol = np.zeros (self._nr_nucl_spins, nr_steps+1)
-
-			#it would be nice to show a 2D plot with the evolution of the probability density over time (x axis)
-			# as a function of Az
-				ax1.plot(,self.P_Az[j], linewidth = 2, color=color_list[j])
-				ax1.plot(self.get_probability_density()[0],, 'o', markersize=7, color=color_list[j])
-
-			plt.xlabel (r'A$_z$', fontsize = 20)
-			plt.ylabel (r'P(A$_z$)', fontsize = 20)
-			plt.show()
-
-			fig2 = plt.figure(figsize = (15,6))
-			ax2 = fig2.add_subplot(1, 1, 1)
-			for j in range(nr_steps+1): 
-				ax2.plot(range(2**self._nr_nucl_spins),self.eigvals[j], linewidth = 2, color=color_list[j])
-			plt.xlabel ('nuclear spin number', fontsize = 20)
-			plt.show()
-			
-			fig3 = plt.figure(figsize = (15,6))
-			ax3 = fig3.add_subplot(1, 1, 1)
-			for j in range(3):
-				ax3.plot(range(nr_steps+1),np.divide(self.Over_sd[j],1000),
-						label=ax_labels[j]+'- component s.d.')
-			ax3.scatter(np.zeros(3), np.divide(init_over_ticks,1000), color='red',
-						label='analytical reciprocal of initial $T^*_2$')
-			plt.ylabel (r'$\sigma^{x,y,z}_{Over}$ (kHz)', fontsize=18)
-			plt.legend(fontsize=15)
-			plt.xlabel ('step nr', fontsize=18)
-
-			
-			fig4 = plt.figure(figsize = (15,6))
-			ax4 = fig4.add_subplot(1, 1, 1)
-			for j in range(3):
-				ax4.plot(range(nr_steps+1),self.Over_mean[j],
-						label=ax_labels[j]+'- component mean')
-			plt.ylabel (r'$\mu^{x,y,z}_{Over}$ (Hz)', fontsize=18)
-			plt.xlabel ('step nr', fontsize=18)
-			plt.legend(fontsize=15)
-			plt.show()
-
-
-	'''
-
+	# "evolution dictionary": stores data for each step
+	self._evol_dict = {}
