@@ -8,8 +8,8 @@ import logging, time, timeit
 
 import matplotlib.pyplot as plt
 from scipy import signal
-from analysis_simulations.libs.math import statistics as stat
-from analysis_simulations.libs.tools import toolbox
+from simulations.libs.math import statistics as stat
+from analysis.libs.tools import toolbox
 
 reload (stat)
 matplotlib.rc('xtick', labelsize=18) 

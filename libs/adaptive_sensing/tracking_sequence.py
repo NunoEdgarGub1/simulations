@@ -11,10 +11,10 @@ import re
 import matplotlib.pyplot as plt
 import inspect
 from scipy import signal
-from analysis_simulations.libs.math import statistics as stat
-from analysis_simulations.libs.tools import toolbox
-from analysis_simulations.libs.adaptive_sensing import adaptive_tracking as track_libOH
-from analysis_simulations import data_object as DO
+from simulations.libs.math import statistics as stat
+from analysis.libs.tools import toolbox
+from simulations.libs.adaptive_sensing import adaptive_tracking as track_libOH
+from tools import data_object as DO
 
 reload (stat)
 reload (track_libOH)
@@ -23,7 +23,7 @@ matplotlib.rc('xtick', labelsize=18)
 matplotlib.rc('ytick', labelsize=18)
 
 
-class Analyze (DO.DataObject):
+class Analyze (DO.DataObjectHDF5):
 
 	def __init__(self, name_tag = '', folder = 'D:/Research/WorkData/adptv_tracking_sim/'):
 		self.folder = folder
@@ -130,7 +130,7 @@ class Analyze (DO.DataObject):
 			setattr (self, k, grp2[k].value)
 
 
-class SequenceStatistics (DO.DataObject):
+class SequenceStatistics (DO.DataObjectHDF5):
 
 	def __init__ (self, folder = 'D:/Research/WorkData/adptv_tracking_sim/'):
 		self.folder = folder

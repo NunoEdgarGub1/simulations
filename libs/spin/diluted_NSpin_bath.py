@@ -174,8 +174,8 @@ class NSpinBath ():
         
 	def plot_spin_bath_info (self):
 
-		#A = (self.Ap**2+self.Ao**2)**0.5
-		#comp = (self.Aox**2+self.Aoy**2)**0.5 - np.abs(self.Ao)
+		A = (self.Ap**2+self.Ao**2)**0.5
+		comp = (self.Aox**2+self.Aoy**2)**0.5 - np.abs(self.Ao)
 		phi = np.arccos((self.Ap)/A)*180/np.pi
 		Brang = np.linspace(-2.5*2*np.sqrt(2*np.log(2))/self.T2l,2.5*2*np.sqrt(2*np.log(2))/self.T2l,max(1/self.T2l,1000))
 
@@ -377,6 +377,7 @@ class CentralSpinExperiment ():
 		#initial bath density matrix
 		self._curr_rho = np.eye(2**self._nr_nucl_spins)/np.trace(np.eye(2**self._nr_nucl_spins))
 
+		self.exp.plot_spin_bath_info()
 		pd = np.real(self.get_probability_density())
 		self.values_Az_kHz = pd[0]
 		stat = self.get_overhauser_stat()
@@ -387,6 +388,7 @@ class CentralSpinExperiment ():
 			'prob_Az': pd[1],
 			'outcome': None,
 		}		
+
 
 	def _op_sd(self, Op):
 		'''
@@ -533,6 +535,20 @@ class CentralSpinExperiment ():
 			eigvec_prob[j] = np.trace(self._curr_rho.dot(np.outer(np.conjugate(eigvecs[j]),eigvecs[j])))
 			
 		return eigvals, eigvec_prob
+
+	def get_values_Az (self):
+		return self.values_Az_kHz
+
+	def plot_curr_probability_density (self, title = ''):
+		az, pd = np.real(self.get_probability_density())
+
+		plt.figure (figsize = (10,6))
+		plt.plot (az, pd, linewidth=2, color = 'RoyalBlue')
+		plt.xlabel ('frequency hyperfine (kHz)', fontsize=18)
+		plt.ylabel ('probability', fontsize=18)
+		plt.title (title, fontsize=18)
+		plt.show()
+
 	
 	def get_overhauser_stat (self, component=None):
 		'''
@@ -574,11 +590,10 @@ class CentralSpinExperiment ():
 		plt.ylabel ('Az (kHz)', fontsize=22)
 		plt.show()
 
-
+'''
 class SpinExp_cluster1 (CentralSpinExperiment):
 
 	def __init__ (self):
-
 	# Pauli matrices
 	self.sx = np.array([[0,1],[1,0]])
 	self.sy = np.array([[0,-complex(0,1)],[complex(0,1),0]])
@@ -591,3 +606,4 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 
 	# "evolution dictionary": stores data for each step
 	self._evol_dict = {}
+'''
