@@ -837,7 +837,7 @@ class CentralSpinExperiment ():
 			sig_clus = 1
 			
 			for j in range(len(self._grp_lst)):
-				U_in_clus = [self._U_op_clus_test(j, 0, t), self._U_op_clus_test(j, 1, t)]
+				U_in_clus = [self._U_op_clus_disjoint(j, 0, t), self._U_op_clus_disjoint(j, 1, t)]
 				
 				U0_clus = multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).dot(multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]))
 				U1_clus = (multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).conj().T).dot(multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]).conj().T)
@@ -1051,7 +1051,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 			for cartm in [0,1,2])
 			for index in range(len(pair_ind))))
 		
-			Hms = Hms+Hc
+			Hms = Hms#+Hc
 
 		return Hms
 	
