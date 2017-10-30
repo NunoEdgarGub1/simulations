@@ -1115,7 +1115,8 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		ms = ran.choice([1,0],p=[p1, p0])
 		print 'Ramsey outcome: ', ms
 		
-		#Ppropagate sub density matrices based on Ramsey result. Then calculate full density matrix
+		#Ppropagate sub density matrices based on Ramsey result. 
+		#Then calculate full density matrix
 		for j in range(len(self._grp_lst)):
 			#evolution operator depending on Ramsey result:
 			U_in = [self._U_op_clus_disjoint(j, 0, tau), self._U_op_clus_disjoint(j, 1, tau)]
