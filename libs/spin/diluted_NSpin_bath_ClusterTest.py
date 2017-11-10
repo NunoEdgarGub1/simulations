@@ -912,7 +912,6 @@ class CentralSpinExperiment ():
 		plt.xlabel ('step number', fontsize=22)
 		plt.ylabel ('Az (kHz)', fontsize=22)
 		plt.colorbar(orientation='vertical')
-		plt.savefig('Please_fucking_kill_me4.pdf') 
 		plt.show()    
 
 		fig = plt.figure(figsize=(10, 5.2))
