@@ -612,11 +612,8 @@ class CentralSpinExperiment ():
 		
 		'''
 		
-		#print 'Algo start'
 		self._sorted_pairs = self._C_merit()[1]
-		#print 'sorted'
 		C = self._C_merit()[0]
-		#print C
 		self._grp_lst = [[self._sorted_pairs[j][0],self._sorted_pairs[j][1]] for j in range(len(self._sorted_pairs))]
 		ind = [[] for j in range(self._nr_nucl_spins)]
 		check_lst = []
@@ -630,9 +627,6 @@ class CentralSpinExperiment ():
 			#(2)
 			if ind[self._grp_lst[j][1]] == []:
 				ind[self._grp_lst[j][1]] = [next(index for index, value in enumerate(self._grp_lst) if self._grp_lst[j][1] in value)]
-				
-			#print self._grp_lst[j], C[j], j
-			#print ind
 		
 			#(3)
 			if (ind[self._grp_lst[j][0]] != ind[self._grp_lst[j][1]] and ind.count(ind[self._grp_lst[j][0]])+ind.count(ind[self._grp_lst[j][1]]) <= g):
@@ -640,8 +634,6 @@ class CentralSpinExperiment ():
 					if ind[itemno] == ind[self._grp_lst[j][0]] or ind[itemno] == ind[self._grp_lst[j][1]]:
 						#print ind[itemno], '-->', min(ind[self._grp_lst[j][0]],ind[self._grp_lst[j][1]])
 						ind[itemno] = min(ind[self._grp_lst[j][0]],ind[self._grp_lst[j][1]])
-			#	print 'ding ding', self._grp_lst[j], self._sorted_pairs[j], C[j], j
-			#print ind
 	
 		#(4)
 		self._grp_lst = [[] for j in range(max([ind[k][0] for k in range(len(ind))])+1)]
@@ -650,28 +642,20 @@ class CentralSpinExperiment ():
 		self._grp_lst = [x for x in self._grp_lst if x != []]
 		
 		#create new pair list
-		self._sorted_pairs_test = []
+		self._sorted_pairs = []
 
 		for k in range(len(self._grp_lst)):
 			if len(self._grp_lst[k]) > 1:
-				self._sorted_pairs_test.append(list(it.combinations(self._grp_lst[k], 2)))
+				self._sorted_pairs.append(list(it.combinations(self._grp_lst[k], 2)))
 
-		self._ind_arr = [[] for j in range(len(self._sorted_pairs_test))]
+		self._ind_arr = [[] for j in range(len(self._sorted_pairs))]
 		
-		for j in range(len(self._sorted_pairs_test)):
-			for k in range(len(self._sorted_pairs_test[j])):
-				self._ind_arr[j].append(self._sorted_pairs.index(self._sorted_pairs_test[j][k]))
-				
-		self._ind_arr_unsrt = [[] for j in range(len(self._sorted_pairs_test))]
-		
-		for j in range(len(self._sorted_pairs_test)):
-			for k in range(len(self._sorted_pairs_test[j])):
-				self._ind_arr_unsrt[j].append(self.pair_lst.index(self._sorted_pairs_test[j][k]))
+		for j in range(len(self._sorted_pairs)):
+			for k in range(len(self._sorted_pairs[j])):
+				self._ind_arr[j].append(self.pair_lst.index(self._sorted_pairs[j][k]))
 
 		#new list of sorting parameter values (not used)
 		Cmer_arr = [[C[j] for j in self._ind_arr[k]] for k in range(len(self._ind_arr))]
-		ind_test = [[self._ind_arr[k][j] for j in range(len(self._ind_arr[k]))] for k in range(len(self._ind_arr))]
-
 
 	def _op_sd(self, Op):
 		'''
@@ -912,8 +896,7 @@ class CentralSpinExperiment ():
 		plt.xlabel ('step number', fontsize=22)
 		plt.ylabel ('Az (kHz)', fontsize=22)
 		plt.colorbar(orientation='vertical')
-		plt.savefig('Please_fucking_kill_me4.pdf') 
-		plt.show()    
+		plt.show()
 
 		fig = plt.figure(figsize=(10, 5.2))
 
@@ -1064,7 +1047,6 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		plt.title ('Hahn echo')
 		plt.show()
 	
-
 	def _H_op_clus_disjoint(self, group, ms):
 		'''
 		
@@ -1089,11 +1071,9 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		if len(self._grp_lst[group])>1:
 		#for m in range(len(groups)):
 			#group = groups[m]
-			pair_ind = self._ind_arr_unsrt[group]
-			pair = self._sorted_pairs_test[group]
+			pair_ind = self._ind_arr[group]
+			pair = self._sorted_pairs[group]
 			pair_enum = list(it.combinations(range(len(self._grp_lst[group])),2))
-			
-			print pair_ind, pair, pair_enum
 			
 			#add correction terms based on self._dCmn (DOI:10.1103/PhysRevB.78.094303 Eq.A4, DOI: 10.1126/science.1131871 Suppl. Info)
 			Hc = (sum(sum(sum(self._Cmn()[pair_ind[index]][cartm][cartn]*self.In_tens_disjoint[group][pair_enum[index][0]][cartm].dot(self.In_tens_disjoint[group][pair_enum[index][1]][cartn])
@@ -1106,6 +1086,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 			for index in range(len(pair_ind))))
 		
 		return Hms+Hc #+(self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**len(self._grp_lst[group]))
+	
 
 	# Functions below not in use until we figure out how to propagate the cluster density matrices individually
 	def _U_op_clus_disjoint(self, group, ms, tau):
@@ -1190,7 +1171,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 	def TestFunction (self,tau):
 	
 		'''
-		Needs to be renormalized after eaech Ramsey.
+		Needs to be renormalized after eaech Ramser.
 		
 		Does n
 		'''
@@ -1228,19 +1209,3 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 #			'prob_Az': pd[1],
 #			'outcome': None,
 #		}
-
-
-
-
-#Fixed bugs:
-# 10/11/2017: group_algo was returning wrong values of pair indeces as it was using the unsorted pair list.
-
-#To do:
-# 10/11/2017: Find why exactly the probabilities plot P(Az) with clustering is not as smooth as the one without
-#			  Possible causes: repeated measurement backaction
-#							   considerable contribution to Ramsey signal by pairs not included in clustering
-#			  Quantify the contribution of neglected spin pairings, similar to Eq. (11) in DOI: 10.1103/PhysRevB.78.094303
-
-
-
-
