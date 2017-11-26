@@ -285,14 +285,12 @@ class NSpinBath ():
 		plt.show()
 
 	#gives Larmor vector. hf_approx condition set to normal condition before we agree if setting azx and azy is a valid approximation...
-	def larm_vec (self, hf_approx, clus):
+	def larm_vec (self, hf_approx):
 		'''
 		Calculates Larmor vectors.
 		
 		Input:
 		hf_approx	[boolean]	-high Bz field approximation: neglects Azx and Azy components
-		clus		[boolean]	-apply corrections to HF vector due to secular approximation
-								 in disjoint cluster method c.f. DOI:10.1103/PhysRevB.78.094303
 		
 		'''
 	
@@ -300,15 +298,24 @@ class NSpinBath ():
 		lar_0 = np.zeros((len(self.Ap),3))
 		
 		#gam are in rad s-1 T-1, convert to Hz T-1
+#		for f in range(len(self.Ap)):
+#			if hf_approx:
+#				lar_1[f] = (self.gam_n/(2*np.pi))*(1+self.gam_el/(self.ZFS*self.gam_n))*np.array([self.Bx,self.By,self.Bz])+np.array([0,0,0*self.Ap[f]])
+#				lar_0[f] = (self.gam_n/(2*np.pi))*(1-2*self.gam_el/(self.ZFS*self.gam_n))*np.array([self.Bx,self.By,self.Bz])
+#		
+#			else:
+#				lar_1[f] = (self.gam_n/(2*np.pi))*(1+self.gam_el/(self.ZFS*self.gam_n))*np.array([self.Bx,self.By,self.Bz])+np.array([0*self.Azx[f],0*self.Azy[f],0*self.Ap[f]])
+#				lar_0[f] = (self.gam_n/(2*np.pi))*(1-2*self.gam_el/(self.ZFS*self.gam_n))*np.array([self.Bx,self.By,self.Bz])
+
 		for f in range(len(self.Ap)):
 			if hf_approx:
-				lar_1[f] = (self.gam_n/(2*np.pi))*(1+self.gam_el/(self.ZFS*self.gam_n))*np.array([self.Bx,self.By,self.Bz])+np.array([0,0,self.Ap[f]])
-				lar_0[f] = (self.gam_n/(2*np.pi))*(1-2*self.gam_el/(self.ZFS*self.gam_n))*np.array([self.Bx,self.By,self.Bz])
+				lar_1[f] = (self.gam_n/(2*np.pi))*np.array([self.Bx,self.By,self.Bz])+np.array([0,0,self.Ap[f]])
+				lar_0[f] = (self.gam_n/(2*np.pi))*np.array([self.Bx,self.By,self.Bz])
 		
 			else:
-				lar_1[f] = (self.gam_n/(2*np.pi))*(1+self.gam_el/(self.ZFS*self.gam_n))*np.array([self.Bx,self.By,self.Bz])+np.array([self.Azx[f],self.Azy[f],self.Ap[f]])
-				lar_0[f] = (self.gam_n/(2*np.pi))*(1-2*self.gam_el/(self.ZFS*self.gam_n))*np.array([self.Bx,self.By,self.Bz])
-	
+				lar_1[f] = (self.gam_n/(2*np.pi))*np.array([self.Bx,self.By,self.Bz])+np.array([self.Azx[f],self.Azy[f],self.Ap[f]])
+				lar_0[f] = (self.gam_n/(2*np.pi))*np.array([self.Bx,self.By,self.Bz])
+
 		return lar_0, lar_1
 
 	def _set_pars (self, tau):
@@ -437,6 +444,7 @@ class CentralSpinExperiment ():
 		self.sz = np.array([[1,0],[0,-1]])
 		self.In = .5*np.array([self.sx,self.sy,self.sz])
 		self.msArr = []
+		
 
 		# current density matrix for nuclear spin bath
 		self._curr_rho = []
@@ -470,25 +478,25 @@ class CentralSpinExperiment ():
 		self.Bx, self.By, self.Bz = self.exp.set_B_Cart (Bx=0, By=0 , Bz=1)
 
 		
-		self.Larm = self.exp.larm_vec (self._hf_approx, self._clus)
+		self.Larm = self.exp.larm_vec (self._hf_approx)
 		self._nr_nucl_spins = self.exp._nr_nucl_spins
 
 		#hyperfine vector
 		self.HFvec = np.array([[self.Azx[j], self.Azy[j], self.Ap[j]] for j in range(self._nr_nucl_spins)])
 
 		#Creating 2**N * 2**N spin Pauli matrices. For full cluster only, not disjoint
-		self.In_tens = np.zeros((self._nr_nucl_spins,3,2**self._nr_nucl_spins,2**self._nr_nucl_spins),dtype=complex)
+		self.In_tens = [[] for j in range(self._nr_nucl_spins)]
 		for j in range(self._nr_nucl_spins):
 			Q1 = np.eye(2**j)
 			Q2 = np.eye(2**(self._nr_nucl_spins-(j+1)))
 
 			for k in range(3):
-				self.In_tens[j][k] = np.kron(np.kron(Q1,self.In[k]),Q2)
+				self.In_tens[j].append(np.kron(np.kron(Q1,self.In[k]),Q2))
 
 		#Run group algo for next step
 		self._group_algo()
 
-		#Creating 2**g * 2**g spin Pauli matrices. For disjoint cluster only, not disjoint
+		#Creating 2**g * 2**g spin Pauli matrices. For disjoint cluster only
 		self.In_tens_disjoint = [[[] for l in range(len(self._grp_lst[j]))] for j in range(len(self._grp_lst))]
 		for l in range(len(self._grp_lst)):
 			for j in range(len(self._grp_lst[l])):
@@ -497,6 +505,17 @@ class CentralSpinExperiment ():
 				
 				for k in range(3):
 					self.In_tens_disjoint[l][j].append(np.kron(np.kron(Q1,self.In[k]),Q2))
+					
+		#2**N * 2**N Pauli matrices based on In_tens_disjoint for checking Overhauser operator. Comment out if not checking Over op
+		self.In_tens_test = [[[] for l in range(len(self._grp_lst[j]))] for j in range(len(self._grp_lst))]
+		nr_spins_old = 0
+		for l in range(len(self._grp_lst)):
+			nr_spins_old+=int(len(self._grp_lst[l]))
+			Q1 = np.eye(2**(nr_spins_old-len(self._grp_lst[l])))
+			Q2 = np.eye(2**(self._nr_nucl_spins-(nr_spins_old)))
+			for j in range(len(self._grp_lst[l])):
+				for k in range(3):
+					self.In_tens_test[l][j].append(np.kron(np.kron(Q1,self.In_tens_disjoint[l][j][k]),Q2))
 				
 		#initial bath density matrix
 		self._curr_rho = np.eye(2**self._nr_nucl_spins)/np.trace(np.eye(2**self._nr_nucl_spins))
@@ -515,6 +534,7 @@ class CentralSpinExperiment ():
 			'mean_OH': np.real(stat[0]),
 			'std_OH': np.real(stat[1]),
 			'prob_Az': pd[1],
+			#'prob_Az_test': pd[2],
 			'outcome': None,
 		}
 
@@ -671,7 +691,11 @@ class CentralSpinExperiment ():
 		#new list of sorting parameter values (not used)
 		Cmer_arr = [[C[j] for j in self._ind_arr[k]] for k in range(len(self._ind_arr))]
 		ind_test = [[self._ind_arr[k][j] for j in range(len(self._ind_arr[k]))] for k in range(len(self._ind_arr))]
-
+		
+		print self._ind_arr_unsrt
+		print self._grp_lst
+		print [spin for group in self._grp_lst for spin in group]
+		print self.pair_lst
 
 	def _op_sd(self, Op):
 		'''
@@ -708,18 +732,65 @@ class CentralSpinExperiment ():
 		'''
 		Creates Overhauser operator
 		'''
-		
-		#if self._clus:
-		#	self._over_op = []
-		#	for j in range(3):
-		#		self._over_op.append(sum(self.HFvec[np.hstack(np.array(self._grp_lst))[k]][j]*self.In_tens[k][j] for k in range(len(np.hstack(np.array(self._grp_lst))))))
-		#	print 'Overhauser time', time.time() - startTime
 
 		self._over_op = []
-		for j in range(3):
-			self._over_op.append(sum(self.HFvec[k][j]*self.In_tens[k][j] for k in range(self._nr_nucl_spins)))
-
+		
+		HFvec_order = [[self.HFvec[k][j] for k in [spin for group in self._grp_lst for spin in group]] for j in range(3)]
+		#testHFvec1 = [self.HFvec[k][1] for k in [spin for group in self._grp_lst for spin in group]]
+		#testHFvec2 = [self.HFvec[k][2] for k in [spin for group in self._grp_lst for spin in group]]
+		
+		for j in range(3): self._over_op.append(sum(HFvec_order[j][k]*self.In_tens[k][j] for k in range(self._nr_nucl_spins)))
+		#self._over_op.append(sum(testHFvec1[k]*self.In_tens[k][1] for k in range(self._nr_nucl_spins)))
+		#self._over_op.append(sum(testHFvec2[k]*self.In_tens[k][2] for k in range(self._nr_nucl_spins)))
+		
 		return self._over_op
+		
+	def _overhauser_op_test(self):
+		'''
+		Check if _overhauser_op() gives correct output
+		Takes up significantly more memory due to In_tens_test. Comment latter out if not in use
+		'''
+		
+		self._over_op_test = []
+		
+		for g in range(len(self._grp_lst)):
+			if g==0:
+				for j in range(3):
+					self._over_op_test.append(sum(self.HFvec[self._grp_lst[g][k]][j]*self.In_tens_test[g][k][j] for k in range(len(self._grp_lst[g]))))
+				#self._over_op_test.append(sum(self.HFvec[self._grp_lst[g][k]][1]*self.In_tens_test[g][k][1] for k in range(len(self._grp_lst[g]))))
+				#self._over_op_test.append(sum(self.HFvec[self._grp_lst[g][k]][2]*self.In_tens_test[g][k][2] for k in range(len(self._grp_lst[g]))))
+			else:
+				for j in range(3): self._over_op_test[j]+=sum(self.HFvec[self._grp_lst[g][k]][j]*self.In_tens_test[g][k][j] for k in range(len(self._grp_lst[g])))
+	
+		print np.amax(np.subtract(self._overhauser_op(),self._over_op_test).real),np.amax(np.subtract(self._overhauser_op(),self._over_op_test).imag)
+	
+	def _overhauser_op_clus(self, group):
+		
+		'''
+		Creates Overhauser operator
+		'''
+		
+		self._over_op_clus = []
+
+		testHFvec0 = [self.HFvec[k][0] for k in [spin for spin in self._grp_lst[group]]]
+		testHFvec1 = [self.HFvec[k][1] for k in [spin for spin in self._grp_lst[group]]]
+		testHFvec2 = [self.HFvec[k][2] for k in [spin for spin in self._grp_lst[group]]]
+		
+		self._over_op_clus.append(sum(testHFvec0[k]*self.In_tens_disjoint[group][k][0] for k in len(self._grp_lst[group])))
+		self._over_op_clus.append(sum(testHFvec1[k]*self.In_tens_disjoint[group][k][1] for k in len(self._grp_lst[group])))
+		self._over_op_clus.append(sum(testHFvec2[k]*self.In_tens_disjoint[group][k][2] for k in len(self._grp_lst[group])))
+
+#		if self._clus:
+#			for j in range(3):
+#				self._over_op.append(sum(self.HFvec[k][j]*self.In_tens[k][j] for k in [spin for group in self._grp_lst for spin in group]))
+#
+#		else:
+#			for j in range(3):
+#				self._over_op.append(sum(self.HFvec[k][j]*self.In_tens[k][j] for k in range(self._nr_nucl_spins)))
+#
+#				print [spin for group in self._grp_lst for spin in group]
+
+		return self._over_op_clus
 		
 		
 	def _H_op(self, ms):
@@ -733,10 +804,8 @@ class CentralSpinExperiment ():
 		'''
 
 		Hmsi = []
-		for g in range(self._nr_nucl_spins):
-			Hmsi.append(sum(self.Larm[ms][g][h]*self.In_tens[g][h] for h in range(3)))
 
-		Hms = sum(Hmsi[g] for g in range(self._nr_nucl_spins))
+		Hms = sum(sum(self.Larm[ms][g][h]*self.In_tens[g][h] for h in range(3)) for g in [spin for group in self._grp_lst for spin in group])
 
 		return Hms
 	
@@ -751,29 +820,32 @@ class CentralSpinExperiment ():
 		'''
 
 		Umsi = []
+
+		testHFvec = [[self.Larm[ms][k][j] for j in range(3)] for k in [spin for group in self._grp_lst for spin in group]]
+
 		if self._hf_approx:
 			for g in range(self._nr_nucl_spins):
-				Umsi.append(np.diag(np.diag(lin.expm(-complex(0,1)*sum(self.Larm[ms][g][h]*self.In[h] for h in range(2,3)) *tau))))
+				Umsi.append(np.diag(np.diag(lin.expm(-complex(0,1)*sum(testHFvec[g][h]*self.In[h] for h in range(3)) *tau))))
 	
-			Ums = Umsi[0]
+			Ums = 1
 		
-			for g in range(1,self._nr_nucl_spins):
+			for g in range(self._nr_nucl_spins):
 				Ums = self._diag_kron(Ums, Umsi[g])
 			
 		else:
 			for g in range(self._nr_nucl_spins):
-				Umsi.append(lin.expm(-complex(0,1)*sum(self.Larm[ms][g][h]*self.In[h] for h in range(3)) *tau))
+				Umsi.append(lin.expm(-complex(0,1)*sum(testHFvec[g][h]*self.In[h] for h in range(3)) *tau))
 
-			Ums = Umsi[0]
+			Ums = 1
 			
-			for g in range(1,self._nr_nucl_spins):
+			for g in range(self._nr_nucl_spins):
 				Ums = np.kron(Ums, Umsi[g])
 
 		return Ums
-	
 
 
 	def Ramsey (self, tau, phi):
+
 		'''
 		Performs a single Ramsey experiment:
 		(1) calculates probabilities [p0, p1] to get ms=0,1
@@ -787,8 +859,6 @@ class CentralSpinExperiment ():
 		Output: outcome {0/1} of Ramsey experiment
 		'''
 		
-		#startTime = time.time()
-		
 		if self._clus:
 			U_in = [self._U_op_clus(0, tau), self._U_op_clus(1, tau)]
 		
@@ -799,7 +869,7 @@ class CentralSpinExperiment ():
 		U1 = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0]) + np.multiply(np.exp(complex(0,1)*phi/2),U_in[1])
 		
 		#Ramsey result probabilities
-		
+				
 		if self._hf_approx and not self._clus:
 			p0 = .25*sum(U0[j][j]*self._curr_rho[j][j]*np.conjugate(U0[j][j]) for j in range(2**self._nr_nucl_spins)).real
 			p1 = .25*sum(U1[j][j]*self._curr_rho[j][j]*np.conjugate(U1[j][j]) for j in range(2**self._nr_nucl_spins)).real
@@ -824,8 +894,6 @@ class CentralSpinExperiment ():
 			rhoN_new = U.dot(self._curr_rho.dot(U.conj().T))/ np.trace(U.dot(self._curr_rho.dot(U.conj().T)))
 			self._curr_rho = rhoN_new
 		
-		#print 'Elapsed time', time.time() - startTime
-		
 		self.msArr.append(ms)
 
 		# update evolution dictionary
@@ -841,6 +909,7 @@ class CentralSpinExperiment ():
 		}
 
 		return ms
+
 
 	def get_probability_density(self):
 		'''
@@ -858,7 +927,7 @@ class CentralSpinExperiment ():
 		
 		eigvals, eigvecs = np.linalg.eig(self._overhauser_op()[2])
 		eigvecs = [x for (y,x) in sorted(zip(eigvals,eigvecs), key=lambda pair: pair[0])]
-		eigval_prob = np.multiply(1e-3, sorted(eigvals))
+		eigval_prob = multiply(1e-3, sorted(eigvals))
 		
 		#Calculate Tr(|Az><Az| rho)
 		eigvec_prob = np.zeros(2**self._nr_nucl_spins,dtype=complex)
@@ -899,11 +968,12 @@ class CentralSpinExperiment ():
 
 		y = self.values_Az_kHz
 		x = np.arange(self._curr_step+1)
-
+		
 		[X, Y] = np.meshgrid (x,y)
 
 		# make 2D matrix with prob(Az) as function of time
 		M = np.zeros ([len(y), self._curr_step+1])
+
 		for j in range(self._curr_step+1):
 			M [:, j] = np.ndarray.transpose(self._evol_dict[str(j)]['prob_Az'])
 
@@ -911,8 +981,10 @@ class CentralSpinExperiment ():
 		plt.pcolor (X, Y, M)
 		plt.xlabel ('step number', fontsize=22)
 		plt.ylabel ('Az (kHz)', fontsize=22)
+		for j in y:
+			plt.axhline(j,c='r',alpha=0.1,ls=':')
 		plt.colorbar(orientation='vertical')
-		plt.show()    
+		plt.show()
 
 		fig = plt.figure(figsize=(10, 5.2))
 
@@ -982,10 +1054,12 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		
 		Hc = []
 		
+		
 		for m in range(len(groups)):
 			group = groups[m]
-			pair_ind = self._ind_arr[m]
-			pair = self._sorted_pairs[m]
+			
+			pair_ind = self._ind_arr_unsrt[m]
+ 			pair = self._sorted_pairs_test[m]
 			
 			#add correction terms based on self._dCmn (DOI:10.1103/PhysRevB.78.094303 Eq.A4, DOI: 10.1126/science.1131871 Suppl. Info)
 			Hc.append(sum(sum(sum(self._Cmn()[pair_ind[index]][cartm][cartn]*self.In_tens[pair[index][0]][cartm].dot(self.In_tens[pair[index][1]][cartn])
@@ -997,8 +1071,9 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 			for cartm in [0,1,2])
 			for index in range(len(pair_ind))))
 
-	
-		return self._H_op(ms) #+ sum(Hc[m] for m in range(len(groups))) +(self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**self._nr_nucl_spins)
+		print 'Clustered'
+
+		return self._H_op(ms) #+ sum(Hc[m] for m in range(len(groups))) #+(self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**self._nr_nucl_spins)
 			
 
 	def _U_op_clus(self, ms, tau):
@@ -1062,6 +1137,15 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		plt.legend()
 		plt.title ('Hahn echo')
 		plt.show()
+		
+		
+	def Larm_sanity(self):
+	
+		for j in range(len(self._grp_lst)):
+			print [self.Larm[1][k][0] for k in self._grp_lst[j]]
+	
+		print
+		print [self.Larm[1][k][0] for k in [spin for group in self._grp_lst for spin in group]]
 	
 
 	def _H_op_clus_disjoint(self, group, ms):
@@ -1079,20 +1163,13 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		'''
 		
 		Hmsi = []
-		
-		for j in range(len(self._grp_lst[group])):
-			Hmsi.append(sum(self.Larm[ms][self._grp_lst[group][j]][h]*self.In_tens_disjoint[group][j][h] for h in range(3)))
 
-		Hms = sum(Hmsi[j] for j in range(len(self._grp_lst[group])))
+		Hms = sum(sum(self.Larm[ms][self._grp_lst[group][j]][h]*self.In_tens_disjoint[group][j][h] for j in range(len(self._grp_lst[group]))) for h in range(3))
 		
 		if len(self._grp_lst[group])>1:
-		#for m in range(len(groups)):
-			#group = groups[m]
 			pair_ind = self._ind_arr_unsrt[group]
 			pair = self._sorted_pairs_test[group]
 			pair_enum = list(it.combinations(range(len(self._grp_lst[group])),2))
-			
-			print pair_ind, pair, pair_enum
 			
 			#add correction terms based on self._dCmn (DOI:10.1103/PhysRevB.78.094303 Eq.A4, DOI: 10.1126/science.1131871 Suppl. Info)
 			Hc = (sum(sum(sum(self._Cmn()[pair_ind[index]][cartm][cartn]*self.In_tens_disjoint[group][pair_enum[index][0]][cartm].dot(self.In_tens_disjoint[group][pair_enum[index][1]][cartn])
@@ -1104,7 +1181,8 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 			for cartm in [0,1,2])
 			for index in range(len(pair_ind))))
 		
-		return Hms+Hc #+(self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**len(self._grp_lst[group]))
+
+		return Hms #+ Hc #+(self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**len(self._grp_lst[group]))
 
 	# Functions below not in use until we figure out how to propagate the cluster density matrices individually
 	def _U_op_clus_disjoint(self, group, ms, tau):
@@ -1116,8 +1194,17 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		ms 		[0/1]		electron spin state
 		tau 	[seconds]	free-evolution time Ramsey
 		'''
-		
+
 		return lin.expm(-complex(0,1)* self._H_op_clus_disjoint(group, ms) *tau)
+	
+	def _U_op_clus_sanity(self, ms, tau):
+	
+		Utest = self._U_op_clus_disjoint(0, ms, tau)
+	
+		for j in range(1,len(self._grp_lst)):
+			Utest = np.kron(Utest, self._U_op_clus_disjoint(j, ms, tau))
+
+		return Utest
 
 
 	def Ramsey_clus_disjoint (self, tau, phi):
@@ -1134,8 +1221,6 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		Output: outcome {0/1} of Ramsey experiment
 		'''
 		
-		#startTime = time.time()
-		
 		sig = 1 #seed value for total sig
 		
 		#calculate Prod(tr(U1* U0 rho_block))
@@ -1145,30 +1230,27 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 			U0 = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0])
 			U1 = np.multiply(np.exp(complex(0,1)*phi/2),U_in[1])
 			
-			sig *= np.trace(U0.dot(self._block_rho[j].dot(U1.conj().T))).real
-		
+			sig *= np.trace(U0.dot((self._block_rho[j]/np.trace(self._block_rho[j])).dot(U1.conj().T))).real
+
 		#calculate probability given by 1 +/- Prod(tr(U1* U0 rho_block))
 		p1 = .5*(1+sig.real)
 		p0 = .5*(1-sig.real)
-		print [p0,p1]
 		ms = ran.choice([1,0],p=[p1, p0])
 		print 'Ramsey outcome: ', ms
 		
 		#Ppropagate sub density matrices based on Ramsey result. Then calculate full density matrix
 		for j in range(len(self._grp_lst)):
 			#evolution operator depending on Ramsey result:
-			U_in = [self._U_op_clus_disjoint(j, 0, tau), self._U_op_clus_disjoint(j, 1, tau)]
-			U = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0])+((-1)**(ms+1))*np.multiply(np.exp(complex(0,1)*phi/2),U_in[1])
+			U = np.multiply(np.exp(-complex(0,1)*phi/2),self._U_op_clus_disjoint(j, 0, tau))+((-1)**(ms+1))*np.multiply(np.exp(complex(0,1)*phi/2),self._U_op_clus_disjoint(j, 1, tau))
 			
-			rhoN_new = U.dot(self._block_rho[j].dot(U.conj().T))
-			self._block_rho[j] = rhoN_new
-			self._block_rho[j] = self._block_rho[j]/np.trace(self._block_rho[j])
+			self._block_rho[j] = U.dot(self._block_rho[j].dot(U.conj().T))#/np.trace(U.dot(self._block_rho[j].dot(U.conj().T)))
 			if j==0:
 				self._curr_rho = self._block_rho[j]
 			else:
 				self._curr_rho = np.kron(self._curr_rho,self._block_rho[j])
-		
-		#print 'Elapsed time', time.time() - startTime
+	
+		self._curr_rho = self._curr_rho/(np.trace(self._curr_rho).real)
+
 		self.msArr.append(ms)
 		
 		# update evolution dictionary
@@ -1180,44 +1262,78 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 			'mean_OH': stat[0],
 			'std_OH': stat[1],
 			'prob_Az': pd[1],
+			#'prob_Az_test': None,#pd[2],
 			'outcome': ms,
 		}
 		
 		return ms
-	
-	
-	def TestFunction (self,tau):
-	
+
+
+
+#   FOR DEBUGGING RAMSEY DISJOINT
+	def Ramsey_clus_disjoint_no (self, tau, phi):
 		'''
-		Needs to be renormalized after eaech Ramsey.
+		Performs a single Ramsey experiment:
+		(1) calculates probabilities [p0, p1] to get ms=0,1
+		(2) performs a measurement: returns either 0 (or 1) with probablity p0(p1)
+		(3) updates the density matrix depending on the measurement outcome in (2)
+
+		Input: 
+		phi  [radians]				: Rotation angle of the spin readout basis
+		U_in = [U(ms=0),U(ms=1)]	: input list of evol. ops. depending on whether
+
+		Output: outcome {0/1} of Ramsey experiment
+		'''
 		
-		Does n
-		'''
-	
-		P0 = 0
-		for karr in list(it.product([0,1], repeat = 2*(len(self.msArr)+1))):
-			kappa = (-1)**(sum((1-self.msArr[j]) - karr[j+1]*(1-self.msArr[j]) for j in range(len(self.msArr))))
-			kappa *= (-1)**(sum((1-self.msArr[j]) - karr[j+int(len(self.msArr))]*(1-self.msArr[j]) for j in range(len(self.msArr))))
-			print kappa
-			DummyTr = 1
-			#print karr
-			for j in range(len(self._grp_lst)):
-				U_in = [self._U_op_clus_disjoint(j, 0, tau), self._U_op_clus_disjoint(j, 1, tau)]
-				Dummy = np.eye(shape(U_in[0])[0])
-				for k in list(karr)[:int(len(list(karr))/2)]:
-					Dummy = Dummy.dot(np.array(np.matrix(U_in[0])**k).dot(np.array(np.matrix(U_in[1])**(1-k))))
-				
-				for k in list(karr)[int(len(list(karr))/2):]:
-					Dummy = Dummy.dot(np.array(np.matrix(U_in[0].conj().T)**k).dot(np.array(np.matrix(U_in[1].conj().T)**(1-k))))
-				
-				DummyTr*=np.trace(Dummy)
-	
-			P0+=.25*((-1)**(2-list(karr)[0]-list(karr)[-1]))*kappa*DummyTr*(2**-self._nr_nucl_spins)
+		#startTime = time.time()
+		
+		U_in = [self._U_op_clus_sanity(0, tau), self._U_op_clus_sanity(1, tau)]
+		
+		U0 = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0]) - np.multiply(np.exp(complex(0,1)*phi/2),U_in[1])
+		U1 = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0]) + np.multiply(np.exp(complex(0,1)*phi/2),U_in[1])
+		
+		#Ramsey result probabilities
+		
+		if self._hf_approx and not self._clus:
+			p0 = .25*sum(U0[j][j]*self._curr_rho[j][j]*np.conjugate(U0[j][j]) for j in range(2**self._nr_nucl_spins)).real
+			p1 = .25*sum(U1[j][j]*self._curr_rho[j][j]*np.conjugate(U1[j][j]) for j in range(2**self._nr_nucl_spins)).real
 
-			print P0
+		else:
+			p0 = .25*np.trace(U0.dot(self._curr_rho.dot(U0.conj().T))).real
+			p1 = .25*np.trace(U1.dot(self._curr_rho.dot(U1.conj().T))).real
 
+		ms = ran.choice([1,0],p=[p1, p0])
+		print 'Ramsey outcome: ', ms
+		
+		#evolution operator depending on Ramsey result:
+		U = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0])+((-1)**(ms+1))*np.multiply(np.exp(complex(0,1)*phi/2),U_in[1])
+		
+		if self._hf_approx and not self._clus:
+			rhoN_new = np.zeros((2**self._nr_nucl_spins,2**self._nr_nucl_spins), dtype=complex)
+			for j in range(2**self._nr_nucl_spins):
+				rhoN_new[j][j] = U[j][j]*self._curr_rho[j][j]*np.conjugate(U[j][j])
+			self._curr_rho = rhoN_new/np.trace(rhoN_new)
+		
+		else:
+			rhoN_new = U.dot(self._curr_rho.dot(U.conj().T))/ np.trace(U.dot(self._curr_rho.dot(U.conj().T)))
+			self._curr_rho = U.dot(self._curr_rho.dot(U.conj().T))/ np.trace(U.dot(self._curr_rho.dot(U.conj().T)))
+		
+		self.msArr.append(ms)
 
+		# update evolution dictionary
+		self._curr_step += 1
+		pd = np.real(self.get_probability_density())
+		stat = self.get_overhauser_stat()
+		self._evol_dict [str(self._curr_step)] = {
+			#'rho': self._curr_rho,
+			'mean_OH': stat[0],
+			'std_OH': stat[1],
+			'prob_Az': pd[1],
+			#'prob_Az_test': pd[2],
+			'outcome': ms,
+		}
 
+		return ms
 
 
 #		self._evol_dict ['0'] = {
@@ -1230,15 +1346,17 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 
 
 
-
-#Fixed bugs:
-# 10/11/2017: group_algo was returning wrong values of pair indeces as it was using the unsorted pair list.
+# 26/11/2017: Added _overhauser_op_test() method to check the overhauser operator was correct for the clustered case
+#			  Reoredered HF vector for clustered approach for the overhauser operator
+#			  No new bugs found
 
 #To do:
-# 10/11/2017: Find why exactly the probabilities plot P(Az) with clustering is not as smooth as the one without
-#			  Possible causes: repeated measurement backaction
-#							   considerable contribution to Ramsey signal by pairs not included in clustering
+# 26/11/2017: Find why exactly the probabilities plot P(Az) with clustering is not as smooth as the one without
+#			  Possible causes: Method is inadequate for multiple measurements, see Density matrix issue.pdf
+#							   Repeated measurement backaction
+#							   Considerable contribution to Ramsey signal by pairs not included in clustering
 #			  Quantify the contribution of neglected spin pairings, similar to Eq. (11) in DOI: 10.1103/PhysRevB.78.094303
+#			  Keep looking for possible bugs: Unlikely since the only possible source would be misordering the HF vectors, which was fixed
 
 
 
