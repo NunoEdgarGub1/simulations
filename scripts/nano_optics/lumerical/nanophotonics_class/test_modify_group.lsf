@@ -1,0 +1,7 @@
+
+switchtolayout;
+setnamed("cavity","dS",700e-9);
+#runsetup;
+
+#setnamed("::model::WG","wg_width",0.5e-6);
+#runsetup;

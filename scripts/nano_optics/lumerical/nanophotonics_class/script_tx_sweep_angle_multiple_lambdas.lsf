@@ -1,0 +1,24 @@
+
+n_lambda = 200;
+n_angles = 10;
+th = linspace (0, 70, n_angles);
+trx = matrix (n_angles, n_lambda);
+rx = matrix (n_angles, n_lambda);
+
+for (i=1:n_angles) {
+
+switchtolayout;
+setnamed ("source", "angle theta", th(i));
+?getnamed ("source", "angle theta");
+
+run;
+f = getdata ("Trx", "f");
+T = -transmission ("Trx");
+R = transmission ("Rx");
+
+trx (i, :) = T;
+rx (i, :) = R;
+}
+
+lambda = (c/f)*1e9;
+image (th, lambda, rx);

@@ -1,0 +1,20 @@
+
+n = 30;
+d = 1e-6*linspace (0.01, 1, n);
+p = zeros(n);
+
+for (i=1:n) {
+
+switchtolayout;
+setnamed ("source", "y", d(i));
+?i;
+
+run;
+purcell_data = getresult ("source", "purcell");
+?max(purcell_data.purcell);
+p(i)=0;
+p(i) = max(purcell_data.purcell);
+
+}
+
+plot (d*1e9, p);

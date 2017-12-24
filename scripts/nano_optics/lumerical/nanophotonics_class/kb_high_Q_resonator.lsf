@@ -1,0 +1,152 @@
+# This section defines the multi-stack cavity resonator structure
+# and calculates the theoretical Q value
+
+# define number of mirror periods in each Bragg stack
+mirror_periods = 10;
+
+# define the indices and layer thicknesses for one Bragg stack
+n0 = [2; 1];
+a = 1e-6/2/sqrt(0.5*n0(1)^2+0.5*n0(2)^2);
+d0 = [a/2;a/2];
+
+n_mirror = n0;
+d_mirror = d0;
+if(mirror_periods > 1) {
+  for(i=1:mirror_periods-1) {
+    n_mirror = [n_mirror; n0];
+    d_mirror = [d_mirror; d0];
+  }
+}
+
+# make an array of indices and an array of the corresponding
+# thicknesses along x for one Bragg stack
+n = [1;n_mirror;1];
+d = [0;d_mirror;0];
+
+# define a vector of frequencies and angle of incidence
+lambda = linspace(0.5e-6,1.5e-6,1000);
+f = c/lambda;
+n = meshgridx(n,f);
+theta = 0;
+
+# calculate reflection and transmission coefficients
+RT1 = stackrt(n,d,f);
+
+# plot theoretical reflection and transmission from one Bragg stack
+plot(lambda*1e6,RT1.Rs,RT1.Ts,"lambda (microns)","R and T","R,T from one bragg stack");
+legend("R Theory","T Theory");
+
+# define vectors of indices, layer thicknesses, frequencies
+# for cavity resonator with 2 Bragg stacks
+n = [1;n_mirror;1;n_mirror;1];
+d = [0;d_mirror;0.8e-6;d_mirror;0];
+lambda = linspace(0.9883e-6,0.9886e-6,10000);
+f = c/lambda;
+n = meshgridx(n,f);
+theta = 0;
+
+# call stack_r_t to get reflection and transmission coefficients
+# for cavity resonator
+RT2 = stackrt(n,d,f);
+
+# plot theoretical transmission and reflection of resonator
+plot(lambda*1e6,RT2.Rs,RT2.Ts,"lambda (microns)","R and T","R,T of full cavity (two stacks)");
+legend("R Theory","T Theory");
+
+# perform theoretical Q factor calculation
+p0 = findpeaks(RT2.Ts);
+f0 = f(p0);
+T_temp = (RT2.Ts) >= 0.5;
+df = abs(integrate(T_temp,1,f));
+
+
+
+# This section sets up the cavity resontaor structures,
+# runs the simulation, and gets the FDTD simulation Q factor
+
+# delete previous Bragg stack structures
+switchtolayout;
+groupscope("::model::stack_left");
+deleteall;
+groupscope("::model::stack_right");
+deleteall;
+groupscope("::model");
+
+# set up Bragg stacks
+x_span = sum(d);
+for(i=2:length(d)-1) {
+  if(n(i) > 1) {
+      start_x = -x_span/2 + sum(d(1:i));
+      addrect;
+      set("x min",start_x);
+      set("x max",start_x+d(i));
+      set("index",2);
+      set("y",0);
+      set("y span",1e-6);
+      set("name","structures");
+      if(start_x < 0){
+	addtogroup("stack_left");
+	} else{
+	addtogroup("stack_right");
+	}
+  }
+}
+
+# define mesh override area for left and right Bragg stacks 
+select("mesh_left");
+set("x min",-x_span/2+sum(d(1:2)));
+set("x max",get("x min")+(mirror_periods)*a);
+set("y",0);
+set("y span",1e-6);
+select("mesh_right");
+set("x min",-a/2-x_span/2+sum(d(1:2*mirror_periods+3)));
+set("x max",get("x min")+(mirror_periods)*a);
+set("y",0);
+set("y span",1e-6);
+
+# set override mesh dx for right mesh
+set("override x mesh",1);
+set("override y mesh",0);
+target_dx = 1e-6/20/2;
+N = round(a/target_dx);
+set("dx",a/N);
+
+# set override mesh dx for left mesh
+select("mesh_left");
+
+set("override x mesh",1);
+set("override y mesh",0);
+target_dx = 1e-6/20/2;
+N = round(a/target_dx);
+set("dx",a/N);
+
+# run simulation
+run;
+
+# run Q factor analysis script
+runanalysis;
+
+# print Q factor to script prompt
+Q=getresult("Qanalysis","Q");
+Q=Q.Q;
+?"Q FDTD: " + num2str(Q(1));
+Q_theory = f0/df;
+?"Q theory: " + num2str(Q_theory);
+
+
+
+if (0) {
+  # get simulation transmission and reflection from frequency monitors
+  # WARNING: R,T data from the frequency monitors will not be accurate in this
+  # situation because the simulation does not run long enough for the fields
+  # to decay.  For this reason, this code is commented out.
+  Tsim = transmission("T");
+  fsim = getdata("T","f");
+  Rsim = -transmission("R");
+
+  # plot simulation transmission and reflection
+  plotxy(c/f*1e6,RT2.Ts,c/f*1e6,RT2.Rs,c/fsim*1e6,Tsim,c/fsim*1e6,Rsim);
+  legend("T theory","R theory","T simulation","R simulation");
+}
+
+

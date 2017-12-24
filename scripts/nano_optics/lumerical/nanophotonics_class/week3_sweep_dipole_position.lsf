@@ -1,0 +1,16 @@
+
+K = 30;
+loc = linspace (0.2, 1.1, K);
+Pow = matrix(1,K);
+
+for (i=1:K){
+switchtolayout;
+setnamed ("source_2","y", loc(i)*1e-6);
+
+run;
+
+a = getresult ("source_2", "dipolepower");
+Pow(i) = max(a.dipolepower);
+}
+
+plot (loc, Pow);
