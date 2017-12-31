@@ -1,0 +1,19 @@
+
+n = 30;
+d = (1e-9)*linspace (500, 1500, n);
+P = matrix (n, 1000);
+
+for (i=1:n) {
+?d(i);
+switchtolayout;
+setnamed("cavity","width",d(i));
+?getnamed ("cavity","width");
+
+run;
+purcell_data = getresult ("source1", "purcell");
+purcell = purcell_data.purcell;
+P (i, :) = purcell;
+}
+
+lambda = purcell_data.lambda*1e9;
+image (d*1e6, lambda, P, "pillar width [um]", "wavelength [nm]", "Purcell factor");

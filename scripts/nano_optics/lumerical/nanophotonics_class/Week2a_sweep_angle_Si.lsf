@@ -1,0 +1,19 @@
+
+n = 15;
+th = linspace (0, 90, n);
+trx = matrix (1, n);
+
+for (i=1:n) {
+
+switchtolayout;
+setnamed ("source", "angle theta", th(i));
+?getnamed ("source", "angle theta");
+
+run;
+T = -transmission ("T");
+R = transmission ("R");
+L = 1-(R+T);
+trx (1, i) = R;
+}
+
+plot (th, trx);

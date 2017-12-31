@@ -1,0 +1,51 @@
+# This script runs the experiment and plots the results for
+# the case (1)where only the upper slit is open, the case (2)where
+# only the lower slit is open, the sum of the intensities from case
+# (1) and (2), and the case (3)where both slits are open at once.
+
+# Fill in bottom slit by changing the material
+switchtolayout;
+select("bottom_slit");
+set("material","PEC (Perfect Electrical Conductor)");
+
+# Run the simulation for case (1)
+run;
+
+# Get monitor data from the 1D monitor
+y=getdata("projection","y");
+I_top=getelectric("projection");
+
+# Switch to layout mode
+switchtolayout;
+
+# Open bottom slit and fill in top slit
+select("bottom_slit");
+set("material","etch");
+select("top_slit");
+set("material","PEC (Perfect Electrical Conductor)");
+
+# Run the simulation for case (2)
+run;
+
+# Get monitor data and plot intensity
+I_bottom=getelectric("projection");
+plot(y*1e3,I_top,I_bottom,"y (um)","Intensity");
+legend("Top slit","Bottom slit");
+
+# Switch to layout mode
+switchtolayout;
+
+# Open top slit so both slits open
+select("top_slit");
+set("material","etch");
+
+# Run the simulation for case (3)
+run;
+
+# Get monitor data and plot intensity
+I=getelectric("projection");
+plot(y*1e3,I,"y (um)","Intensity","Double slit");
+
+# Plot the incoherent result
+sum_top_bottom=I_top+I_bottom;
+plot(y*1e3,sum_top_bottom,"y (um)","Intensity","Incoherent sum of intensities");

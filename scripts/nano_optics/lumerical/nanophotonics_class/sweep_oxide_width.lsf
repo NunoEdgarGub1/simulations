@@ -1,0 +1,19 @@
+
+n = 30;
+d = (1e-9)*linspace (500, 1500, n);
+P = matrix (n, 1000);
+
+for (i=1:n) {
+
+switchtolayout;
+setnamed("cavity","unoxide_width", d(i));
+
+run;
+purcell_data = getresult ("source_1_1", "purcell");
+purcell = purcell_data.purcell;
+
+P(i, 1:1000) = purcell;
+}
+
+lambda = purcell_data.lambda*1e9;
+image (d*1e6, lambda, P, "width unoxidized region [um]", "wavelength [nm]", "Purcell factor");

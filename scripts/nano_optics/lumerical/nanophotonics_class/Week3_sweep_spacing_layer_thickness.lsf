@@ -1,0 +1,21 @@
+
+n = 50;
+d = (1e-9)*linspace (500, 2000, n);
+absorpt = matrix (n, 200);
+
+for (i=1:n) {
+?d(i);
+switchtolayout;
+setnamed("cavity","dS",d(i));
+?getnamed ("cavity","dS");
+
+run;
+f = getdata ("Trx", "f");
+T = -transmission ("Trx");
+R = transmission ("Rx");
+L = 1-(R+T);
+absorpt (i, :) = T;
+}
+
+lambda = (c/f)*1e9;
+image (d, lambda, absorpt);

@@ -1,0 +1,21 @@
+
+n = 20;
+d = (1e-9)*linspace (50, 500, n);
+absorpt = matrix (n, 50);
+
+for (i=1:n) {
+?d(i);
+switchtolayout;
+setnamed ("Si_slab", "y max", d(i));
+?getnamed ("Si_slab", "y max");
+
+run;
+f = getdata ("T", "f");
+T = -transmission ("T");
+R = transmission ("R");
+L = 1-(R+T);
+absorpt (i, :) = L;
+}
+
+lambda = (c/f)*1e9;
+image (d, lambda, absorpt);
