@@ -10,9 +10,9 @@ matplotlib.rc('xtick', labelsize=18)
 matplotlib.rc('ytick', labelsize=18)
 #matplotlib.rc('text', usetext=True)
 
-_viridis_data = np.load ('D:/Research/bonato-lab/analysis_simulations/viridis_cmp.npy')
-viridis = ListedColormap(_viridis_data, name='viridis')
-plt.register_cmap(name='viridis', cmap=viridis)
+#_viridis_data = np.load ('D:/Research/bonato-lab/analysis_simulations/viridis_cmp.npy')
+#viridis = ListedColormap(_viridis_data, name='viridis')
+#plt.register_cmap(name='viridis', cmap=viridis)
 
 class V1_SiC ():
 
