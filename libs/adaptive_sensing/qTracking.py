@@ -5,6 +5,7 @@ import matplotlib
 import os, sys
 import h5py
 import logging, time, timeit
+from importlib import reload
 
 import matplotlib.pyplot as plt
 from scipy import signal
@@ -87,7 +88,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		pass
 
 	def adptv_tracking_single_step (self, sensing_time_idx, do_debug=False, room_temp = False):
-		# I cannpot use the sensing time idx since now I'm going further than that
+		# I cannot use the sensing time idx since now I'm going further than that
 		# but the value of K defines how precise the p_k should be
 		# so I still need K, somehow
 
@@ -102,7 +103,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		m_res = self.ramsey (theta=phase_cappellaro, t = t_i*self.tau0, do_plot=do_debug)	
 		self.bayesian_update (m_n = m_res, phase_n = phase_cappellaro, t_n = t_i, do_plot=do_debug)
 		if do_debug:
-			print "Estimation step: t_units=", t_i, "    -- res:", m_res, '--- elapsed_time: ', (self.running_time -t0)*1e3, "ms"
+			print ("Estimation step: t_units=", t_i, "    -- res:", m_res, '--- elapsed_time: ', (self.running_time -t0)*1e3, "ms")
 
 		dt = t_i*self.tau0 + self.OH
 		return dt/self.tau0

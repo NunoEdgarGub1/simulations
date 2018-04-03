@@ -118,7 +118,7 @@ class NSpinBath ():
 	    
 	    if do_sphere == True:
 	        zipped = zip(r,Ap,Ao,Aox,Aoy,x,y,z)
-	        zipped.sort() # sort list as function of r
+	        zipped.sort() #sort list as a function of r
 	        zipped = zipped[0:len(r)/2] # only take half of the occurences
 	        r = np.asarray([r_s for r_s,Ap_s,Ao_s,Aox_s,Aoy_s,x_s,y_s,z_s in zipped])
 	        Ap = np.asarray([Ap_s for r_s,Ap_s,Ao_s,Aox_s,Aoy_s,x_s,y_s,z_s in zipped])
@@ -132,7 +132,7 @@ class NSpinBath ():
 	    
 	    for p in range(N):
 	        # here we choose the grid points that contain a carbon 13 spin, dependent on concentration
-	        Sel = np.where(np.random.rand(L_size/2) < conc)
+	        Sel = np.where(np.random.rand(int(L_size/2)) < conc)
 	        Ap_NV =[ Ap[u] for u in Sel]
 	        Ao_NV =[ Ao[u] for u in Sel]
 	        Aox_NV =[ Aox[u] for u in Sel]
@@ -144,8 +144,8 @@ class NSpinBath ():
 	        r_NV = [ r[u] for u in Sel]
 	        # NV_list.append(A_NV[0]) #index 0 is to get rid of outher brackets in A_NV0
 	    self._nr_nucl_spins = len(Ap_NV[0])
-	    print "Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice."
-	    print T2_h,T2_l
+	    print ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
+	    print (T2_h,T2_l)
 	    return Ap_NV[0], Ao_NV[0] , Aox_NV[0] , Aoy_NV[0] , r_NV[0] , T2_h*1e6, T2_l*1e6
 
 	def set_spin_bath (self, Ap, Ao, Aox, Aoy, T2h, T2l):
@@ -307,7 +307,7 @@ class NSpinBath ():
 				a2 = np.sin(k*theta/2.)**2
 				self.L[i, :] = np.ones(len(tau)) -2*a1*a2
 			else:
-				print "Not yet"
+				print ("Not yet")
 			plt.plot (tau, self.L[i, :])
 		plt.show()
 
@@ -490,7 +490,7 @@ class CentralSpinExperiment ():
 		#print 'Probablity to get 0 (%): ', int(p0*100)
 
 		ms = ran.choice([1,0],p=[p1, p0])
-		print 'Ramsey outcome: ', ms
+		print ('Ramsey outcome: ', ms)
 		#evolution operator depending on Ramsey result:
 		U = multiply(np.exp(-complex(0,1)*phi/2),self._U_op(0, tau))+((-1)**(ms+1))*multiply(np.exp(complex(0,1)*phi/2),self._U_op(1, tau))
 	
