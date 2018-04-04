@@ -12,7 +12,7 @@ from scipy import signal
 from simulations.libs.math import statistics as stat
 from analysis.libs.tools import toolbox
 from simulations.libs.adaptive_sensing import adaptive_tracking as adptvTrack
-from simulations.libs.spin import diluted_NSpin_bath as NSpin
+from simulations.libs.spin import diluted_NSpin_bath_py3 as NSpin
 
 reload (NSpin)
 reload (adptvTrack)
@@ -24,7 +24,7 @@ matplotlib.rc('ytick', labelsize=18)
 
 class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
-	def __init__ (self, time_interval, overhead, folder, nr_spins = 4):
+	def __init__ (self, time_interval, overhead, folder):
 		self.time_interval = time_interval
 		self._B_dict = {}
 		self.kappa = None
@@ -42,9 +42,15 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self._called_modules = ['ramsey', 'bayesian_update', 'calc_acc_phase']
 		self.folder = folder
 
+	def set_spin_bath (self, nr_spins, concentration, verbose = False):
+		
 		# Spin bath initialization
 		self.nbath = NSpin.CentralSpinExperiment()
-		self.nbath.set_experiment(nr_spins=nr_spins)
+		self.nbath.set_experiment(nr_lattice_sites=False, 
+				nr_nuclear_spins=nr_spins, concentration = concentration)
+
+		if verbose:
+			self.nbath.print_nuclear_spins()
 
 	def reset_called_modules(self):
 		self._called_modules = ['ramsey', 'bayesian_update', 'calc_acc_phase']
@@ -87,26 +93,22 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 	def calc_acc_phase (self, t_units, do_debug=False):
 		pass
 
-	def adptv_tracking_single_step (self, sensing_time_idx, do_debug=False, room_temp = False):
-		# I cannot use the sensing time idx since now I'm going further than that
-		# but the value of K defines how precise the p_k should be
-		# so I still need K, somehow
+	def adptv_tracking_single_step (self, k, M, do_debug=False):
 
-		k = self.k_array[sensing_time_idx]
 		t_i = int(2**k)
 		ttt = -2**(k+1)
 		t0 = self.running_time					
 
 		phase_cappellaro = 0.5*np.angle (self.p_k[ttt+self.points])
+		m_list = []
+		for m in range(M):
+			m_res = self.ramsey (theta=phase_cappellaro, t = t_i*self.tau0, do_plot=do_debug)
+			m_list.append(m_res)	
+			self.bayesian_update (m_n = m_res, phase_n = phase_cappellaro, t_n = t_i, do_plot=do_debug)
+			if do_debug:
+				print ("Estimation step: t_units=", t_i, "    -- res:", m_res)
 
-		m = 0
-		m_res = self.ramsey (theta=phase_cappellaro, t = t_i*self.tau0, do_plot=do_debug)	
-		self.bayesian_update (m_n = m_res, phase_n = phase_cappellaro, t_n = t_i, do_plot=do_debug)
-		if do_debug:
-			print ("Estimation step: t_units=", t_i, "    -- res:", m_res, '--- elapsed_time: ', (self.running_time -t0)*1e3, "ms")
-
-		dt = t_i*self.tau0 + self.OH
-		return dt/self.tau0
+		return m_list
 
 
 	def adaptive_tracking_estimation (self, do_plot = False, do_debug=False):

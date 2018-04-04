@@ -20,6 +20,7 @@ import operator as op
 import scipy.linalg as lin
 import scipy.spatial.distance as dst
 import numpy.random as ran
+import tabulate as tb
 
 import matplotlib as mpl
 from matplotlib import pyplot as plt
@@ -44,7 +45,14 @@ class NSpinBath ():
 	    self.prefactor = self.mu0*self.gam_el*self.gam_n/(4*np.pi)*self.hbar**2 /self.hbar/(2*np.pi) #Last /hbar/2pi is to convert from Joule to Hz
  
 
-	def generate_NSpin_distr (self, conc=0.02, N=25, do_sphere = True):
+	def generate_NSpin_distr (self, conc =0.02, Nspins = 7, do_sphere = True):
+		# this is just a quick hack, we need to put in a specific number of spins
+		N = int (((Nspins/conc+2)/2)**(1/3))
+		N = int (((Nspins/conc))**(1/3))
+		print ("Calculating with N = ", N)
+		return self.generate_NSpin_distr_latticeSites (conc=conc, N=N, do_sphere = do_sphere)
+
+	def generate_NSpin_distr_latticeSites (self, conc=0.02, N=25, do_sphere = True):
 
 	    pi = np.pi
 
@@ -118,7 +126,7 @@ class NSpinBath ():
 	    
 	    if do_sphere == True:
 	        zipped = list(zip(r,Ap,Ao,Aox,Aoy,x,y,z))
-	        zipped = sorted(zipped) #sort list as a function of r
+	        zipped.sort(key = lambda t: t[0]) #sort list as a function of r
 	        zipped = zipped[0:int(len(r)/2)] # only take half of the occurences
 	        r = np.asarray([r_s for r_s,Ap_s,Ao_s,Aox_s,Aoy_s,x_s,y_s,z_s in zipped])
 	        Ap = np.asarray([Ap_s for r_s,Ap_s,Ao_s,Aox_s,Aoy_s,x_s,y_s,z_s in zipped])
@@ -145,7 +153,8 @@ class NSpinBath ():
 	        # NV_list.append(A_NV[0]) #index 0 is to get rid of outher brackets in A_NV0
 	    self._nr_nucl_spins = len(Ap_NV[0])
 	    print ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
-	    print (T2_h,T2_l)
+	    print ("T2* -- high field: , ", int(T2_h*1e9), " ns")
+	    print ("T2* -- low field: ", int(T2_l*1e9), " ns")
 	    return Ap_NV[0], Ao_NV[0] , Aox_NV[0] , Aoy_NV[0] , r_NV[0] , T2_h*1e6, T2_l*1e6
 
 	def set_spin_bath (self, Ap, Ao, Aox, Aoy, T2h, T2l):
@@ -311,7 +320,6 @@ class NSpinBath ():
 			plt.plot (tau, self.L[i, :])
 		plt.show()
 
-
 		for i in np.arange(self._nr_nucl_spins):
 			self.L_dd = self.L_dd * self.L[i, :]
 
@@ -340,7 +348,17 @@ class CentralSpinExperiment ():
 	def gaussian(self, x, mu, sig):
 		return 1./(sqrt(2.*pi)*sig)*np.exp(-np.power((x - mu)/sig, 2.)/2)
 
-	def set_experiment(self, nr_spins, concentration = .1):   
+	def print_nuclear_spins (self):
+
+		T = [['', 'Ap (kHz)', 'Ao (kHz)', 'r (A)'], ['------', '------', '------', '------']]
+
+		for i in np.arange(self._nr_nucl_spins):
+			T.append ([i, int(self.Ap[i]*1e-2)/10, int(self.Ao[i]*1e-2)/10, int(self.r[i]*1e11)/10])
+
+		print(tb.tabulate(T, stralign='center'))
+
+
+	def set_experiment(self, nr_lattice_sites, nr_nuclear_spins = False, concentration = .1):   
 		'''
 		Sets up spin bath and external field
 
@@ -351,23 +369,21 @@ class CentralSpinExperiment ():
 
 		self._curr_step = 0
 		self.exp = NSpinBath ()
-		self.Ap, self.Ao, self.Aox, self.Aoy, self.r, self.T2h, self.T2l = \
-				self.exp.generate_NSpin_distr (conc = concentration, N = nr_spins, do_sphere=True)
-		
+		if (nr_nuclear_spins == False):
+			self.Ap, self.Ao, self.Aox, self.Aoy, self.r, self.T2h, self.T2l = \
+					self.exp.generate_NSpin_distr_latticeSites (conc = concentration, N = nr_lattice_sites, do_sphere=True)
+		elif (nr_lattice_sites == False):
+			self.Ap, self.Ao, self.Aox, self.Aoy, self.r, self.T2h, self.T2l = \
+					self.exp.generate_NSpin_distr (conc = concentration, Nspins = nr_nuclear_spins, do_sphere=True)
+		else:
+			print ("Error! You need to set eithr nr_lattice_sites or nr_nuclear_spins to False")
+
 		#modified previous code to give necessary Cartesian components of hf vector (not just Ap and Ao)
 		self.exp.set_spin_bath (self.Ap, self.Ao, self.Aox, self.Aoy, self.T2h, self.T2l)
 		self.exp.set_B_Cart (Bx=0, By=0 , Bz=1)
 		self.Larm = self.exp.larm_vec ()
 		self._nr_nucl_spins = self.exp._nr_nucl_spins
-		
-		#close_cntr = 0
-		#for j in range(self._nr_nucl_spins):
-		#	if np.sqrt(self.Aox[j]**2 + self.Aoy[j]**2 + self.Ap[j]**2) > 1e6:
-		#		self.Aox[j], self.Aoy[j], self.Ap[j] = 0, 0, 0
-		#	close_cntr +=1
-		#
-		#print '%d spins with |A| > 1MHz. Set Aoz, Aoy and Ap to 0.' %close_cntr
-
+		print ("Number of nuclear spins: ", self._nr_nucl_spins)
 		
 		#hyperfine vector
 		self.HFvec = np.array([[self.Aox[j], self.Aoy[j], self.Ap[j]] for j in range(self._nr_nucl_spins)])
@@ -589,21 +605,3 @@ class CentralSpinExperiment ():
 		plt.xlabel ('step number', fontsize=22)
 		plt.ylabel ('Az (kHz)', fontsize=22)
 		plt.show()
-
-'''
-class SpinExp_cluster1 (CentralSpinExperiment):
-
-	def __init__ (self):
-	# Pauli matrices
-	self.sx = np.array([[0,1],[1,0]])
-	self.sy = np.array([[0,-complex(0,1)],[complex(0,1),0]])
-	self.sz = np.array([[1,0],[0,-1]])
-	self.In = .5*np.array([self.sx,self.sy,self.sz])
-
-	# current density matrix for nuclear spin bath.
-	# Now you won't keep all the elements but only the diagonal ones
-	self._curr_rho = []
-
-	# "evolution dictionary": stores data for each step
-	self._evol_dict = {}
-'''

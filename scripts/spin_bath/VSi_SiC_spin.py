@@ -11,7 +11,7 @@ matplotlib.rc('ytick', labelsize=22)
 
 t = np.arange (0, .5e-6, 2.e-9)
 s = V1.V1_SiC (B_Gauss=63., t=t, T2_star = 100e-9, verbose = True)
-s.set_intensity_transitions (I_m32_m12=1., I_m12_p12=1., I_p12_p32=1.)
+s.set_intensity_transitions (I_m32_m12=0., I_m12_p12=1., I_p12_p32=0.)
 s.set_ODMR_pars (polariz_array = [1.,0.,0.,1.], ODMR_contrast_array=[1.5,1.,1.,1.5], verbose = True)
 s.set_decay (t1 = 200e-9, t2= 200e-9)
 s.rabi (f=180.4e6, Omega= 2*3.47e6, do_plot = True)

@@ -326,8 +326,9 @@ class TimeSequence_overhead (TimeSequence):
 		A = 0.5*(self.fid0 + 1.-self.fid1)
 		B = 0.5*(1.-self.fid1 - self.fid0)		
 
-		p0 = (1-A)-B*np.exp(-(t/self.T2)**2)*np.cos(self.curr_acc_phase+theta)
-		p1 = A+B*np.exp(-(t/self.T2)**2)*np.cos(self.curr_acc_phase+theta)
+		Bp = np.exp(-(t/self.T2)**2)*np.cos(self.curr_acc_phase+theta)
+		p0 = (1-A)-B*Bp
+		p1 = A+B*Bp
 		np.random.seed()
 		result = np.random.choice (2, 1, p=[p0, p1])
 		return result[0]	
