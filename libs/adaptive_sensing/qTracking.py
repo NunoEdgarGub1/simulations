@@ -205,6 +205,87 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 			plt.axis('tight')
 			plt.show()
 
+	def qTracking (self, do_plot = False, do_debug=False):
+
+		'''
+		Simulates adaptive tracking protocol
+
+		Input: do_plot [bool], do_debug [bool]
+		'''
+
+		self._called_modules.append('adaptive_tracking_estimation')
+		self.init_apriori ()
+		estim_time = 0
+		self.initialize_in_zero(do_debug=do_debug)
+		fom = 0
+		rep_idx = 0
+		est_field = 0
+		estim_time = 0
+
+		while self.running_time<self.time_interval:
+
+			fom = 100e6
+			rep_idx = 0
+			sensing_time_idx = np.mod(idx, self.N)
+			
+			t_i = int(2**(self.k_array[sensing_time_idx]))
+			BBB = []
+
+			nr_sensing_reps= int(self.G_adptv + self.F*sensing_time_idx)
+			if nr_sensing_reps<1:
+				nr_sensing_reps=1
+			while ((rep_idx < nr_sensing_reps) and (fom>0.15*self.fom_array[sensing_time_idx])):#(fom<self.fom_threshold)):
+				self.convolve_prob_distribution (t = 1*(t_i+self.OH/self.tau0), do_plot = do_debug)
+				dt = self.adptv_tracking_single_step (sensing_time_idx = sensing_time_idx, do_debug=do_debug)
+
+				fom = self.figure_of_merit_std()
+				rep_idx += 1
+
+				total_time = total_time + dt
+				estim_time = estim_time + dt
+				#BBB = np.hstack((BBB, self.curr_fB_array))
+
+			est_field = -np.angle(self.p_k[self.points-1])/(2*np.pi*self.tau0)
+			if (fom<0.15*self.fom_array[sensing_time_idx]):
+				if (sensing_time_idx >0):
+					idx=idx-1
+				else:
+					idx = 0
+			else:
+				idx +=1
+
+			self.fom.append(fom)
+			#self.est_field.append(est_field)
+			self.time_tags.append(total_time)
+			#self.field.append (np.mean(BBB))
+			#self.field_std.append(np.std(BBB))
+
+		self.prev_estim = est_field
+		self.field = np.asarray(self.field)
+		self.time_tags = np.asarray(self.time_tags)
+		#self.est_field = np.asarray(self.est_field)
+		self.fom = np.asarray(self.fom)
+		self.field_std = np.asarray(self.field_std)
+		self.time_scale = self.time_tags*self.tau0
+
+		if do_plot:
+			plt.figure(figsize=(20,6))
+			plt.subplot (2,1,1)
+			sf = (3**0.5*2**(-self.N))/(2*np.pi*self.tau0)
+			plt.plot (self.time_scale*1e3, self.est_field*1e-6, 'crimson')		
+			plt.fill_between (self.time_scale*1e3, 1e-6*(self.est_field-sf), 1e-6*(self.est_field+sf), color = 'crimson', alpha=0.3)
+			plt.plot (self.time_scale*1e3, self.est_field*1e-6, 'o', color='crimson', markersize=4)		
+			plt.fill_between (self.time_scale*1e3, 1e-6*(self.field-self.field_std), 1e-6*(self.field+self.field_std), color = 'RoyalBlue')
+			plt.xlabel ('time [msec]', fontsize=16)
+			plt.ylabel ('[MHz]', fontsize=16)
+			plt.axis('tight')
+			plt.subplot (2,1,2)
+			plt.semilogy (self.time_scale*1e3,self.fom, color='lightsteelblue', linewidth=1)
+			plt.semilogy (self.time_scale*1e3,self.fom, 'o', markersize=3, color='RoyalBlue')
+			plt.ylabel ('FOM', fontsize=16)
+			plt.axis('tight')
+			plt.show()
+
 
 	def nontracking_estimation_routine (self):
 		self._called_modules.append('nontracking_estimation_routine')
