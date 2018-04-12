@@ -9,7 +9,7 @@ import logging, time, timeit
 import matplotlib.pyplot as plt
 from scipy import signal
 from simulations.libs.math import statistics as stat
-from analysis.libs.tools import toolbox
+from importlib import reload
 
 reload (stat)
 matplotlib.rc('xtick', labelsize=18) 
@@ -137,13 +137,13 @@ class TimeSequence ():
 		'''
 
 		self.renorm_p_k()
-		y = np.fft.fftshift(np.abs(np.fft.fft(self.p_k, self.n_points))**2)
+		y = np.fft.fftshift(np.abs(np.fft.fft(self.p_k, self.discr_steps))**2)
 		p_fB = y/np.sum(np.abs(y))
 		m = np.sum(self.beta*p_fB)
 		return p_fB, m
 
 	def renorm_p_k (self):
-		self.p_k=self.p_k/(np.sum(np.abs(self.p_k)**2)**0.5)
+		self.p_k = self.p_k/(np.sum(np.abs(self.p_k)**2)**0.5)
 		self.p_k = self.p_k/(2*np.pi*np.real(self.p_k[self.points]))
 
 	def return_std (self, do_print=False):
@@ -159,7 +159,7 @@ class TimeSequence ():
 		std_H = ((Hvar**0.5)/(2*np.pi*self.tau0))
 		fom = self.figure_of_merit()
 		if do_print:
-			print "Std (Holevo): ", std_H*1e-3 , ' kHz --- fom = ', fom
+			print ("Std (Holevo): ", std_H*1e-3 , ' kHz --- fom = ', fom)
 		return  std_H, fom
 
 	def figure_of_merit (self):
@@ -274,7 +274,7 @@ class TimeSequence_overhead (TimeSequence):
 		elif os.path.exists (file_old):
 			swarm_incr_file = file_old
 		else:
-			print 'ATTENTION!!! No file found for swarm optimization...'
+			print ('ATTENTION!!! No file found for swarm optimization...')
 			do_it = False
 			
 		if do_it:
@@ -367,8 +367,8 @@ class TimeSequence_overhead (TimeSequence):
 		self.curr_fB_array = fB
 
 		if do_debug:
-			print "Check dfB (total): ", 1e-6*((self.curr_fB - fB[0])/(self.tau0*t_units+self.OH)**0.5), " MHz"
-			print "Check dfB (overhead): ", 1e-6*((self.curr_fB - fB[-1])/(self.OH)**0.5), " MHz"
+			print ("Check dfB (total): ", 1e-6*((self.curr_fB - fB[0])/(self.tau0*t_units+self.OH)**0.5), " MHz")
+			print ("Check dfB (overhead): ", 1e-6*((self.curr_fB - fB[-1])/(self.OH)**0.5), " MHz")
 
 		return np.mean(fB), self.running_time/self.tau0, t_units*self.tau0+self.OH
 
@@ -385,7 +385,7 @@ class TimeSequence_overhead (TimeSequence):
 		m_res = self.ramsey (theta=phase_cappellaro, t = t_i*self.tau0)	
 		self.bayesian_update (m_n = m_res, phase_n = phase_cappellaro, t_n = t_i, do_plot=do_debug)
 		if do_debug:
-			print "Estimation step: t_units=", t_i, "    -- res:", m_res, '--- elapsed_time: ', (self.running_time -t0)*1e3, "ms"
+			print ("Estimation step: t_units=", t_i, "    -- res:", m_res, '--- elapsed_time: ', (self.running_time -t0)*1e3, "ms")
 
 		return dt/self.tau0
 
@@ -564,7 +564,7 @@ class TimeSequence_overhead (TimeSequence):
 			plt.subplot (2,1,2)
 			plt.plot (self.time_scale*1e3, np.abs(self.est_field-self.field)*1e-6, 'royalblue')		
 			plt.show()
-			print "RMSE: ", np.mean(np.abs(self.est_field-self.field))*1e-3, ' kHz'
+			print ("RMSE: ", np.mean(np.abs(self.est_field-self.field))*1e-3, ' kHz')
 
 
 	def simulate(self, track, do_save = False, do_plot = False, kappa = None, do_debug=False):

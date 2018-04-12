@@ -155,6 +155,8 @@ class NSpinBath ():
 	    print ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
 	    print ("T2* -- high field: , ", int(T2_h*1e9), " ns")
 	    print ("T2* -- low field: ", int(T2_l*1e9), " ns")
+	    self.T2star_lowField = T2_l
+	    self.T2star_highField = T2_h
 	    return Ap_NV[0], Ao_NV[0] , Aox_NV[0] , Aoy_NV[0] , r_NV[0] , T2_h*1e6, T2_l*1e6
 
 	def set_spin_bath (self, Ap, Ao, Aox, Aoy, T2h, T2l):

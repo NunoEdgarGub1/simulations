@@ -12,9 +12,11 @@ import matplotlib.pyplot as plt
 import inspect
 from scipy import signal
 from simulations.libs.math import statistics as stat
-from analysis.libs.tools import toolbox
+from tools import toolbox_delft as toolbox
 from simulations.libs.adaptive_sensing import adaptive_tracking as track_libOH
 from tools import data_object as DO
+from importlib import reload
+
 
 reload (stat)
 reload (track_libOH)
@@ -37,12 +39,12 @@ class Analyze (DO.DataObjectHDF5):
 		ind = 0
 
 		if (len(stamps_list)==1):
-			print "Checking for files with stamp: ", stamps_list[0]
+			print ("Checking for files with stamp: ", stamps_list[0])
 			all_files = [f[:-5] for f in os.listdir(self.folder) if stamps_list[0] in f]
 			all_files.sort()
 			stamps_list = all_files
 
-			print "Nr of files found: ", len(stamps_list)
+			print ("Nr of files found: ", len(stamps_list))
 
 		self.wf_estim_rmse = np.zeros(len(stamps_list))
 		self.wf_estim_rmse_std = np.zeros(len(stamps_list))
@@ -52,7 +54,7 @@ class Analyze (DO.DataObjectHDF5):
 
 		for i in stamps_list:
 
-			print "Checking stamp: ", i
+			print ("Checking stamp: ", i)
 			analysis_dict[i] = {}
 			s.load (folder = self.folder, stamp = i)
 
@@ -193,7 +195,7 @@ class SequenceStatistics (DO.DataObjectHDF5):
 		self.N = N
 		self.set_msmnt_params (G=self.G, F=self.F, dfB=dfB, N=N, tau0=self.tau0, T2 = self.T2, fid0=self.fid0, fid1=self.fid1)
 		self._called_modules.append('automatic_set_N')
-		print "# Automatic settings: N=", self.N
+		print ("# Automatic settings: N=", self.N)
 
 	def calculate_fom_thresholds (self, alpha = 1.):
 
@@ -210,14 +212,14 @@ class SequenceStatistics (DO.DataObjectHDF5):
 			self.fom_array[n] = alpha*(2.**(-(self.N-(n+1)))/self.tau0)
 		self.auto_set = True
 		self._called_modules.append('calculate_fom_thresholds')
-		print "-----------------------------------------------"
-		print "FOM thresholds (MHz): ", self.fom_array*1e-6
+		print ("-----------------------------------------------")
+		print ("FOM thresholds (MHz): ", self.fom_array*1e-6)
 
 	def print_parameters(self):
-		print "##### Parameters:"
+		print ("##### Parameters:")
 		for k in self.__dict__.keys():
 			if ((type (self.__dict__[k]) is float) or (type (self.__dict__[k]) is int) or (type (self.__dict__[k]) is str)):
-				print ' - - ', k, ': ', self.__dict__[k]
+				print (' - - ', k, ': ', self.__dict__[k])
 
 	def __save_values(self, obj, file_handle):
 		for k in obj.__dict__.keys():
@@ -272,8 +274,8 @@ class SequenceStatistics (DO.DataObjectHDF5):
 		plt.show()
 
 		estim_var = (1./(t[-1]))*np.sum((np.abs(field[1:]-est_field[1:])**2)*(t[1:]-t[0:-1]))
-		print "Waveform estimation std: ", 1e-3*(estim_var)**0.5, ' kHz'
-		print "RMSE: ", np.mean(np.abs(field-est_field))*1e-3, ' kHz'
+		print ("Waveform estimation std: ", 1e-3*(estim_var)**0.5, ' kHz')
+		print ("RMSE: ", np.mean(np.abs(field-est_field))*1e-3, ' kHz')
 
 		plt.figure(figsize=(20,5))
 		plt.plot (t*1e3, np.abs(field-est_field)*1e-3, color='crimson', linewidth = 1)
@@ -299,7 +301,7 @@ class SequenceStatistics (DO.DataObjectHDF5):
 				mode = 'w'
 			else:
 				mode = 'r+'
-				print 'Output file already exists!'
+				print ('Output file already exists!')
 			
 			f = h5py.File(os.path.join(self.folder, fName+'.hdf5'), mode)
 			
@@ -311,7 +313,7 @@ class SequenceStatistics (DO.DataObjectHDF5):
 			
 			dig = len(str(self.reps))
 
-		print 'Repetitions: '
+		print ('Repetitions: ')
 
 		for r in np.arange(self.reps):
 			sys.stdout.write(str(r)+', ')	
@@ -354,7 +356,7 @@ class SequenceStatistics (DO.DataObjectHDF5):
 			try:
 				f.create_dataset ('fom_array', data = self.fom_array)
 			except:
-				print "fom_array not found"
+				print ("fom_array not found")
 
 			grp = f.create_group('code')
 
@@ -362,7 +364,7 @@ class SequenceStatistics (DO.DataObjectHDF5):
 				try:
 					grp.attrs[i] = inspect.getsource(getattr(T, i))
 				except:
-					print "Non-existing function: ", i
+					print ("Non-existing function: ", i)
 			f.close()
 
 	def load (self, stamp, folder):
@@ -434,7 +436,7 @@ class SequenceStatistics (DO.DataObjectHDF5):
 			ind_over = np.where(np.abs(d['set_B_field'])>24e6)
 			if (len(ind_over [0]) == 0):
 				new_reps.append(i)
-		print "Discarding out-of-bound instances. Number of usable instances:", len(new_reps),'/',len(reps)
+		print ("Discarding out-of-bound instances. Number of usable instances:", len(new_reps),'/',len(reps))
 		reps = new_reps
 		self.usable_reps = reps
 		self.reps = len(reps)
@@ -494,7 +496,7 @@ class SequenceStatistics (DO.DataObjectHDF5):
 
 			nr_occurs, bin_edges = np.histogram (self.wf_estim_std*1e-3, bins=1000)
 			bins = 0.5*(bin_edges[1:]+bin_edges[:-1])
-			print len(bins),len(nr_occurs)
+			print (len(bins),len(nr_occurs))
 			plt.figure (figsize = (20, 5))
 			plt.plot (bins, nr_occurs, 'RoyalBlue', linewidth = 2)
 			plt.plot (bins, nr_occurs, 'o', color = 'RoyalBlue', markersize = 2)
@@ -502,9 +504,9 @@ class SequenceStatistics (DO.DataObjectHDF5):
 			plt.ylabel ('fraction of occurences', fontsize=18)
 			plt.show()
 
-		print "Average waveform estimation error: ", np.mean (self.wf_estim_std*1e-3), " -- std: ", np.std(self.wf_estim_std*1e-3)
+		print ("Average waveform estimation error: ", np.mean (self.wf_estim_std*1e-3), " -- std: ", np.std(self.wf_estim_std*1e-3))
 		ind = np.where (np.abs(self.wf_estim_std-np.mean(self.wf_estim_std))<3*np.std(self.wf_estim_std))
-		print "Excluding outliers: ", np.mean (self.wf_estim_std[ind]*1e-3), " -- std: ", np.std(self.wf_estim_std[ind]*1e-3)
+		print ("Excluding outliers: ", np.mean (self.wf_estim_std[ind]*1e-3), " -- std: ", np.std(self.wf_estim_std[ind]*1e-3))
 		if self.track:		
 			return np.mean (self.wf_estim_std*1e-3), 0
 		else:

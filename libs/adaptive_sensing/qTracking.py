@@ -10,7 +10,6 @@ from importlib import reload
 import matplotlib.pyplot as plt
 from scipy import signal
 from simulations.libs.math import statistics as stat
-from analysis.libs.tools import toolbox
 from simulations.libs.adaptive_sensing import adaptive_tracking as adptvTrack
 from simulations.libs.spin import diluted_NSpin_bath_py3 as NSpin
 
@@ -48,9 +47,38 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self.nbath = NSpin.CentralSpinExperiment()
 		self.nbath.set_experiment(nr_lattice_sites=False, 
 				nr_nuclear_spins=nr_spins, concentration = concentration)
+		self.T2star = self.nbath.T2l*1e-6
+		print ("T2* at low magnetic field: ", int(self.T2star*1e10)/10)
 
 		if verbose:
 			self.nbath.print_nuclear_spins()
+
+	def initialize (self, N = 7):
+		# B_std = 1/(sqrt(2)*pi*T2_star)
+		self._dfB0 = 1./(4.442883*self.T2star)
+		print ("std fB: ", self._dfB0*1e-3, " kHz")
+
+		self.N = N
+
+		self.points = 2**(self.N+1)+3
+		self.discr_steps = 2*self.points+1
+		self.fB_max = 4.*self._dfB0
+		self.n_points = 2**(self.N+1)
+		self.beta = np.linspace (-self.fB_max, self.fB_max, self.discr_steps)
+
+		p = np.exp(-0.5*(self.beta/self._dfB0)**2)
+		p = p/(np.sum(p))
+		self.p_k = np.fft.ifftshift(np.abs(np.fft.ifft(p, self.discr_steps))**2)
+		self.renorm_p_k()
+
+		az, pd = np.real(self.nbath.get_probability_density())
+		p, m = self.return_p_fB()
+
+		print (az)
+		plt.plot (az*1e-3, pd/np.sum(pd), 'royalblue', linewidth=2)
+		plt.plot (self.beta*1e-6, p, 'crimson', linewidth = 2)
+		plt.show()
+
 
 	def reset_called_modules(self):
 		self._called_modules = ['ramsey', 'bayesian_update', 'calc_acc_phase']
@@ -86,12 +114,6 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 			plt.show()
 
 		return m
-
-	def set_magnetic_field (self, dfB):
-		self.dfB = dfB
-
-	def calc_acc_phase (self, t_units, do_debug=False):
-		pass
 
 	def adptv_tracking_single_step (self, k, M, do_debug=False):
 
@@ -364,7 +386,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 			plt.subplot (2,1,2)
 			plt.plot (self.time_scale*1e3, np.abs(self.est_field-self.field)*1e-6, 'royalblue')		
 			plt.show()
-			print "RMSE: ", np.mean(np.abs(self.est_field-self.field))*1e-3, ' kHz'
+			print ("RMSE: ", np.mean(np.abs(self.est_field-self.field))*1e-3, ' kHz')
 
 
 	def simulate(self, track, do_save = False, do_plot = False, kappa = None, do_debug=False):

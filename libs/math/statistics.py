@@ -15,7 +15,7 @@ class BootStrap ():
 			self.y = y
 			self._N = len(self.y)
 		else:
-			print 'y must be a valid array!'
+			print ('y must be a valid array!')
 
 	def run_bootstrap (self):
 
@@ -39,7 +39,7 @@ class BootStrap ():
 			self.err_std_bootstrap = np.std (self.std_B)
 
 		else:
-			print 'Unspecified input data!'
+			print ('Unspecified input data!')
 
 	def run_bootstrap_holevo (self):
 
@@ -57,14 +57,14 @@ class BootStrap ():
 			self.errH_bootstrap = np.std (self.hB)
 
 		else:
-			print 'Unspecified input data!'
+			print ('Unspecified input data!')
 
 
 
 	def print_results (self):
-		print 'Bootstrap over '+str(self.n_boots)+' resamples'
-		print 'Mean: '+str(self.mean_bootstrap)+ '  StDev: '+str(self.std_bootstrap)
-		print 'Error on StDev: '+str(self.err_std_bootstrap)
+		print ('Bootstrap over '+str(self.n_boots)+' resamples')
+		print ('Mean: '+str(self.mean_bootstrap)+ '  StDev: '+str(self.std_bootstrap))
+		print ('Error on StDev: '+str(self.err_std_bootstrap))
 
 	def histogram (self):
 		plt.figure()

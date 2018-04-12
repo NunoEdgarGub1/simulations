@@ -11,6 +11,7 @@ from matplotlib import pyplot as plt
 
 from simulations.libs.adaptive_sensing import qTracking as qtrack
 from simulations.libs.adaptive_sensing import tracking_sequence as trackSeq
+from importlib import reload
 
 reload (qtrack)
 reload (trackSeq)
@@ -36,7 +37,10 @@ fid1 = 1.
 track = True
 
 folder = 'C:/'
-exp = qtrack.TimeSequenceQ(time_interval=100e-6, overhead=0, folder=folder, nr_spins=7)
+exp = qtrack.TimeSequenceQ(time_interval=100e-6, overhead=0, folder=folder)
 
-for i in range(25):
-	exp.ramsey (t = (2**(i-1))*1e-6, theta = np.pi/2., do_plot= True)
+exp.set_spin_bath (nr_spins=5, concentration=0.01, verbose=True)
+exp.initialize()
+
+#for i in range(25):
+#	exp.ramsey (t = (2**(i-1))*1e-6, theta = np.pi/2., do_plot= True)
