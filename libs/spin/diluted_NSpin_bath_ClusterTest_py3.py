@@ -118,7 +118,7 @@ class NSpinBath ():
 	                    if r[o] != 0:
 	                        theta[o] = np.arccos(z[o]/r[o])
 	                    else:
-	                        print 'Error: nuclear spin overlapping with NV centre'
+	                        print('Error: nuclear spin overlapping with NV centre')
 	                            
 	                    #if x[o] != 0:
 	                    #    Azx[o] = Ao[o]*np.cos(phi[o])
@@ -151,7 +151,7 @@ class NSpinBath ():
 	                    if r[o] != 0:
 	                        theta[o] = np.arccos(z[o]/r[o])
 	                    else:
-	                        print 'Error: nuclear spin overlapping with NV centre' 
+	                        print('Error: nuclear spin overlapping with NV centre') 
 	                            
 	                    #if x[o] != 0:
 	                    #    Azx[o] = Ao[o]*np.cos(phi[o])
@@ -174,8 +174,8 @@ class NSpinBath ():
 	
 	    if do_sphere == True:
 	        zipped = zip(r,Ap,Ao,Axx,Ayy,Axy,Ayx,Axz,Ayz,Azx,Azy,x,y,z,theta,phi)
-	        zipped.sort() # sort list as function of r
-	        zipped = zipped[0:len(r)/2] # only take half of the occurences
+	        zipped = sorted(zipped, key=lambda r: r[0]) # sort list as function of r
+	        zipped = zipped[0:int(len(r)/2)] # only take half of the occurences
 	        r = np.asarray([r_s for r_s,Ap_s,Ao_s,Axx_s,Ayy_s,Axy_s,Ayx_s,Axz_s,Ayz_s,Azx_s,Azy_s,x_s,y_s,z_s,theta_s,phi_s in zipped])
 	        Ap = np.asarray([Ap_s for r_s,Ap_s,Ao_s,Axx_s,Ayy_s,Axy_s,Ayx_s,Axz_s,Ayz_s,Azx_s,Azy_s,x_s,y_s,z_s,theta_s,phi_s in zipped])
 	        Ao = np.asarray([Ao_s for r_s,Ap_s,Ao_s,Axx_s,Ayy_s,Axy_s,Ayx_s,Axz_s,Ayz_s,Azx_s,Azy_s,x_s,y_s,z_s,theta_s,phi_s in zipped])
@@ -195,7 +195,7 @@ class NSpinBath ():
 	    
 	    for p in range(N):
 	        # here we choose the grid points that contain a carbon 13 spin, dependent on concentration
-	        Sel = (np.array(rand.sample(range(L_size/2), N)),)#np.where(np.random.rand(L_size/2) < conc)
+	        Sel = (np.array(rand.sample(list(range(int(L_size/2))), N)),)#np.where(np.random.rand(L_size/2) < conc)
 	        #np.random.shuffle(Sel)
 	        Ap_NV =[ Ap[u] for u in Sel]
 	        Ao_NV =[ Ao[u] for u in Sel]
@@ -213,17 +213,8 @@ class NSpinBath ():
 	        r_NV = [ r[u] for u in Sel]
 	        theta_NV = [ theta[u] for u in Sel]
 	        phi_NV = [ phi[u] for u in Sel]
-	
-	        T2_h = sum(Ap_NV[0][u]**2 for u in range(len(Ap_NV[0])))**-0.5
-	        T2_l = sum(Ap_NV[0][u]**2 + Ao_NV[0][u]**2 for u in range(len(Ap_NV[0])))**-0.5
-	
 	        # NV_list.append(A_NV[0]) #index 0 is to get rid of outher brackets in A_NV0
 	    self._nr_nucl_spins = len(Ap_NV[0])
-	    print ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
-	    print ("T2* -- high field: , ", int(T2_h*1e9), " ns")
-	    print ("T2* -- low field: ", int(T2_l*1e9), " ns")
-	    self.T2star_lowField = T2_l
-	    self.T2star_highField = T2_h
 	    #print theta_NV[0]
 	    #print r_NV
 	
@@ -237,7 +228,7 @@ class NSpinBath ():
 
             
 	    else:
-	        pair_lst = list(it.combinations(range(self._nr_nucl_spins), 2))
+	        pair_lst = list(it.combinations(list(range(self._nr_nucl_spins)), 2))
 	        r_ij_C = np.zeros(len(pair_lst)) #length is nC2, n = #nuc spins
 	        theta_ij_C = np.zeros(len(pair_lst)) #length is nC2, n = #nuc spins
 	        phi_ij_C = np.zeros(len(pair_lst)) #length is nC2, n = #nuc spins
@@ -258,12 +249,12 @@ class NSpinBath ():
 	            if r_ij_C[j] != 0:
 	                theta_ij_C[j] = np.arccos(r_ij[2]/r_ij_C[j])
 	            else:
-	                print 'Error: %d nuclear spin pair overlapping'%j
+	                print('Error: %d nuclear spin pair overlapping'%j)
 
 	        geom_lst = [r_ij_C , theta_ij_C , phi_ij_C] #all parameters to calculate nuclear bath couplings
 	        dC_lst = [[Axx_NV[0],Axy_NV[0],Axz_NV[0]],[Ayx_NV[0],Ayy_NV[0],Ayz_NV[0]]] #additional hf values to calculate dC 
 
-	    print "Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice."
+	    print("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
 	    return Ap_NV[0], Ao_NV[0] , Azx_NV[0] , Azy_NV[0] , r_NV[0] , pair_lst , geom_lst , dC_lst
 
 	def set_spin_bath (self, Ap, Ao, Azx, Azy):
@@ -434,7 +425,7 @@ class NSpinBath ():
 				a2 = np.sin(k*theta/2.)**2
 				self.L[i, :] = np.ones(len(tau)) -2*a1*a2
 			else:
-				print "Not yet"
+				print("Not yet")
 			plt.plot (tau, self.L[i, :])
 		plt.show()
 
@@ -705,9 +696,9 @@ class CentralSpinExperiment ():
 		Cmer_arr = [[C[j] for j in self._ind_arr[k]] for k in range(len(self._ind_arr))]
 		ind_test = [[self._ind_arr[k][j] for j in range(len(self._ind_arr[k]))] for k in range(len(self._ind_arr))]
 		
-		print 'unsorted index array', self._ind_arr_unsrt
-		print 'grouped', self._grp_lst
-		print 'nuc-nuc coupling strength', Cmer_arr
+		print('unsorted index array', self._ind_arr_unsrt)
+		print('grouped', self._grp_lst)
+		print('nuc-nuc coupling strength', Cmer_arr)
 			
 
 
@@ -775,8 +766,8 @@ class CentralSpinExperiment ():
 			else:
 				for j in range(3): self._over_op_test[j]+=sum(self.HFvec[self._grp_lst[g][k]][j]*self.In_tens_test[g][k][j] for k in range(len(self._grp_lst[g])))
 	
-		print np.amax(np.subtract(self._overhauser_op(),self._over_op_test).real),np.amax(np.subtract(self._overhauser_op(),self._over_op_test).imag)
-		print [k for k in [spin for group in self._grp_lst for spin in group]]
+		print(np.amax(np.subtract(self._overhauser_op(),self._over_op_test).real),np.amax(np.subtract(self._overhauser_op(),self._over_op_test).imag))
+		print([k for k in [spin for group in self._grp_lst for spin in group]])
 
 
 	def _H_op_ind(self, ms):
@@ -950,7 +941,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		self.arr_test = []
 		self.arr_test_clus = []
 		
-		print self._grp_lst
+		print(self._grp_lst)
 		
 		for t in tauarr:
 		
@@ -982,8 +973,8 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		if do_compare:
 			plt.plot (tauarr, self.arr_test, 'RoyalBlue', label='Independent')
 			plt.plot (tauarr, self.arr_test, 'o',ms=3)
-		plt.plot (tauarr, self.arr_test_clus, 'Red', label='Interacting')
-		plt.plot (tauarr, self.arr_test_clus, 'o',ms=3)
+		#plt.plot (tauarr, self.arr_test_clus, 'Red', label='Interacting')
+		#plt.plot (tauarr, self.arr_test_clus, 'o',ms=3)
 		plt.legend(fontsize=15)
 		plt.title ('Hahn echo')
 		plt.show()
@@ -1005,7 +996,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		
 		pair_ind = self._ind_arr_unsrt[group]
 		pair = self._sorted_pairs_test[group]
-		pair_enum = list(it.combinations(range(len(self._grp_lst[group])),2))
+		pair_enum = list(it.combinations(list(range(len(self._grp_lst[group]))),2))
 		
 		Hmsi = []
 		
@@ -1083,7 +1074,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		p0 = round(.5*(1-sig.real),5)
 		
 		ms = ran.choice([1,0],p=[p1, p0])
-		print 'Ramsey outcome: ', ms
+		print('Ramsey outcome: ', ms)
 		
 		#Propagate sub density matrices based on Ramsey result. Then calculate full density matrix
 		for j in range(len(self._grp_lst)):
