@@ -53,6 +53,14 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		if verbose:
 			self.nbath.print_nuclear_spins()
 
+	def set_msmnt_params (self, G, F, tau0=20e-9, fid0=1., fid1=1.):
+		self.fid0 = fid0
+		self.fid1 = fid1
+		self.F = F
+		self.G = G
+		self.tau0 = tau0
+
+
 	def initialize (self, N = 7):
 		# B_std = 1/(sqrt(2)*pi*T2_star)
 		self._dfB0 = 1./(4.442883*self.T2star)
@@ -63,6 +71,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self.points = 2**(self.N+1)+3
 		self.discr_steps = 2*self.points+1
 		self.fB_max = 4.*self._dfB0
+		self.tp0 = 1./(2*self.fB_max)
 		self.n_points = 2**(self.N+1)
 		self.beta = np.linspace (-self.fB_max, self.fB_max, self.discr_steps)
 
@@ -71,14 +80,40 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self.p_k = np.fft.ifftshift(np.abs(np.fft.ifft(p, self.discr_steps))**2)
 		self.renorm_p_k()
 
-		az, pd = np.real(self.nbath.get_probability_density())
 		p, m = self.return_p_fB()
-
-		print (az)
-		plt.plot (az*1e-3, pd/np.sum(pd), 'royalblue', linewidth=2)
+		h, az = self.nbath.get_histogram_Az(nbins = 100)
+		plt.plot (az*1e-3, h/np.sum(h), color='royalblue')
 		plt.plot (self.beta*1e-6, p, 'crimson', linewidth = 2)
 		plt.show()
 
+		#self.p_k[self.points] = 0
+		plt.figure(figsize=(12,6))
+		plt.plot (np.real(self.p_k), 'crimson')
+		plt.plot (np.imag(self.p_k), 'RoyalBlue')
+		plt.axis([200, 300, 0, 0.1])
+		plt.xlabel ('p_k', fontsize = 18)
+		plt.show()
+
+		#opt_k = self.find_optimal_k()
+		#print ("Optimal k: ", opt_k)
+
+	def return_std (self, verbose=False):
+
+		'''
+		Returns:
+		std_H 		standard deviation for the frequency f_B (calculated from p_{-1})
+		fom 		figure of merit	
+		'''
+
+		self.renorm_p_k()
+		print ("|p_(-1)| = ", np.abs(self.p_k[self.points-1]))
+		Hvar = (2*np.pi*np.abs(self.p_k[self.points-1]))**(-2)-1
+		std_H = ((Hvar**0.5)/(16*np.pi*self.tp0))
+		print ("tp0 = ", self.tp0*1e9, ' ns')
+		#fom = self.figure_of_merit()
+		if verbose:
+			print ("Std (Holevo): ", std_H*1e-3 , ' kHz')
+		return  std_H, 0
 
 	def reset_called_modules(self):
 		self._called_modules = ['ramsey', 'bayesian_update', 'calc_acc_phase']
@@ -115,6 +150,11 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
 		return m
 
+	def find_optimal_k (self):
+		width, fom = self.return_std (verbose=True)
+		opt_k = np.round(np.log(1/(width*self.tau0))/np.log(2))
+		return opt_k
+
 	def adptv_tracking_single_step (self, k, M, do_debug=False):
 
 		t_i = int(2**k)
@@ -133,100 +173,6 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		return m_list
 
 
-	def adaptive_tracking_estimation (self, do_plot = False, do_debug=False):
-
-		'''
-		Simulates adaptive tracking protocol
-
-		Input: do_plot [bool], do_debug [bool]
-		'''
-
-		self._called_modules.append('adaptive_tracking_estimation')
-		fom = 1e12
-		idx = 0
-		total_time = 0
-		self.field = []
-		self.field_std = []
-		self.time_tags = []
-		self.fom = []
-		self.est_field = []
-		self.prev_estim = self.curr_fB
-		rep_array = np.arange(self.nr_sensing_reps)
-		self.k_array = self.K-np.arange(self.K+1)
-		sigma_reps_idx = 0
-
-		self.init_apriori ()
-		estim_time = 0
-		self.initialize_in_zero(do_debug=do_debug)
-		fom = 0
-		rep_idx = 0
-		est_field = 0
-		estim_time = 0
-
-		while self.running_time<self.time_interval:
-
-			fom = 100e6
-			rep_idx = 0
-			sensing_time_idx = np.mod(idx, self.N)
-			
-			t_i = int(2**(self.k_array[sensing_time_idx]))
-			BBB = []
-
-			nr_sensing_reps= int(self.G_adptv + self.F*sensing_time_idx)
-			if nr_sensing_reps<1:
-				nr_sensing_reps=1
-			while ((rep_idx < nr_sensing_reps) and (fom>0.15*self.fom_array[sensing_time_idx])):#(fom<self.fom_threshold)):
-				self.convolve_prob_distribution (t = 1*(t_i+self.OH/self.tau0), do_plot = do_debug)
-				dt = self.adptv_tracking_single_step (sensing_time_idx = sensing_time_idx, do_debug=do_debug)
-
-				fom = self.figure_of_merit_std()
-				rep_idx += 1
-
-				total_time = total_time + dt
-				estim_time = estim_time + dt
-				#BBB = np.hstack((BBB, self.curr_fB_array))
-
-			est_field = -np.angle(self.p_k[self.points-1])/(2*np.pi*self.tau0)
-			if (fom<0.15*self.fom_array[sensing_time_idx]):
-				if (sensing_time_idx >0):
-					idx=idx-1
-				else:
-					idx = 0
-			else:
-				idx +=1
-
-			self.fom.append(fom)
-			#self.est_field.append(est_field)
-			self.time_tags.append(total_time)
-			#self.field.append (np.mean(BBB))
-			#self.field_std.append(np.std(BBB))
-
-		self.prev_estim = est_field
-		self.field = np.asarray(self.field)
-		self.time_tags = np.asarray(self.time_tags)
-		#self.est_field = np.asarray(self.est_field)
-		self.fom = np.asarray(self.fom)
-		self.field_std = np.asarray(self.field_std)
-		self.time_scale = self.time_tags*self.tau0
-
-		if do_plot:
-			plt.figure(figsize=(20,6))
-			plt.subplot (2,1,1)
-			sf = (3**0.5*2**(-self.N))/(2*np.pi*self.tau0)
-			plt.plot (self.time_scale*1e3, self.est_field*1e-6, 'crimson')		
-			plt.fill_between (self.time_scale*1e3, 1e-6*(self.est_field-sf), 1e-6*(self.est_field+sf), color = 'crimson', alpha=0.3)
-			plt.plot (self.time_scale*1e3, self.est_field*1e-6, 'o', color='crimson', markersize=4)		
-			plt.fill_between (self.time_scale*1e3, 1e-6*(self.field-self.field_std), 1e-6*(self.field+self.field_std), color = 'RoyalBlue')
-			plt.xlabel ('time [msec]', fontsize=16)
-			plt.ylabel ('[MHz]', fontsize=16)
-			plt.axis('tight')
-			plt.subplot (2,1,2)
-			plt.semilogy (self.time_scale*1e3,self.fom, color='lightsteelblue', linewidth=1)
-			plt.semilogy (self.time_scale*1e3,self.fom, 'o', markersize=3, color='RoyalBlue')
-			plt.ylabel ('FOM', fontsize=16)
-			plt.axis('tight')
-			plt.show()
-
 	def qTracking (self, do_plot = False, do_debug=False):
 
 		'''
@@ -236,157 +182,12 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		'''
 
 		self._called_modules.append('adaptive_tracking_estimation')
-		self.init_apriori ()
-		estim_time = 0
-		self.initialize_in_zero(do_debug=do_debug)
-		fom = 0
-		rep_idx = 0
-		est_field = 0
-		estim_time = 0
+		self.running_time = 0
 
-		while self.running_time<self.time_interval:
+		for i in range(5):
 
-			fom = 100e6
-			rep_idx = 0
-			sensing_time_idx = np.mod(idx, self.N)
-			
-			t_i = int(2**(self.k_array[sensing_time_idx]))
-			BBB = []
-
-			nr_sensing_reps= int(self.G_adptv + self.F*sensing_time_idx)
-			if nr_sensing_reps<1:
-				nr_sensing_reps=1
-			while ((rep_idx < nr_sensing_reps) and (fom>0.15*self.fom_array[sensing_time_idx])):#(fom<self.fom_threshold)):
-				self.convolve_prob_distribution (t = 1*(t_i+self.OH/self.tau0), do_plot = do_debug)
-				dt = self.adptv_tracking_single_step (sensing_time_idx = sensing_time_idx, do_debug=do_debug)
-
-				fom = self.figure_of_merit_std()
-				rep_idx += 1
-
-				total_time = total_time + dt
-				estim_time = estim_time + dt
-				#BBB = np.hstack((BBB, self.curr_fB_array))
-
-			est_field = -np.angle(self.p_k[self.points-1])/(2*np.pi*self.tau0)
-			if (fom<0.15*self.fom_array[sensing_time_idx]):
-				if (sensing_time_idx >0):
-					idx=idx-1
-				else:
-					idx = 0
-			else:
-				idx +=1
-
-			self.fom.append(fom)
-			#self.est_field.append(est_field)
-			self.time_tags.append(total_time)
-			#self.field.append (np.mean(BBB))
-			#self.field_std.append(np.std(BBB))
-
-		self.prev_estim = est_field
-		self.field = np.asarray(self.field)
-		self.time_tags = np.asarray(self.time_tags)
-		#self.est_field = np.asarray(self.est_field)
-		self.fom = np.asarray(self.fom)
-		self.field_std = np.asarray(self.field_std)
-		self.time_scale = self.time_tags*self.tau0
-
-		if do_plot:
-			plt.figure(figsize=(20,6))
-			plt.subplot (2,1,1)
-			sf = (3**0.5*2**(-self.N))/(2*np.pi*self.tau0)
-			plt.plot (self.time_scale*1e3, self.est_field*1e-6, 'crimson')		
-			plt.fill_between (self.time_scale*1e3, 1e-6*(self.est_field-sf), 1e-6*(self.est_field+sf), color = 'crimson', alpha=0.3)
-			plt.plot (self.time_scale*1e3, self.est_field*1e-6, 'o', color='crimson', markersize=4)		
-			plt.fill_between (self.time_scale*1e3, 1e-6*(self.field-self.field_std), 1e-6*(self.field+self.field_std), color = 'RoyalBlue')
-			plt.xlabel ('time [msec]', fontsize=16)
-			plt.ylabel ('[MHz]', fontsize=16)
-			plt.axis('tight')
-			plt.subplot (2,1,2)
-			plt.semilogy (self.time_scale*1e3,self.fom, color='lightsteelblue', linewidth=1)
-			plt.semilogy (self.time_scale*1e3,self.fom, 'o', markersize=3, color='RoyalBlue')
-			plt.ylabel ('FOM', fontsize=16)
-			plt.axis('tight')
-			plt.show()
-
-
-	def nontracking_estimation_routine (self):
-		self._called_modules.append('nontracking_estimation_routine')
-		tau = 2**(self.k_array)
-		t = np.zeros (self.K+1)
-		res_idx = 0
-		m_res = 0
-
-		total_time = 0
-		self.msmnt_idx = 0
-		for i,k in enumerate(self.k_array):
-
-			t[i] = int(2**k)
-			ttt = -2**(k+1)					
-			m_total = 0
-
-			MK = self.G+self.F*(self.K-k)
-
-			for m in np.arange(MK):
-				if (m_res == 0):
-					phase_inc_swarm = self.u0 [res_idx]
-				else:
-					phase_inc_swarm = self.u1 [res_idx]
-
-				phase_cappellaro = 0.5*np.angle (self.p_k[ttt+self.points])
-				phase = phase_cappellaro + phase_inc_swarm
-				
-				f0, time_tag, dt = self.calc_acc_phase (t_units = int(t[i]))
-
-				self.field.append(f0)
-				self.time_tags.append(time_tag)
-				self.msmnt_idx +=1
-
-				m_res = self.ramsey (theta=phase, t = t[i]*self.tau0)					
-				self.bayesian_update (m_n = m_res, phase_n = phase, t_n = 2**k)
-				res_idx = res_idx + 1
-				total_time = total_time + dt
-		return total_time
-
-	def non_tracking_estimation (self, do_plot=False):
-		self._called_modules.append('non_tracking_estimation')
-		idx = 0
-		total_time = 0
-
-		# these arrays record the 'real' values of the magnetic field over time
-		self.field = []
-		self.field_std = []
-		self.time_tags = []
-
-		self.est_field = np.array([])
-		self.msmnt_times = []
-		self.k_array = self.K-np.arange(self.K+1)
-		self.curr_fB = 1e6*(np.random.rand()-0.5)*5
-		self.init_apriori()
-		
-		while self.running_time<self.time_interval:
-			self.init_apriori ()
-			#self.convolve_prob_distribution (t = sensing_t+OH_t, do_plot = False)
-			dt = self.nontracking_estimation_routine ()
-			total_time = total_time + dt
-			self.msmnt_times.append(dt)
-
-			est_field = -np.angle(self.p_k[self.points-1])/(2*np.pi*self.tau0)
-			self.est_field = np.hstack ((self.est_field, est_field*np.ones(self.msmnt_idx)))
-
-		self.field = np.asarray(self.field)
-		self.time_tags = np.asarray(self.time_tags)
-		self.time_scale = self.time_tags*self.tau0
-		self.msmnt_times = np.asarray (self.msmnt_times)
-
-		if do_plot:
-			plt.figure(figsize=(20,8))
-			plt.subplot (2,1,1)
-			plt.plot (self.time_scale*1e3, self.est_field*1e-6, 'o', markersize=4,color='crimson')		
-			plt.plot (self.time_scale*1e3, self.field*1e-6, 'royalblue')
-			plt.subplot (2,1,2)
-			plt.plot (self.time_scale*1e3, np.abs(self.est_field-self.field)*1e-6, 'royalblue')		
-			plt.show()
-			print ("RMSE: ", np.mean(np.abs(self.est_field-self.field))*1e-3, ' kHz')
+			opt_k = self.find_optimal_k ()
+			m_list = self.adptv_tracking_single_step (k = opt_k, M=3)			
 
 
 	def simulate(self, track, do_save = False, do_plot = False, kappa = None, do_debug=False):

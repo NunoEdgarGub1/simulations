@@ -39,7 +39,8 @@ track = True
 folder = 'C:/'
 exp = qtrack.TimeSequenceQ(time_interval=100e-6, overhead=0, folder=folder)
 
-exp.set_spin_bath (nr_spins=5, concentration=0.01, verbose=True)
+exp.set_spin_bath (nr_spins=6, concentration=0.01, verbose=True)
+exp.set_msmnt_params (tau0 = 20e-9, G=5, F=3)
 exp.initialize()
 
 #for i in range(25):

@@ -557,11 +557,18 @@ class CentralSpinExperiment ():
 	def get_values_Az (self):
 		return self.values_Az_kHz
 
+	def get_histogram_Az (self, nbins = 50):
+		hist, bin_edges = np.histogram (self.get_values_Az(), nbins)
+		bin_ctrs = 0.5*(bin_edges[1:]+bin_edges[:-1])
+		return hist, bin_ctrs
+		
+
 	def plot_curr_probability_density (self, title = ''):
 		az, pd = np.real(self.get_probability_density())
 
 		plt.figure (figsize = (10,6))
-		plt.plot (az, pd, linewidth=2, color = 'RoyalBlue')
+		plt.plot (az*1000, pd, 'o',  color = 'RoyalBlue')
+		plt.xlabel ('(kHz)', fontsize = 18)
 		plt.xlabel ('frequency hyperfine (kHz)', fontsize=18)
 		plt.ylabel ('probability', fontsize=18)
 		plt.title (title, fontsize=18)

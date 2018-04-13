@@ -146,7 +146,7 @@ class TimeSequence ():
 		self.p_k = self.p_k/(np.sum(np.abs(self.p_k)**2)**0.5)
 		self.p_k = self.p_k/(2*np.pi*np.real(self.p_k[self.points]))
 
-	def return_std (self, do_print=False):
+	def return_std (self, verbose=False):
 
 		'''
 		Returns:
@@ -155,10 +155,11 @@ class TimeSequence ():
 		'''
 
 		self.renorm_p_k()
+		print ("|p_(-1)| = ", np.abs(self.p_k[self.points-1]))
 		Hvar = (2*np.pi*np.abs(self.p_k[self.points-1]))**(-2)-1
 		std_H = ((Hvar**0.5)/(2*np.pi*self.tau0))
 		fom = self.figure_of_merit()
-		if do_print:
+		if verbose:
 			print ("Std (Holevo): ", std_H*1e-3 , ' kHz --- fom = ', fom)
 		return  std_H, fom
 
