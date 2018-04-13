@@ -50,8 +50,7 @@ class TimeSequence ():
 		self.discr_steps = 2*self.points+1
 		self.fB_max = 1./(2*tau0)
 		self.n_points = 2**(self.N+1)
-		self.beta = np.linspace (-self.fB_max, self.fB_max, self.n_points+1)
-		self.beta = self.beta[:-1]
+		self.beta = np.linspace (-self.fB_max, self.fB_max, self.discr_steps)
 		self.init_apriori()
 
 
@@ -102,10 +101,14 @@ class TimeSequence ():
 
 			p0 = 0.5-0.5*np.cos(2*np.pi*self.beta*t_n*self.tau0+phase_n)
 			p1 = 0.5+0.5*np.cos(2*np.pi*self.beta*t_n*self.tau0+phase_n)
-			cb_min = np.min(self.curr_fB_array)
-			cb_max = np.max(self.curr_fB_array)
 
-			fom = self.figure_of_merit()
+			try:
+				cb_min = np.min(self.curr_fB_array)
+				cb_max = np.max(self.curr_fB_array)
+				fom = self.figure_of_merit()
+			except:
+				pass
+
 			y, b_mean = self.return_p_fB()
 			y = y/np.sum(y)
 			m = max(y)
@@ -114,7 +117,10 @@ class TimeSequence ():
 
 			fig = plt.figure(figsize = (10,4))
 			plt.plot (self.beta*1e-6, y_old, '--', color='dimgray', linewidth = 2)
-			plt.axvspan (cb_min*1e-6, cb_max*1e-6, alpha=0.5, color='green')
+			try:
+				plt.axvspan (cb_min*1e-6, cb_max*1e-6, alpha=0.5, color='green')
+			except:
+				pass
 			plt.plot (self.beta*1e-6, y, 'k', linewidth=4)
 			plt.fill_between (self.beta*1e-6, 0, massimo*p0/max(p0), color='crimson', alpha = 0.15)
 			plt.fill_between (self.beta*1e-6, 0, massimo*p1/max(p1), color='RoyalBlue', alpha = 0.15)

@@ -41,61 +41,46 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self._called_modules = ['ramsey', 'bayesian_update', 'calc_acc_phase']
 		self.folder = folder
 
-	def set_spin_bath (self, nr_spins, concentration, verbose = False):
+	def set_spin_bath (self, nr_spins, concentration, verbose = False, do_plot = False):
 		
 		# Spin bath initialization
 		self.nbath = NSpin.CentralSpinExperiment()
 		self.nbath.set_experiment(nr_lattice_sites=False, 
-				nr_nuclear_spins=nr_spins, concentration = concentration)
+				nr_nuclear_spins=nr_spins, concentration = concentration,
+				do_plot = do_plot)
 		self.T2star = self.nbath.T2l*1e-6
 		print ("T2* at low magnetic field: ", int(self.T2star*1e10)/10)
 
 		if verbose:
 			self.nbath.print_nuclear_spins()
 
-	def set_msmnt_params (self, G, F, tau0=20e-9, fid0=1., fid1=1.):
-		self.fid0 = fid0
-		self.fid1 = fid1
-		self.F = F
-		self.G = G
-		self.tau0 = tau0
+	def init_a_priory (self):
+		pass
 
-
-	def initialize (self, N = 7):
+	def initialize (self):
 		# B_std = 1/(sqrt(2)*pi*T2_star)
 		self._dfB0 = 1./(4.442883*self.T2star)
 		print ("std fB: ", self._dfB0*1e-3, " kHz")
-
-		self.N = N
-
-		self.points = 2**(self.N+1)+3
-		self.discr_steps = 2*self.points+1
-		self.fB_max = 4.*self._dfB0
-		self.tp0 = 1./(2*self.fB_max)
-		self.n_points = 2**(self.N+1)
-		self.beta = np.linspace (-self.fB_max, self.fB_max, self.discr_steps)
 
 		p = np.exp(-0.5*(self.beta/self._dfB0)**2)
 		p = p/(np.sum(p))
 		self.p_k = np.fft.ifftshift(np.abs(np.fft.ifft(p, self.discr_steps))**2)
 		self.renorm_p_k()
 
+		self.plot_hyperfine_distr()
+
+
+	def plot_hyperfine_distr(self):
 		p, m = self.return_p_fB()
-		h, az = self.nbath.get_histogram_Az(nbins = 100)
-		plt.plot (az*1e-3, h/np.sum(h), color='royalblue')
-		plt.plot (self.beta*1e-6, p, 'crimson', linewidth = 2)
+		#h, az = self.nbath.get_histogram_Az(nbins = 100)
+		az, p_az = self.nbath.get_probability_density()
+		plt.figure(figsize = (12,6))
+		plt.plot (az*1e-3, p_az/np.sum(p_az), color='royalblue', label = 'spin-bath')
+		plt.plot (self.beta*1e-6, p, '--', color='crimson', linewidth = 2, label = 'classical')
+		plt.xlabel (' hyperfine (kHz)', fontsize=18)
+		plt.legend()
 		plt.show()
 
-		#self.p_k[self.points] = 0
-		plt.figure(figsize=(12,6))
-		plt.plot (np.real(self.p_k), 'crimson')
-		plt.plot (np.imag(self.p_k), 'RoyalBlue')
-		plt.axis([200, 300, 0, 0.1])
-		plt.xlabel ('p_k', fontsize = 18)
-		plt.show()
-
-		#opt_k = self.find_optimal_k()
-		#print ("Optimal k: ", opt_k)
 
 	def return_std (self, verbose=False):
 
@@ -108,8 +93,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self.renorm_p_k()
 		print ("|p_(-1)| = ", np.abs(self.p_k[self.points-1]))
 		Hvar = (2*np.pi*np.abs(self.p_k[self.points-1]))**(-2)-1
-		std_H = ((Hvar**0.5)/(16*np.pi*self.tp0))
-		print ("tp0 = ", self.tp0*1e9, ' ns')
+		std_H = ((Hvar**0.5)/(2*np.pi*self.tau0))
 		#fom = self.figure_of_merit()
 		if verbose:
 			print ("Std (Holevo): ", std_H*1e-3 , ' kHz')
@@ -133,26 +117,28 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		'''
 
 		az0, pd0 = np.real(self.nbath.get_probability_density())
-
 		m = self.nbath.Ramsey (tau=t, phi = theta)
-
 		az, pd = np.real(self.nbath.get_probability_density())
 
 		if do_plot:
-			title = 'Ramsey: tau = '+str(int(t*1e9))+' ns -- phase: '+str(int(theta*180/3.14))+' deg'
-			plt.figure (figsize = (8,4))
-			plt.plot (az0, pd0, linewidth=2, color = 'RoyalBlue')
-			plt.plot (az, pd, linewidth=2, color = 'crimson')
-			plt.xlabel ('frequency hyperfine (kHz)', fontsize=18)
-			plt.ylabel ('probability', fontsize=18)
-			plt.title (title, fontsize=18)
-			plt.show()
+			self.plot_hyperfine_distr()
+			
+			#title = 'Ramsey: tau = '+str(int(t*1e9))+' ns -- phase: '+str(int(theta*180/3.14))+' deg'
+			#plt.figure (figsize = (8,4))
+			#plt.plot (az0, pd0, linewidth=2, color = 'RoyalBlue')
+			#plt.plot (az, pd, linewidth=2, color = 'crimson')
+			#plt.xlabel ('frequency hyperfine (kHz)', fontsize=18)
+			#plt.ylabel ('probability', fontsize=18)
+			#plt.title (title, fontsize=18)
+			#plt.show()
 
 		return m
 
-	def find_optimal_k (self):
+	def find_optimal_k (self, do_debug=False):
 		width, fom = self.return_std (verbose=True)
-		opt_k = np.round(np.log(1/(width*self.tau0))/np.log(2))
+		opt_k = np.int(np.log(1/(width*self.tau0))/np.log(2))-1
+		if do_debug:
+			print ("Optimal k = ", opt_k)
 		return opt_k
 
 	def adptv_tracking_single_step (self, k, M, do_debug=False):
@@ -161,12 +147,14 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		ttt = -2**(k+1)
 		t0 = self.running_time					
 
-		phase_cappellaro = 0.5*np.angle (self.p_k[ttt+self.points])
+		#print ("idx_capp = ", ttt+self.points)
+
+		phase_cappellaro = 0.5*np.angle (self.p_k[int(ttt+self.points)])
 		m_list = []
 		for m in range(M):
 			m_res = self.ramsey (theta=phase_cappellaro, t = t_i*self.tau0, do_plot=do_debug)
 			m_list.append(m_res)	
-			self.bayesian_update (m_n = m_res, phase_n = phase_cappellaro, t_n = t_i, do_plot=do_debug)
+			self.bayesian_update (m_n = m_res, phase_n = phase_cappellaro, t_n = t_i, do_plot=False)
 			if do_debug:
 				print ("Estimation step: t_units=", t_i, "    -- res:", m_res)
 
@@ -185,9 +173,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self.running_time = 0
 
 		for i in range(5):
-
-			opt_k = self.find_optimal_k ()
-			m_list = self.adptv_tracking_single_step (k = opt_k, M=3)			
+			opt_k = self.find_optimal_k (do_debug = do_debug)
+			m_list = self.adptv_tracking_single_step (k = opt_k, M=1, do_debug = do_debug)			
 
 
 	def simulate(self, track, do_save = False, do_plot = False, kappa = None, do_debug=False):

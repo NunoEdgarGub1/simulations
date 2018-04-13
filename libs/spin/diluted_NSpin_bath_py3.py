@@ -360,7 +360,7 @@ class CentralSpinExperiment ():
 		print(tb.tabulate(T, stralign='center'))
 
 
-	def set_experiment(self, nr_lattice_sites, nr_nuclear_spins = False, concentration = .1):   
+	def set_experiment(self, nr_lattice_sites, nr_nuclear_spins = False, concentration = .1, do_plot = False):   
 		'''
 		Sets up spin bath and external field
 
@@ -395,7 +395,8 @@ class CentralSpinExperiment ():
 		#initial bath density matrix
 		self._curr_rho = np.eye(2**self._nr_nucl_spins)/np.trace(np.eye(2**self._nr_nucl_spins))
 
-		self.exp.plot_spin_bath_info()
+		if do_plot:
+			self.exp.plot_spin_bath_info()
 		pd = np.real(self.get_probability_density())
 		self.values_Az_kHz = pd[0]
 		stat = self.get_overhauser_stat()

@@ -28,8 +28,6 @@ F = 3
 # nr of protocol repetitions (for statistics)
 nr_reps = 1
 
-# T2*
-T2 = 1e-6
 #Read-out fidelities for spin 0 and spin 1
 fid0 = 1.
 fid1 = 1.
@@ -39,9 +37,7 @@ track = True
 folder = 'C:/'
 exp = qtrack.TimeSequenceQ(time_interval=100e-6, overhead=0, folder=folder)
 
-exp.set_spin_bath (nr_spins=6, concentration=0.01, verbose=True)
-exp.set_msmnt_params (tau0 = 20e-9, G=5, F=3)
+exp.set_spin_bath (nr_spins=6, concentration=0.01, verbose=True, do_plot = False)
+exp.set_msmnt_params (tau0 = 1000e-9, G=5, F=3)
 exp.initialize()
-
-#for i in range(25):
-#	exp.ramsey (t = (2**(i-1))*1e-6, theta = np.pi/2., do_plot= True)
+exp.qTracking (do_debug = True)
