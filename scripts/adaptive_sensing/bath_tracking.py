@@ -9,6 +9,8 @@ import sys
 
 from matplotlib import pyplot as plt
 
+sys.path.append ('/Users/dalescerri/Documents/GitHub')
+
 from simulations.libs.adaptive_sensing import qTracking as qtrack
 from simulations.libs.adaptive_sensing import tracking_sequence as trackSeq
 from importlib import reload
@@ -38,6 +40,6 @@ folder = 'C:/'
 exp = qtrack.TimeSequenceQ(time_interval=100e-6, overhead=0, folder=folder)
 
 exp.set_spin_bath (nr_spins=6, concentration=0.01, verbose=True, do_plot = False)
-exp.set_msmnt_params (tau0 = 1000e-9, G=5, F=3)
+exp.set_msmnt_params (tau0 = 1e-6, G=5, F=3)
 exp.initialize()
 exp.qTracking (do_debug = True)

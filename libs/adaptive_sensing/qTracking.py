@@ -4,14 +4,17 @@ from matplotlib import rc, cm
 import matplotlib
 import os, sys
 import h5py
+import cmath
 import logging, time, timeit
 from importlib import reload
+
+#sys.path.append ('/Users/dalescerri/Documents/GitHub')
 
 import matplotlib.pyplot as plt
 from scipy import signal
 from simulations.libs.math import statistics as stat
 from simulations.libs.adaptive_sensing import adaptive_tracking as adptvTrack
-from simulations.libs.spin import diluted_NSpin_bath_py3 as NSpin
+from simulations.libs.spin import diluted_NSpin_bath_py3_dale as NSpin
 
 reload (NSpin)
 reload (adptvTrack)
@@ -33,6 +36,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self.est_fB = []
 		self.curr_fB = 0
 		self.plot_idx = 0
+		#self.step=0
 
 		# The "called modules" is  a list that tracks which functions have been used
 		# so that they are saved in the output hdf5 file.
@@ -44,9 +48,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 	def set_spin_bath (self, nr_spins, concentration, verbose = False, do_plot = False):
 		
 		# Spin bath initialization
-		self.nbath = NSpin.CentralSpinExperiment()
-		self.nbath.set_experiment(nr_lattice_sites=False, 
-				nr_nuclear_spins=nr_spins, concentration = concentration,
+		self.nbath = NSpin.SpinExp_cluster1()
+		self.nbath.set_experiment(nr_spins=nr_spins, concentration = concentration,
 				do_plot = do_plot)
 		self.T2star = self.nbath.T2l*1e-6
 		print ("T2* at low magnetic field: ", int(self.T2star*1e10)/10)
@@ -75,25 +78,29 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		#h, az = self.nbath.get_histogram_Az(nbins = 100)
 		az, p_az = self.nbath.get_probability_density()
 		plt.figure(figsize = (12,6))
-		plt.plot (az*1e-3, p_az/np.sum(p_az), color='royalblue', label = 'spin-bath')
-		plt.plot (self.beta*1e-6, p, '--', color='crimson', linewidth = 2, label = 'classical')
+		plt.plot (az, p_az/np.sum(p_az), 'o', color='royalblue', label = 'spin-bath')
+		plt.xlabel (' hyperfine (kHz)', fontsize=18)
+		plt.plot (self.beta*1e-3, p, '--', color='crimson', linewidth = 2, label = 'classical')
 		plt.xlabel (' hyperfine (kHz)', fontsize=18)
 		plt.legend()
+		#plt.savefig('%.04d'%self.step)
 		plt.show()
+		#self.step+=1
 
 
 	def return_std (self, verbose=False):
 
 		'''
 		Returns:
-		std_H 		standard deviation for the frequency f_B (calculated from p_{-1})
+		std_H 		standard deviation for the frequency f_B (calculated from p_{-1}). SOmetimes returns negative Holevo
 		fom 		figure of merit	
 		'''
 
 		self.renorm_p_k()
 		print ("|p_(-1)| = ", np.abs(self.p_k[self.points-1]))
 		Hvar = (2*np.pi*np.abs(self.p_k[self.points-1]))**(-2)-1
-		std_H = ((Hvar**0.5)/(2*np.pi*self.tau0))
+		print('Hvar',Hvar)
+		std_H = ((abs(cmath.sqrt(Hvar)))/(2*np.pi*self.tau0))
 		#fom = self.figure_of_merit()
 		if verbose:
 			print ("Std (Holevo): ", std_H*1e-3 , ' kHz')
@@ -136,7 +143,14 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
 	def find_optimal_k (self, do_debug=False):
 		width, fom = self.return_std (verbose=True)
+		print('optk+1',np.log(1/(width*self.tau0))/np.log(2))
+		print('width',width)
 		opt_k = np.int(np.log(1/(width*self.tau0))/np.log(2))-1
+        
+		#TEMPORARY fix for when opt_k is negative. In case flag is raised, best to reset simulation for now
+		if opt_k<0:
+			print('K IS NEGATIVE',opt_k)
+			opt_k = 0
 		if do_debug:
 			print ("Optimal k = ", opt_k)
 		return opt_k
@@ -150,7 +164,10 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		#print ("idx_capp = ", ttt+self.points)
 
 		phase_cappellaro = 0.5*np.angle (self.p_k[int(ttt+self.points)])
+		print('Phase',phase_cappellaro)
 		m_list = []
+		print('Ramsey time', t_i*self.tau0)
+		print('tau_0 time', self.tau0)
 		for m in range(M):
 			m_res = self.ramsey (theta=phase_cappellaro, t = t_i*self.tau0, do_plot=do_debug)
 			m_list.append(m_res)	
@@ -172,10 +189,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self._called_modules.append('adaptive_tracking_estimation')
 		self.running_time = 0
 
-		for i in range(5):
+		for i in range(100):
 			opt_k = self.find_optimal_k (do_debug = do_debug)
-			m_list = self.adptv_tracking_single_step (k = opt_k, M=1, do_debug = do_debug)			
-
+			m_list = self.adptv_tracking_single_step (k = opt_k, M=1, do_debug = do_debug)
 
 	def simulate(self, track, do_save = False, do_plot = False, kappa = None, do_debug=False):
 		self.k_array = self.K-np.arange(self.K+1)

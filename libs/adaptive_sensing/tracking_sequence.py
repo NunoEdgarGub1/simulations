@@ -8,6 +8,8 @@ import h5py
 import logging, time, timeit
 import re
 
+#sys.path.append ('/Users/dalescerri/Documents/GitHub')
+
 import matplotlib.pyplot as plt
 import inspect
 from scipy import signal
