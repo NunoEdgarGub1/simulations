@@ -178,7 +178,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		return m_list
 
 
-	def qTracking (self, do_plot = False, do_debug=False):
+	def qTracking (self, M=1, do_plot = False, do_debug=False):
 
 		'''
 		Simulates adaptive tracking protocol
@@ -191,7 +191,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
 		for i in range(100):
 			opt_k = self.find_optimal_k (do_debug = do_debug)
-			m_list = self.adptv_tracking_single_step (k = opt_k, M=1, do_debug = do_debug)
+			m_list = self.adptv_tracking_single_step (k = opt_k, M=M, do_debug = do_debug)
 
 	def simulate(self, track, do_save = False, do_plot = False, kappa = None, do_debug=False):
 		self.k_array = self.K-np.arange(self.K+1)
