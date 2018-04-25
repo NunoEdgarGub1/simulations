@@ -36,7 +36,11 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self.est_fB = []
 		self.curr_fB = 0
 		self.plot_idx = 0
-		#self.step=0
+		self.step=0
+		self.phase_cappellaro = 0
+		self.opt_k = 0
+		self.m_res = 0
+		self.phaselist = []
 
 		# The "called modules" is  a list that tracks which functions have been used
 		# so that they are saved in the output hdf5 file.
@@ -51,8 +55,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self.nbath = NSpin.SpinExp_cluster1()
 		self.nbath.set_experiment(nr_spins=nr_spins, concentration = concentration,
 				do_plot = do_plot)
-		self.T2star = self.nbath.T2l*1e-6
-		print ("T2* at low magnetic field: ", int(self.T2star*1e10)/10)
+		self.T2star = self.nbath.T2h*1e-6
+		print ("T2* at high magnetic field: ", int(self.T2star*1e10)/10)
 
 		if verbose:
 			self.nbath.print_nuclear_spins()
@@ -77,15 +81,33 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		p, m = self.return_p_fB()
 		#h, az = self.nbath.get_histogram_Az(nbins = 100)
 		az, p_az = self.nbath.get_probability_density()
+		f = ((1/(self.tau0))*np.angle(self.p_k[self.points-1])*1e-6)
+		print('f',f)
+        
 		plt.figure(figsize = (12,6))
+		p0 = 0.5-0.5*np.cos(2*np.pi*self.beta*(int(2**self.opt_k))*self.tau0+self.phase_cappellaro)
+		p1 = 0.5+0.5*np.cos(2*np.pi*self.beta*(int(2**self.opt_k))*self.tau0+self.phase_cappellaro)
+		plt.fill_between (self.beta*1e-3, 0, max(p)*p0/max(p0), color='magenta', alpha = 0.1)
+		plt.fill_between (self.beta*1e-3, 0, max(p)*p1/max(p1), color='cyan', alpha = 0.1)
+		tarr = np.linspace(min(self.beta)*1e-3,max(self.beta)*1e-3,1000)
 		plt.plot (az, p_az/np.sum(p_az), 'o', color='royalblue', label = 'spin-bath')
+		#plt.text(self.m_list[-1])
+		plt.text(0, 0, self.m_res, bbox=dict(facecolor='red', alpha=0.5))
 		plt.xlabel (' hyperfine (kHz)', fontsize=18)
-		plt.plot (self.beta*1e-3, p, '--', color='crimson', linewidth = 2, label = 'classical')
+		plt.plot (self.beta*1e-3, max(p)*p0/max(p0) * (p /max(p)), color='crimson', linewidth = 2, label = 'classical')
+		plt.plot (self.beta*1e-3, max(p)*p1/max(p1) * (p /max(p)), color='blue', linewidth = 2, label = 'classical')
+		plt.plot (self.beta*1e-3, p, color='green', linewidth = 2, label = 'classical')
 		plt.xlabel (' hyperfine (kHz)', fontsize=18)
+		#plt.plot(tarr,(.5+.5*np.cos(f*tarr))*max(p),':',color='magenta')
+		#plt.plot(tarr,(1-(.5+.5*np.cos(f*tarr)))*max(p),':',color='cyan')
+		plt.axvline(np.average(az, weights=p_az/np.sum(p_az)),color='blue', ls='--')
+		plt.axvline(az[list(p_az/sum(p_az)).index(max(p_az/sum(p_az)))],color='blue', ls=':')
+		plt.xlim(min(self.beta*1e-3),max(self.beta*1e-3))
+		#plt.ylim(0, max(p))
 		plt.legend()
-		#plt.savefig('%.04d'%self.step)
+		plt.savefig('%.04d'%self.step)
 		plt.show()
-		#self.step+=1
+		self.step+=1
 
 
 	def return_std (self, verbose=False):
@@ -129,7 +151,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
 		if do_plot:
 			self.plot_hyperfine_distr()
-			
+			print('mmmm',m)
 			#title = 'Ramsey: tau = '+str(int(t*1e9))+' ns -- phase: '+str(int(theta*180/3.14))+' deg'
 			#plt.figure (figsize = (8,4))
 			#plt.plot (az0, pd0, linewidth=2, color = 'RoyalBlue')
@@ -141,39 +163,50 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
 		return m
 
-	def find_optimal_k (self, do_debug=False):
+	def find_optimal_k (self, do_debug=True):
 		width, fom = self.return_std (verbose=True)
 		print('optk+1',np.log(1/(width*self.tau0))/np.log(2))
 		print('width',width)
-		opt_k = np.int(np.log(1/(width*self.tau0))/np.log(2))-1
+		self.opt_k = np.int(np.log(1/(width*self.tau0))/np.log(2))-1
+		#self.opt_k = int(self.opt_k) if ((int(self.opt_k) % 2) == 0) else int(self.opt_k) + 1
         
 		#TEMPORARY fix for when opt_k is negative. In case flag is raised, best to reset simulation for now
-		if opt_k<0:
-			print('K IS NEGATIVE',opt_k)
-			opt_k = 0
+		if self.opt_k<0:
+			print('K IS NEGATIVE',self.opt_k)
+			self.opt_k = 0
 		if do_debug:
-			print ("Optimal k = ", opt_k)
-		return opt_k
+			print ("Optimal k = ", self.opt_k)
+		return self.opt_k
 
 	def adptv_tracking_single_step (self, k, M, do_debug=False):
 
-		t_i = int(2**k)
-		ttt = -2**(k+1)
-		t0 = self.running_time					
+		# t_i = int(2**k)
+		# ttt = -2**(k+1)
+		# t0 = self.running_time					
 
 		#print ("idx_capp = ", ttt+self.points)
 
-		phase_cappellaro = 0.5*np.angle (self.p_k[int(ttt+self.points)])
-		print('Phase',phase_cappellaro)
 		m_list = []
-		print('Ramsey time', t_i*self.tau0)
-		print('tau_0 time', self.tau0)
+		#print('Ramsey time', t_i*self.tau0)
+		#print('tau_0 time', self.tau0)
+		#self.phase_cappellaro = 0.5*np.angle (self.p_k[int(ttt+self.points)])
+		#print('Phase',self.phase_cappellaro)
 		for m in range(M):
-			m_res = self.ramsey (theta=phase_cappellaro, t = t_i*self.tau0, do_plot=do_debug)
-			m_list.append(m_res)	
-			self.bayesian_update (m_n = m_res, phase_n = phase_cappellaro, t_n = t_i, do_plot=False)
+			t_i = int(2**min(k,abs(k- (k+m)))) #k-(M - m - 1), k- (k+m)
+			ttt = -2**(min(k,abs(k- (k+m)))+1)
+			t0 = self.running_time
+			print('Ramsey time', t_i*self.tau0)
+			print('k_m', min(k,abs(k- (k+m))))
+			self.phase_cappellaro = -(0.5*np.angle (self.p_k[int(ttt+self.points)]) - (np.pi/2+np.pi/2))
+			self.phaselist.append(self.phase_cappellaro)
+			print('points',self.points)
+			print('Phase',self.phase_cappellaro)
+			self.m_res = self.ramsey (theta=self.phase_cappellaro, t = t_i*self.tau0, do_plot=do_debug)
+			print('mmm2',self.m_res)
+			m_list.append(self.m_res)	
+			self.bayesian_update (m_n = self.m_res, phase_n = self.phase_cappellaro, t_n = t_i, do_plot=False)
 			if do_debug:
-				print ("Estimation step: t_units=", t_i, "    -- res:", m_res)
+				print ("Estimation step: t_units=", t_i, "    -- res:", self.m_res)
 
 		return m_list
 
@@ -189,9 +222,16 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self._called_modules.append('adaptive_tracking_estimation')
 		self.running_time = 0
 
-		for i in range(100):
-			opt_k = self.find_optimal_k (do_debug = do_debug)
-			m_list = self.adptv_tracking_single_step (k = opt_k, M=M, do_debug = do_debug)
+		for i in range(40):
+			self.opt_k = self.find_optimal_k (do_debug = do_debug)
+			m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, do_debug = do_debug)
+			p = self.return_p_fB()[0]
+			maxp = list(p).index(max(p))
+			# if self.beta[maxp]!=0:
+			# 	self.tau0 = 1/(2*np.pi*abs(self.beta[maxp]))
+			# 	print(self.tau0)
+			#print(self.phaselist)
+
 
 	def simulate(self, track, do_save = False, do_plot = False, kappa = None, do_debug=False):
 		self.k_array = self.K-np.arange(self.K+1)
