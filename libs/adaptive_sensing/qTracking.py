@@ -55,7 +55,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self.nbath = NSpin.SpinExp_cluster1()
 		self.nbath.set_experiment(nr_spins=nr_spins, concentration = concentration,
 				do_plot = do_plot)
-		self.T2star = self.nbath.T2h*1e-6
+		self.T2star = self.nbath.T2h
 		print ("T2* at high magnetic field: ", int(self.T2star*1e10)/10)
 
 		if verbose:

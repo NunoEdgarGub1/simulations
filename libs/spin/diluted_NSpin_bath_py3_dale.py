@@ -262,7 +262,7 @@ class NSpinBath ():
 	        dC_lst = [[Axx_NV[0],Axy_NV[0],Axz_NV[0]],[Ayx_NV[0],Ayy_NV[0],Ayz_NV[0]]] #additional hf values to calculate dC 
 
 	    print("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
-	    return Ap_NV[0], Ao_NV[0] , Azx_NV[0] , Azy_NV[0] , r_NV[0] , pair_lst , geom_lst , dC_lst, T2_h*1e6, T2_l*1e6
+	    return Ap_NV[0], Ao_NV[0] , Azx_NV[0] , Azy_NV[0] , r_NV[0] , pair_lst , geom_lst , dC_lst, T2_h, T2_l
 
 	def set_spin_bath (self, Ap, Ao, Azx, Azy):
 
