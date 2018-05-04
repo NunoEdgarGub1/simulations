@@ -39,7 +39,7 @@ track = True
 folder = 'C:/'
 exp = qtrack.TimeSequenceQ(time_interval=100e-6, overhead=0, folder=folder)
 
-exp.set_spin_bath (nr_spins=6, concentration=0.01, verbose=True, do_plot = False)
-exp.set_msmnt_params (tau0 = 1e-6, G=5, F=3)
+exp.set_spin_bath (nr_spins=8, concentration=0.01, verbose=True, do_plot = False)
+exp.set_msmnt_params (tau0 = 1e-6, G=5, F=3, T2=1.)
 exp.initialize()
-exp.qTracking (do_debug = True, M=3)
+exp.qTracking (do_debug = True, M=3, nr_steps =3)

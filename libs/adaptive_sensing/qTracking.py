@@ -79,8 +79,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
 	def plot_hyperfine_distr(self):
 		p, m = self.return_p_fB()
-		#h, az = self.nbath.get_histogram_Az(nbins = 100)
-		az, p_az = self.nbath.get_probability_density()
+		p_az, az = self.nbath.get_histogram_Az(nbins = 20)
+		az2, p_az2 = self.nbath.get_probability_density()
 		f = ((1/(self.tau0))*np.angle(self.p_k[self.points-1])*1e-6)
 		print('f',f)
         
@@ -91,6 +91,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		plt.fill_between (self.beta*1e-3, 0, max(p)*p1/max(p1), color='cyan', alpha = 0.1)
 		tarr = np.linspace(min(self.beta)*1e-3,max(self.beta)*1e-3,1000)
 		plt.plot (az, p_az/np.sum(p_az), 'o', color='royalblue', label = 'spin-bath')
+		plt.plot (az, p_az/np.sum(p_az), '--', color='royalblue')
+		plt.plot (az2, p_az2/np.sum(p_az2), '^', color='k', label = 'spin-bath')
+		plt.plot (az2, p_az2/np.sum(p_az2), ':', color='k')
 		#plt.text(self.m_list[-1])
 		plt.text(0, 0, self.m_res, bbox=dict(facecolor='red', alpha=0.5))
 		plt.xlabel (' hyperfine (kHz)', fontsize=18)
@@ -105,7 +108,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		plt.xlim(min(self.beta*1e-3),max(self.beta*1e-3))
 		#plt.ylim(0, max(p))
 		plt.legend()
-		plt.savefig('%.04d'%self.step)
+		#plt.savefig('%.04d'%self.step)
 		plt.show()
 		self.step+=1
 
@@ -211,7 +214,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		return m_list
 
 
-	def qTracking (self, M=1, do_plot = False, do_debug=False):
+	def qTracking (self, M=1, nr_steps = 1, do_plot = False, do_debug=False):
 
 		'''
 		Simulates adaptive tracking protocol
@@ -222,7 +225,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self._called_modules.append('adaptive_tracking_estimation')
 		self.running_time = 0
 
-		for i in range(40):
+		for i in range(nr_steps):
 			self.opt_k = self.find_optimal_k (do_debug = do_debug)
 			m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, do_debug = do_debug)
 			p = self.return_p_fB()[0]

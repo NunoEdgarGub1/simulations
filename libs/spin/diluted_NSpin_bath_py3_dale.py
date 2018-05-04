@@ -889,6 +889,16 @@ class CentralSpinExperiment ():
 		plt.title (title, fontsize=18)
 		plt.show()
 
+	def get_values_Az (self):
+		return self.values_Az_kHz
+
+	def get_histogram_Az (self, nbins = 50):
+		az, p_az = self.get_probability_density()
+		hist, bin_edges = np.histogram (np.real(az), nbins, weights=np.real(p_az))
+		bin_ctrs = 0.5*(bin_edges[1:]+bin_edges[:-1])
+		hist = hist/np.sum(hist)
+		return hist, bin_ctrs
+		
 	def get_overhauser_stat (self, component=None):
 		'''
 		Calculates mean and standard deviation of Overhauser field
@@ -1147,7 +1157,8 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 			'prob_Az': pd[1],
 			'outcome': ms,
 		}
-		
+		self.values_Az_kHz = pd[0]
+
 		return ms
 
 
