@@ -48,7 +48,7 @@ class TimeSequence ():
 		# Quantities required for computation (ex: discretization space)
 		self.points = 2**(self.N+1)+3
 		self.discr_steps = 2*self.points+1
-		self.fB_max = 1./(2*tau0)
+		self.fB_max = 1./(2*self.T2)
 		self.n_points = 2**(self.N+1)
 		self.beta = np.linspace (-self.fB_max, self.fB_max, self.discr_steps)
 		self.init_apriori()
@@ -89,13 +89,15 @@ class TimeSequence ():
 			m_old = max(y_old)
 
 		p_old = np.copy(self.p_k)
+		print('p_old length',len(p_old))
+		print('p_old max check',list(p_old).index(max(p_old)), max(p_old))
 		p0 = p_old*((1-m_n)-((-1)**m_n)*(self.fid0+1.-self.fid1)/2.) 
 		p1 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(1j*(phase_n))*np.roll(p_old, shift = -t_n)) 
 		p2 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(-1j*(phase_n))*np.roll(p_old, shift = +t_n)) 
 		p = p0+p1+p2
 		p = (p/np.sum(np.abs(p)**2)**0.5)
 		p = p/(2*np.pi*np.real(p[self.points]))
-		self.p_k = np.copy (p)
+		self.p_k = np.copy (p)#np.abs(np.copy (p)) ###########
 
 		if do_plot:
 
@@ -149,8 +151,9 @@ class TimeSequence ():
 		return p_fB, m
 
 	def renorm_p_k (self):
-		self.p_k = self.p_k/(np.sum(np.abs(self.p_k)**2)**0.5)
-		self.p_k = self.p_k/(2*np.pi*np.real(self.p_k[self.points]))
+		# self.p_k = self.p_k/(np.sum(np.abs(self.p_k)**2)**0.5)
+		# self.p_k = self.p_k/(2*np.pi*np.real(self.p_k[self.points]))
+		self.p_k = self.p_k/(2*np.pi*np.sum(np.abs(self.p_k)**2)**0.5)
 
 	def return_std (self, verbose=False):
 

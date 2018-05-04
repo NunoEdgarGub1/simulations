@@ -866,7 +866,6 @@ class CentralSpinExperiment ():
 		eigvecs = [x for (y,x) in sorted(zip(eigvals,eigvecs), key=lambda pair: pair[0])]
 		eigval_prob = multiply(1e-3, sorted(eigvals))
 		
-		
 		#Calculate Tr(|Az><Az| rho)
 		eigvec_prob = np.zeros(2**self._nr_nucl_spins,dtype=complex)
 		for j in range(2**self._nr_nucl_spins):
@@ -877,6 +876,14 @@ class CentralSpinExperiment ():
 
 
 		return eigval_prob, eigvec_prob
+		
+	def get_values_Az (self):
+		return self.values_Az_kHz
+
+	def get_histogram_Az (self, nbins = 50):
+		hist, bin_edges = np.histogram (self.get_values_Az(), nbins)
+		bin_ctrs = 0.5*(bin_edges[1:]+bin_edges[:-1])
+		return hist, bin_ctrs
 		
 	def plot_curr_probability_density (self, title = ''):
 		az, pd = np.real(self.get_probability_density())
@@ -889,16 +896,6 @@ class CentralSpinExperiment ():
 		plt.title (title, fontsize=18)
 		plt.show()
 
-	def get_values_Az (self):
-		return self.values_Az_kHz
-
-	def get_histogram_Az (self, nbins = 50):
-		az, p_az = self.get_probability_density()
-		hist, bin_edges = np.histogram (np.real(az), nbins, weights=np.real(p_az))
-		bin_ctrs = 0.5*(bin_edges[1:]+bin_edges[:-1])
-		hist = hist/np.sum(hist)
-		return hist, bin_ctrs
-		
 	def get_overhauser_stat (self, component=None):
 		'''
 		Calculates mean and standard deviation of Overhauser field
@@ -1099,7 +1096,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 
 		Output: outcome {0/1} of Ramsey experiment
 		'''
-				
+		
 		sig = 1 #seed value for total sig
 		
 		#calculate Prod(tr(U1* U0 rho_block))
@@ -1157,8 +1154,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 			'prob_Az': pd[1],
 			'outcome': ms,
 		}
-		self.values_Az_kHz = pd[0]
-
+		
 		return ms
 
 
