@@ -262,7 +262,7 @@ class NSpinBath ():
 	        dC_lst = [[Axx_NV[0],Axy_NV[0],Axz_NV[0]],[Ayx_NV[0],Ayy_NV[0],Ayz_NV[0]]] #additional hf values to calculate dC 
 
 	    print("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
-	    return Ap_NV[0], Ao_NV[0] , Azx_NV[0] , Azy_NV[0] , r_NV[0] , pair_lst , geom_lst , dC_lst, T2_h*1e6, T2_l*1e6
+	    return Ap_NV[0], Ao_NV[0] , Azx_NV[0] , Azy_NV[0] , r_NV[0] , pair_lst , geom_lst , dC_lst, T2_h, T2_l
 
 	def set_spin_bath (self, Ap, Ao, Azx, Azy):
 
@@ -866,7 +866,6 @@ class CentralSpinExperiment ():
 		eigvecs = [x for (y,x) in sorted(zip(eigvals,eigvecs), key=lambda pair: pair[0])]
 		eigval_prob = multiply(1e-3, sorted(eigvals))
 		
-		
 		#Calculate Tr(|Az><Az| rho)
 		eigvec_prob = np.zeros(2**self._nr_nucl_spins,dtype=complex)
 		for j in range(2**self._nr_nucl_spins):
@@ -877,6 +876,14 @@ class CentralSpinExperiment ():
 
 
 		return eigval_prob, eigvec_prob
+		
+	def get_values_Az (self):
+		return self.values_Az_kHz
+
+	def get_histogram_Az (self, nbins = 50):
+		hist, bin_edges = np.histogram (self.get_values_Az(), nbins)
+		bin_ctrs = 0.5*(bin_edges[1:]+bin_edges[:-1])
+		return hist, bin_ctrs
 		
 	def plot_curr_probability_density (self, title = ''):
 		az, pd = np.real(self.get_probability_density())
@@ -1089,7 +1096,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 
 		Output: outcome {0/1} of Ramsey experiment
 		'''
-				
+		
 		sig = 1 #seed value for total sig
 		
 		#calculate Prod(tr(U1* U0 rho_block))
