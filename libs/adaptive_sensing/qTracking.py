@@ -41,6 +41,13 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self.opt_k = 0
 		self.m_res = 0
 		self.phaselist = []
+		self.classmean = []
+		self.classmax = []
+		self.quantmean = []
+		self.quantmax = []
+		self.timetotal = 0
+		self.tarr = []
+		self.HvarArr = []
 
 		# The "called modules" is  a list that tracks which functions have been used
 		# so that they are saved in the output hdf5 file.
@@ -55,8 +62,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self.nbath = NSpin.SpinExp_cluster1()
 		self.nbath.set_experiment(nr_spins=nr_spins, concentration = concentration,
 				do_plot = do_plot)
-		self.T2star = self.nbath.T2h*1e-6
-		print ("T2* at high magnetic field: ", int(self.T2star*1e10)/10)
+		self.T2star = self.nbath.T2h
+		print ("T2* at high magnetic field: ", int(self.T2star))
 
 		if verbose:
 			self.nbath.print_nuclear_spins()
@@ -66,7 +73,10 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
 	def initialize (self):
 		# B_std = 1/(sqrt(2)*pi*T2_star)
-		self._dfB0 = 1./(4.442883*self.T2star)
+		self._dfB0 = 1./(2*np.pi*self.T2star)
+		#self.n_points = 2**(self.N+1)
+		#self.beta = np.linspace (-self._dfB0, self._dfB0, self.discr_steps)
+		#self._dfB0 = 1./(2*np.pi*self.T2star)
 		print ("std fB: ", self._dfB0*1e-3, " kHz")
 
 		p = np.exp(-0.5*(self.beta/self._dfB0)**2)
@@ -75,6 +85,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self.renorm_p_k()
 
 		self.plot_hyperfine_distr()
+		self.tarr.append(self.timetotal)
 
 
 	def plot_hyperfine_distr(self):
@@ -82,7 +93,6 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		#h, az = self.nbath.get_histogram_Az(nbins = 100)
 		az, p_az = self.nbath.get_probability_density()
 		f = ((1/(self.tau0))*np.angle(self.p_k[self.points-1])*1e-6)
-		print('f',f)
         
 		plt.figure(figsize = (12,6))
 		p0 = 0.5-0.5*np.cos(2*np.pi*self.beta*(int(2**self.opt_k))*self.tau0+self.phase_cappellaro)
@@ -98,16 +108,20 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		plt.plot (self.beta*1e-3, max(p)*p1/max(p1) * (p /max(p)), color='blue', linewidth = 2, label = 'classical')
 		plt.plot (self.beta*1e-3, p, color='green', linewidth = 2, label = 'classical')
 		plt.xlabel (' hyperfine (kHz)', fontsize=18)
-		#plt.plot(tarr,(.5+.5*np.cos(f*tarr))*max(p),':',color='magenta')
-		#plt.plot(tarr,(1-(.5+.5*np.cos(f*tarr)))*max(p),':',color='cyan')
 		plt.axvline(np.average(az, weights=p_az/np.sum(p_az)),color='blue', ls='--')
 		plt.axvline(az[list(p_az/sum(p_az)).index(max(p_az/sum(p_az)))],color='blue', ls=':')
-		plt.xlim(min(self.beta*1e-3),max(self.beta*1e-3))
+		plt.axvline(np.average(self.beta*1e-3, weights=p),color='green', ls='--')
+		plt.axvline(self.beta[list(p).index(max(p))]*1e-3,color='green', ls=':')
+		#plt.xlim(min(self.beta*1e-3),max(self.beta*1e-3))
 		#plt.ylim(0, max(p))
 		plt.legend()
 		plt.savefig('%.04d'%self.step)
 		plt.show()
 		self.step+=1
+		self.classmean.append(np.average(self.beta*1e-3, weights=p))
+		self.classmax.append(self.beta[list(p).index(max(p))]*1e-3)
+		self.quantmean.append(np.average(az, weights=p_az/np.sum(p_az)))
+		self.quantmax.append(az[list(p_az/sum(p_az)).index(max(p_az/sum(p_az)))])
 
 
 	def return_std (self, verbose=False):
@@ -120,9 +134,11 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
 		self.renorm_p_k()
 		print ("|p_(-1)| = ", np.abs(self.p_k[self.points-1]))
-		Hvar = (2*np.pi*np.abs(self.p_k[self.points-1]))**(-2)-1
+		print("self.points", self.points)
+		Hvar = (2*np.pi*np.abs(self.p_k[self.points-1]))**(-2) -1
 		print('Hvar',Hvar)
-		std_H = ((abs(cmath.sqrt(Hvar)))/(2*np.pi*self.tau0))
+		self.HvarArr.append(Hvar)
+		std_H = (Hvar**.5)/(2*np.pi*self.tau0)
 		#fom = self.figure_of_merit()
 		if verbose:
 			print ("Std (Holevo): ", std_H*1e-3 , ' kHz')
@@ -180,24 +196,21 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
 	def adptv_tracking_single_step (self, k, M, do_debug=False):
 
-		# t_i = int(2**k)
-		# ttt = -2**(k+1)
-		# t0 = self.running_time					
+		t_i = int(2**k)
+		ttt = -2**(k+1)
+		t0 = self.running_time					
 
 		#print ("idx_capp = ", ttt+self.points)
 
 		m_list = []
-		#print('Ramsey time', t_i*self.tau0)
-		#print('tau_0 time', self.tau0)
+		print('Ramsey time', t_i*self.tau0)
+		print('tau_0 time', self.tau0)
 		#self.phase_cappellaro = 0.5*np.angle (self.p_k[int(ttt+self.points)])
-		#print('Phase',self.phase_cappellaro)
+		print('Phase',self.phase_cappellaro)
 		for m in range(M):
-			t_i = int(2**min(k,abs(k- (k+m)))) #k-(M - m - 1), k- (k+m)
-			ttt = -2**(min(k,abs(k- (k+m)))+1)
-			t0 = self.running_time
-			print('Ramsey time', t_i*self.tau0)
-			print('k_m', min(k,abs(k- (k+m))))
-			self.phase_cappellaro = -(0.5*np.angle (self.p_k[int(ttt+self.points)]) - (np.pi/2+np.pi/2))
+			self.timetotal+=t_i*self.tau0
+			self.tarr.append(self.timetotal)
+			self.phase_cappellaro = 0.5*np.angle (self.p_k[int(ttt+self.points)]) - np.pi
 			self.phaselist.append(self.phase_cappellaro)
 			print('points',self.points)
 			print('Phase',self.phase_cappellaro)
@@ -207,6 +220,24 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 			self.bayesian_update (m_n = self.m_res, phase_n = self.phase_cappellaro, t_n = t_i, do_plot=False)
 			if do_debug:
 				print ("Estimation step: t_units=", t_i, "    -- res:", self.m_res)
+		# for k_m in range(k+1):
+		# 	t_i = int(2**k_m) #k-(M - m - 1), k- (k+m)
+		# 	ttt = -2**(k_m+1)
+		# 	t0 = self.running_time
+		# 	self.timetotal+=t_i*self.tau0
+		# 	self.tarr.append(self.timetotal)
+		# 	print('Ramsey time', t_i*self.tau0)
+		# 	print('k_m', k_m)
+		# 	self.phase_cappellaro = -(-0.5*np.angle (self.p_k[int(ttt+self.points)]) - 0*(np.pi/2+np.pi/2))
+		# 	self.phaselist.append(self.phase_cappellaro)
+		# 	print('points',self.points)
+		# 	print('Phase',self.phase_cappellaro)
+		# 	self.m_res = self.ramsey (theta=self.phase_cappellaro, t = t_i*self.tau0, do_plot=do_debug)
+		# 	print('mmm2',self.m_res)
+		# 	m_list.append(self.m_res)	
+		# 	self.bayesian_update (m_n = self.m_res, phase_n = self.phase_cappellaro, t_n = t_i, do_plot=False)
+		# 	if do_debug:
+		# 		print ("Estimation step: t_units=", t_i, "    -- res:", self.m_res)
 
 		return m_list
 
@@ -222,7 +253,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self._called_modules.append('adaptive_tracking_estimation')
 		self.running_time = 0
 
-		for i in range(40):
+		for i in range(100):
 			self.opt_k = self.find_optimal_k (do_debug = do_debug)
 			m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, do_debug = do_debug)
 			p = self.return_p_fB()[0]
