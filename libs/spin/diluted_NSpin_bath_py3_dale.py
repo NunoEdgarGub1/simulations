@@ -884,7 +884,6 @@ class CentralSpinExperiment ():
 		
 			#takes the non zero element from each eigvector in the sorted list
 			dum_var = [i for i, e in enumerate(eigvecs[j]) if e != 0][0]
-			eigvec_prob[j] = self._curr_rho[dum_var,dum_var]**2
 
 
 		return eigval_prob, eigvec_prob

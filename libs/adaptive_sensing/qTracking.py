@@ -26,7 +26,7 @@ matplotlib.rc('ytick', labelsize=18)
 
 class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
-	def __init__ (self, time_interval, overhead, folder):
+	def __init__ (self, time_interval, overhead, folder, trial):
 		self.time_interval = time_interval
 		self._B_dict = {}
 		self.kappa = None
@@ -40,12 +40,14 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self.phase_cappellaro = 0
 		self.opt_k = 0
 		self.m_res = 0
+		self.trial = trial
 		# self.phaselist = []
 		# self.classmean = []
 		# self.classmax = []
 		# self.quantmean = []
 		# self.quantmax = []
 		# self.Hvarlist = []
+		# self.mse_lst = []
 
 		# The "called modules" is  a list that tracks which functions have been used
 		# so that they are saved in the output hdf5 file.
@@ -71,16 +73,17 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
 	def initialize (self):
 		# B_std = 1/(sqrt(2)*pi*T2_star)
-		self._dfB0 = 1/(4.442883*self.tau0)
+		self._dfB0 = 1/(np.sqrt(2)*np.pi*self.tau0)
 		print ("std fB: ", self._dfB0*1e-3, " kHz")
 
 		p = np.exp(-0.5*(self.beta/self._dfB0)**2)
 		p = p/(np.sum(p))
 		self.p_k = np.fft.ifftshift(np.abs(np.fft.ifft(p, self.discr_steps))**2)
 		self.renorm_p_k()
-
+		#print('MSE', self.MSE()[0])
+		#self.mse_lst.append(self.MSE()[0])
 		self.plot_hyperfine_distr()
-
+        
 
 	def plot_hyperfine_distr(self):
 		p, m = self.return_p_fB()
@@ -97,8 +100,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		tarr = np.linspace(min(self.beta)*1e-3,max(self.beta)*1e-3,1000)
 		#plt.plot (az, p_az/np.sum(p_az), 'o', color='royalblue', label = 'spin-bath')
 		#plt.plot (az, p_az/np.sum(p_az), '--', color='royalblue')
-		plt.plot (az, p_az/max(p_az) * max(p), 'o', color='royalblue', label = 'spin-bath')
-		plt.plot (az, p_az/max(p_az) * max(p), '--', color='royalblue')
+		#plt.plot (az, p_az/max(p_az) * max(p), 'o', color='royalblue', label = 'spin-bath')
+		#plt.plot (az, p_az/max(p_az) * max(p), '--', color='royalblue')
 		#plt.plot (az2, p_az2/np.sum(p_az2), '^', color='k', label = 'spin-bath')
 		#plt.plot (az2, p_az2/np.sum(p_az2), ':', color='k')
 		plt.plot (az2, p_az2/max(p_az2) *max(p), '^', color='k', label = 'spin-bath')
@@ -106,14 +109,20 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		#plt.text(self.m_list[-1])
 		plt.text(0, 0, self.m_res, bbox=dict(facecolor='red', alpha=0.5))
 		plt.xlabel (' hyperfine (kHz)', fontsize=18)
-		plt.plot (self.beta*1e-3, max(p)*p0/max(p0) * (p /max(p)), color='crimson', linewidth = 2, label = 'classical')
-		plt.plot (self.beta*1e-3, max(p)*p1/max(p1) * (p /max(p)), color='blue', linewidth = 2, label = 'classical')
+		#plt.plot (self.beta*1e-3, max(p)*p0/max(p0) * (p /max(p)), color='crimson', linewidth = 2, label = 'classical')
+		#plt.plot (self.beta*1e-3, max(p)*p1/max(p1) * (p /max(p)), color='blue', linewidth = 2, label = 'classical')
 		plt.plot (self.beta*1e-3, p, color='green', linewidth = 2, label = 'classical')
+		plt.fill_between(az2[0:int(len(az2)/2)], 
+                         (p_az2/max(p_az2) *max(p))[0:int(len(az2)/2)], 
+                         p[self.MSE()[1][0:int(len(az2)/2)]], alpha=.5, color='crimson')
+		plt.fill_between(az2[int(len(az2)/2):], 
+                         (p_az2/max(p_az2) *max(p))[int(len(az2)/2):], 
+                         p[self.MSE()[1][int(len(az2)/2):]], alpha=.5, color='crimson')
 		plt.xlabel (' hyperfine (kHz)', fontsize=18)
 		plt.axvline(np.average(az2, weights=p_az2/np.sum(p_az2)),color='blue', ls='--')
 		plt.axvline(np.average(self.beta*1e-3, weights=p),color='green', ls='--')
 		plt.legend()
-		#plt.savefig('trial_%.04d_%.04d_nonideal'%(self.trial,self.step))
+		plt.savefig('trial_%.04d_%.04d'%(self.trial,self.step))
 		plt.show()
 		self.step+=1
 		# self.classmean.append(np.average(self.beta*1e-3, weights=p))
@@ -124,8 +133,19 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		# np.save('quantmean_uni_%d.npy'%self.trial, self.quantmean)
 		# np.save('classmax_uni_%d.npy'%self.trial, self.classmax)
 		# np.save('quantmax_uni_%d.npy'%self.trial, self.quantmax)
+        
 
-
+	def MSE (self):
+		p, m = self.return_p_fB()
+		az2, p_az2 = self.nbath.get_probability_density()
+		self.az=az2
+		beta_mse_ind = []
+		for freq in az2:
+			beta_mse_ind.append(min(range(len(self.beta)), key=lambda j: abs(self.beta[j] - freq*1e3)))   
+            
+		return(((p[beta_mse_ind]- p_az2/max(p_az2)*max(p))**2).mean().real), beta_mse_ind
+    
+        
 	def return_std (self, verbose=False):
 
 		'''
@@ -137,7 +157,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self.renorm_p_k()
 		print ("|p_(-1)| = ", np.abs(self.p_k[self.points-1]))
 		Hvar = (2*np.pi*np.abs(self.p_k[self.points-1]))**(-2)-1
-		self.Hvarlist.append(Hvar)
+		#self.Hvarlist.append(Hvar)
 		print('Hvar',Hvar)
 		std_H = ((abs(cmath.sqrt(Hvar)))/(2*np.pi*self.tau0))
 		#fom = self.figure_of_merit()
@@ -209,12 +229,14 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		for m in range(M):
 			print('Ramsey time', t_i*self.tau0)
 			self.phase_cappellaro = 0.5*np.angle (self.p_k[int(ttt+self.points)])
-			self.phaselist.append(self.phase_cappellaro)
+			#self.phaselist.append(self.phase_cappellaro)
 			print('points',self.points)
 			print('Phase',self.phase_cappellaro)
 			self.m_res = self.ramsey (theta=self.phase_cappellaro, t = t_i*self.tau0, do_plot=do_debug)
 			m_list.append(self.m_res)	
 			self.bayesian_update (m_n = self.m_res, phase_n = self.phase_cappellaro, t_n = t_i, do_plot=False)
+			print('MSE', self.MSE()[0])
+			#self.mse_lst.append(self.MSE()[0])
 			self.step+=1
 			if do_debug:
 				print ("Estimation step: t_units=", t_i, "    -- res:", self.m_res)
