@@ -48,7 +48,7 @@ class TimeSequence ():
 		# Quantities required for computation (ex: discretization space)
 		self.points = 2**(self.N+1)+3
 		self.discr_steps = 2*self.points+1
-		self.fB_max = 1./(2*self.T2)
+		self.fB_max = 1./(tau0)
 		self.n_points = 2**(self.N+1)
 		self.beta = np.linspace (-self.fB_max, self.fB_max, self.discr_steps)
 		self.init_apriori()
@@ -165,7 +165,7 @@ class TimeSequence ():
 
 		self.renorm_p_k()
 		print ("|p_(-1)| = ", np.abs(self.p_k[self.points-1]))
-		Hvar = (2*np.pi*np.abs(self.p_k[self.points-1]))**(-2)-1
+		Hvar = (np.abs(self.p_k[self.points-1]))**(-2)-1
 		std_H = ((Hvar**0.5)/(2*np.pi*self.tau0))
 		fom = self.figure_of_merit()
 		if verbose:

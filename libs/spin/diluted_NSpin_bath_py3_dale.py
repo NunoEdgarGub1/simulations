@@ -220,8 +220,8 @@ class NSpinBath ():
 	
 	    self._nr_nucl_spins = len(Ap_NV[0])
 	    print ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
-	    print ("T2* -- high field: , ", int(T2_h*1e9), " ns")
-	    print ("T2* -- low field: ", int(T2_l*1e9), " ns")
+	    print ("T2* -- high field: , ", T2_h*1e3, " ms")
+	    print ("T2* -- low field: ", T2_l*1e3, " ms")
 	    self.T2star_lowField = T2_l
 	    self.T2star_highField = T2_h
         
@@ -540,8 +540,18 @@ class CentralSpinExperiment ():
 #					self.In_tens_test[l][j].append(np.kron(np.kron(Q1,self.In_tens_disjoint[l][j][k]),Q2))
 
 		#initial bath density matrix
+#		mu = 0
+#		variance = (self.T2h**-1)**-3 #kHz
+#		sigma = math.sqrt(variance)
+#		x = np.linspace(mu - sigma, mu + sigma, 2**self._nr_nucl_spins)
+#		print(x)
+#		self._curr_rho = np.diag(x)#/np.trace(np.diag(x))
+#		print(np.diag(x))
+
 		self._curr_rho = np.eye(2**self._nr_nucl_spins)/np.trace(np.eye(2**self._nr_nucl_spins))
-		
+
+
+
 		#Create sub matrices based on result of group algo
 		if self._clus:
 			self._block_rho = []
@@ -772,7 +782,8 @@ class CentralSpinExperiment ():
 				for j in range(3):
 					self._over_op.append(sum(self.HFvec[self._grp_lst[g][k]][j]*self.In_tens[g][k][j] for k in range(len(self._grp_lst[g]))))
 			else:
-				for j in range(3): self._over_op[j]+=sum(self.HFvec[self._grp_lst[g][k]][j]*self.In_tens[g][k][j] for k in range(len(self._grp_lst[g])))
+				for j in range(3):
+					self._over_op[j]+=sum(self.HFvec[self._grp_lst[g][k]][j]*self.In_tens[g][k][j] for k in range(len(self._grp_lst[g])))
 		
 		return self._over_op
 
@@ -863,8 +874,9 @@ class CentralSpinExperiment ():
 		'''
 		
 		eigvals, eigvecs = np.linalg.eig(self._overhauser_op()[2])
-		eigvecs = [x for (y,x) in sorted(zip(eigvals,eigvecs), key=lambda pair: pair[0])]
-		eigval_prob = multiply(1e-3, sorted(eigvals))
+		eigvecs = [x for (y,x) in sorted(zip(eigvals,eigvecs), key=lambda pair: pair[0], reverse=True)]
+		eigval_prob = multiply((2*np.sqrt(np.pi))**-1 * 1e-3, sorted(eigvals))#multiply((2*np.pi)**-1 * 1e-3, sorted(eigvals))
+		#eigval_prob = multiply( 1e-3, sorted(eigvals))
 		
 		#Calculate Tr(|Az><Az| rho)
 		eigvec_prob = np.zeros(2**self._nr_nucl_spins,dtype=complex)
@@ -872,7 +884,7 @@ class CentralSpinExperiment ():
 		
 			#takes the non zero element from each eigvector in the sorted list
 			dum_var = [i for i, e in enumerate(eigvecs[j]) if e != 0][0]
-			eigvec_prob[j] = self._curr_rho[dum_var,dum_var]
+			eigvec_prob[j] = self._curr_rho[dum_var,dum_var]**2
 
 
 		return eigval_prob, eigvec_prob
@@ -1098,6 +1110,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		'''
 		
 		sig = 1 #seed value for total sig
+		phi = phi+np.pi
 		
 		#calculate Prod(tr(U1* U0 rho_block))
 		for j in range(len(self._grp_lst)):
