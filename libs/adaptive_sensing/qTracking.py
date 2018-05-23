@@ -26,7 +26,7 @@ matplotlib.rc('ytick', labelsize=18)
 
 class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
-	def __init__ (self, time_interval, overhead, folder, trial):
+	def __init__ (self, time_interval, overhead, folder):
 		self.time_interval = time_interval
 		self._B_dict = {}
 		self.kappa = None
@@ -40,7 +40,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		self.phase_cappellaro = 0
 		self.opt_k = 0
 		self.m_res = 0
-		self.trial = trial
+		#self.trial = trial
 		# self.phaselist = []
 		# self.classmean = []
 		# self.classmax = []
@@ -93,11 +93,10 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		print('f',f)
         
 		fig = plt.figure(figsize = (12,6))
-		p0 = 0.5-0.5*np.cos(2*np.pi*self.beta*(int(2**self.opt_k))*self.tau0+self.phase_cappellaro)
-		p1 = 0.5+0.5*np.cos(2*np.pi*self.beta*(int(2**self.opt_k))*self.tau0+self.phase_cappellaro)
-		plt.fill_between (self.beta*1e-3, 0, max(p)*p0/max(p0), color='magenta', alpha = 0.1)
-		plt.fill_between (self.beta*1e-3, 0, max(p)*p1/max(p1), color='cyan', alpha = 0.1)
-		tarr = np.linspace(min(self.beta)*1e-3,max(self.beta)*1e-3,1000)
+		# p0 = 0.5-0.5*np.cos(2*np.pi*self.beta*(int(2**self.opt_k))*self.tau0+self.phase_cappellaro)
+		# p1 = 0.5+0.5*np.cos(2*np.pi*self.beta*(int(2**self.opt_k))*self.tau0+self.phase_cappellaro)
+		# plt.fill_between (self.beta*1e-3, 0, max(p)*p0/max(p0), color='magenta', alpha = 0.1)
+		# plt.fill_between (self.beta*1e-3, 0, max(p)*p1/max(p1), color='cyan', alpha = 0.1)
 		#plt.plot (az, p_az/np.sum(p_az), 'o', color='royalblue', label = 'spin-bath')
 		#plt.plot (az, p_az/np.sum(p_az), '--', color='royalblue')
 		#plt.plot (az, p_az/max(p_az) * max(p), 'o', color='royalblue', label = 'spin-bath')
@@ -112,17 +111,17 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		#plt.plot (self.beta*1e-3, max(p)*p0/max(p0) * (p /max(p)), color='crimson', linewidth = 2, label = 'classical')
 		#plt.plot (self.beta*1e-3, max(p)*p1/max(p1) * (p /max(p)), color='blue', linewidth = 2, label = 'classical')
 		plt.plot (self.beta*1e-3, p, color='green', linewidth = 2, label = 'classical')
-		plt.fill_between(az2[0:int(len(az2)/2)], 
-                         (p_az2/max(p_az2) *max(p))[0:int(len(az2)/2)], 
-                         p[self.MSE()[1][0:int(len(az2)/2)]], alpha=.5, color='crimson')
-		plt.fill_between(az2[int(len(az2)/2):], 
-                         (p_az2/max(p_az2) *max(p))[int(len(az2)/2):], 
-                         p[self.MSE()[1][int(len(az2)/2):]], alpha=.5, color='crimson')
+		# plt.fill_between(az2[0:int(len(az2)/2)], 
+		# (p_az2/max(p_az2) *max(p))[0:int(len(az2)/2)], 
+		# p[self.MSE()[1][0:int(len(az2)/2)]], alpha=.5, color='crimson')
+		# plt.fill_between(az2[int(len(az2)/2):], 
+		# (p_az2/max(p_az2) *max(p))[int(len(az2)/2):], 
+		# p[self.MSE()[1][int(len(az2)/2):]], alpha=.5, color='crimson')
 		plt.xlabel (' hyperfine (kHz)', fontsize=18)
 		plt.axvline(np.average(az2, weights=p_az2/np.sum(p_az2)),color='blue', ls='--')
 		plt.axvline(np.average(self.beta*1e-3, weights=p),color='green', ls='--')
 		plt.legend()
-		plt.savefig('trial_%.04d_%.04d'%(self.trial,self.step))
+		#plt.savefig('trial_%.04d_%.04d'%(self.trial,self.step))
 		plt.show()
 		self.step+=1
 		# self.classmean.append(np.average(self.beta*1e-3, weights=p))
