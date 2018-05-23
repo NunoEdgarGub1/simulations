@@ -884,6 +884,7 @@ class CentralSpinExperiment ():
 		
 			#takes the non zero element from each eigvector in the sorted list
 			dum_var = [i for i, e in enumerate(eigvecs[j]) if e != 0][0]
+			eigvec_prob[j] = self._curr_rho[dum_var,dum_var]
 
 
 		return eigval_prob, eigvec_prob
@@ -1126,6 +1127,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		#calculate probability given by 1 +/- Prod(tr(U1* U0 rho_block))
 		p1 = round(.5*(1+sig.real),5)
 		p0 = round(.5*(1-sig.real),5)
+		print([p0,p1])
 		
 		ms = ran.choice([1,0],p=[p1, p0])
 		print('Ramsey outcome: ', ms)
