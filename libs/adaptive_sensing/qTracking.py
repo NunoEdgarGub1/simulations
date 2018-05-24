@@ -167,6 +167,18 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 	def reset_called_modules(self):
 		self._called_modules = ['ramsey', 'bayesian_update', 'calc_acc_phase']
 
+	def ramsey_classical (self, t=0., theta=0.):
+
+		A = 0.5
+		B = -0.5		
+
+		Bp = np.exp(-(t/self.T2)**2)*np.cos(self.curr_acc_phase+theta)
+		p0 = (1-A)-B*Bp
+		p1 = A+B*Bp
+		np.random.seed()
+		result = np.random.choice (2, 1, p=[p0, p1])
+		return result[0]	
+
 	def ramsey (self, t=0., theta=0., do_plot = False):
 
 		'''
@@ -200,9 +212,10 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
 	def find_optimal_k (self, do_debug=True):
 		width, fom = self.return_std (verbose=True)
-		print('optk+1',np.log(1/(width*self.tau0))/np.log(2))
-		print('width',width)
 		self.opt_k = np.int(np.log(1/(width*self.tau0))/np.log(2))-1
+
+		print('Optimal k. width = ', width/1000, 'kHz  --- optk+1 = ',np.log(1/(width*self.tau0))/np.log(2), ' -- frq = ', 0.001/(self.tau0*2**self.opt_k), 'kHz')
+		#print('width: ', width)
         
 		#TEMPORARY fix for when opt_k is negative. In case flag is raised, best to reset simulation for now
 		if self.opt_k<0:
@@ -225,20 +238,25 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		#print('tau_0 time', self.tau0)
 		#self.phase_cappellaro = 0.5*np.angle (self.p_k[int(ttt+self.points)])
 		#print('Phase',self.phase_cappellaro)
+		print('Ramsey time', t_i*self.tau0)
+
 		for m in range(M):
-			print('Ramsey time', t_i*self.tau0)
+			#print('Ramsey time', t_i*self.tau0)
 			self.phase_cappellaro = 0.5*np.angle (self.p_k[int(ttt+self.points)])
 			#self.phaselist.append(self.phase_cappellaro)
-			print('points',self.points)
-			print('Phase',self.phase_cappellaro)
-			self.m_res = self.ramsey (theta=self.phase_cappellaro, t = t_i*self.tau0, do_plot=do_debug)
+			#print('points',self.points)
+			#print('Phase',self.phase_cappellaro)
+			self.m_res = self.ramsey (theta=self.phase_cappellaro, t = t_i*self.tau0, do_plot=False)#do_debug)
 			m_list.append(self.m_res)	
 			self.bayesian_update (m_n = self.m_res, phase_n = self.phase_cappellaro, t_n = t_i, do_plot=False)
-			print('MSE', self.MSE()[0])
+			#print('MSE', self.MSE()[0])
 			#self.mse_lst.append(self.MSE()[0])
 			self.step+=1
 			if do_debug:
 				print ("Estimation step: t_units=", t_i, "    -- res:", self.m_res)
+
+		if do_debug:
+			self.plot_hyperfine_distr()
 
 		return m_list
 
@@ -256,9 +274,16 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
 		for i in range(nr_steps):
 			self.opt_k = self.find_optimal_k (do_debug = do_debug)
-			m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, do_debug = do_debug)
+			print ("CURRENT k: ", self.opt_k+1)
+			m_list = self.adptv_tracking_single_step (k = self.opt_k+1, M=M, do_debug = do_debug)
 			p = self.return_p_fB()[0]
 			maxp = list(p).index(max(p))
+
+			m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, do_debug = do_debug)
+			print ("CURRENT k: ", self.opt_k)
+			p = self.return_p_fB()[0]
+			maxp = list(p).index(max(p))
+
 			# if self.beta[maxp]!=0:
 			# 	self.tau0 = 1/(2*np.pi*abs(self.beta[maxp]))
 			# 	print(self.tau0)
