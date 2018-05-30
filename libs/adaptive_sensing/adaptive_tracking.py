@@ -89,8 +89,6 @@ class TimeSequence ():
 			m_old = max(y_old)
 
 		p_old = np.copy(self.p_k)
-		print('p_old length',len(p_old))
-		print('p_old max check',list(p_old).index(max(p_old)), max(p_old))
 		p0 = p_old*((1-m_n)-((-1)**m_n)*(self.fid0+1.-self.fid1)/2.) 
 		p1 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(1j*(phase_n))*np.roll(p_old, shift = -t_n)) 
 		p2 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(-1j*(phase_n))*np.roll(p_old, shift = +t_n)) 

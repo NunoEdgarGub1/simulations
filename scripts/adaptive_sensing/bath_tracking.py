@@ -34,12 +34,25 @@ nr_reps = 1
 fid0 = 1.
 fid1 = 1.
 
+
 track = True
 
 folder = 'C:/'
+
+T2starlist = []
+timelist = []
+
+'''
+If eng_bath==True (engineered bath), set nr_spins to a larger number that how many spins are required. 
+
+len(cluster) determines the nuber of 'seed' spins.
+The values in cluster denotes the number of neighbours selected from nr_spins spins based on proximity to the seed spins.
+
+'''
+
 exp = qtrack.TimeSequenceQ(time_interval=100e-6, overhead=0, folder=folder)
 
-exp.set_spin_bath (nr_spins=6, concentration=0.01, verbose=True, do_plot = False)
-exp.set_msmnt_params (tau0 = 1e-6, G=5, F=3)
+exp.set_spin_bath (cluster=[2,1,1], nr_spins=7, concentration=0.01, verbose=True, do_plot = False, eng_bath=True)
+exp.set_msmnt_params (tau0 = 1e-6, T2 = exp.T2star, G=5, F=3)
 exp.initialize()
-exp.qTracking (do_debug = True, M=3, nr_steps=20)
+exp.qTracking (do_debug = True, M=3, nr_steps = 10)
