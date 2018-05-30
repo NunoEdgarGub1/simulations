@@ -261,32 +261,31 @@ class NSpinBath ():
 	                theta_ij_C[j] = np.arccos(r_ij[2]/r_ij_C[j])
 	            else:
 	                print('Error: %d nuclear spin pair overlapping'%j)
-            
-	        new_nuc_list = [j for j in range(Nseed)]
-	        new_r_list = []
-	        new_theta_list = []
-	        new_phi_list = []
-	        for nuc in range(Nseed):
-	            pairs_seed = [pair for pair in pair_lst if nuc in pair]
-	            r_ij_seed = [r_ij_C[pair_lst.index(pair)] for pair in 
-                             list(it.combinations(list(np.unique(np.array(pairs_seed).flatten())), 2))]
-                                      
-	            pair_sort = [p for _, p in sorted(zip(r_ij_seed,pairs_seed),key=lambda couple: couple[0])]
-                
-	            j=0
-	            pair_nbours = []
-	            spin_nbours = []
-	            for pair in pair_sort:
-	                if pair[1] not in new_nuc_list:
-	                    spin_nbours+=[pair[0],pair[1]]
-	                    pair_nbours+=[(pair[0],pair[1])]
-	                    new_nuc_list+=[pair[1]]
-	                    j+=1
-	                    if j>=cluster[nuc]:
-	                        break
-	            print('pair dist',[r_ij_C[pair_lst.index(pair)] for pair in pair_nbours])
                                                             
-	        if eng_bath:  
+	        if eng_bath:                
+	            new_nuc_list = [j for j in range(Nseed)]
+	            new_r_list = []
+	            new_theta_list = []
+	            new_phi_list = []
+	            for nuc in range(Nseed):
+	                pairs_seed = [pair for pair in pair_lst if nuc in pair]
+	                r_ij_seed = [r_ij_C[pair_lst.index(pair)] for pair in 
+                                 list(it.combinations(list(np.unique(np.array(pairs_seed).flatten())), 2))]
+
+	                pair_sort = [p for _, p in sorted(zip(r_ij_seed,pairs_seed),key=lambda couple: couple[0])]
+
+	                j=0
+	                pair_nbours = []
+	                spin_nbours = []
+	                for pair in pair_sort:
+	                    if pair[1] not in new_nuc_list:
+	                        spin_nbours+=[pair[0],pair[1]]
+	                        pair_nbours+=[(pair[0],pair[1])]
+	                        new_nuc_list+=[pair[1]]
+	                        j+=1
+	                        if j>=cluster[nuc]:
+	                            break
+	                print('pair dist',[r_ij_C[pair_lst.index(pair)] for pair in pair_nbours])
                 
 	            pair_lst = list(it.combinations(new_nuc_list, 2))
 	            new_r_list = [r_ij_C[pair_lst.index(pair)] for pair in pair_lst]
