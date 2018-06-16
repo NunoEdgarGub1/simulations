@@ -239,7 +239,6 @@ class NSpinBath ():
             
 	    else:
 	        pair_lst = list(it.combinations(list(range(self._nr_nucl_spins)), 2))
-	        print(pair_lst)
 	        r_ij_C = np.zeros(len(pair_lst)) #length is nC2, n = #nuc spins
 	        theta_ij_C = np.zeros(len(pair_lst)) #length is nC2, n = #nuc spins
 	        phi_ij_C = np.zeros(len(pair_lst)) #length is nC2, n = #nuc spins
@@ -279,12 +278,12 @@ class NSpinBath ():
 	                spin_nbours = []
 	                for pair in pair_sort:
 	                    if pair[1] not in new_nuc_list:
+	                        if j>=cluster[nuc]:
+	                            break
 	                        spin_nbours+=[pair[0],pair[1]]
 	                        pair_nbours+=[(pair[0],pair[1])]
 	                        new_nuc_list+=[pair[1]]
 	                        j+=1
-	                        if j>=cluster[nuc]:
-	                            break
 	                print('pair dist',[r_ij_C[pair_lst.index(pair)] for pair in pair_nbours])
                 
 	            pair_lst = list(it.combinations(new_nuc_list, 2))
@@ -352,6 +351,7 @@ class NSpinBath ():
 
 	#gives Larmor vector. hf_approx condition set to normal condition before we agree if setting azx and azy is a valid approximation...
 	def larm_vec (self, hf_approx):
+	
 		'''
 		Calculates Larmor vectors.
 		
@@ -372,6 +372,7 @@ class NSpinBath ():
 			else:
 				lar_1[f] = (self.gam_n/(2*np.pi))*np.array([self.Bx,self.By,self.Bz])+np.array([self.Azx[f],self.Azy[f],self.Ap[f]])
 				lar_0[f] = (self.gam_n/(2*np.pi))*np.array([self.Bx,self.By,self.Bz])
+	
 
 		return lar_0, lar_1
 
@@ -550,6 +551,14 @@ class CentralSpinExperiment ():
 		
 		self.Larm = self.exp.larm_vec (self._hf_approx)
 		self._nr_nucl_spins = int(self.exp._nr_nucl_spins)
+		
+		close_cntr = 0
+		for j in range(self._nr_nucl_spins):
+			if np.abs(self.Ap[j]) > 1e6:
+				#self.Ap[j], self.Ao[j], self.Azx[j], self.Azy[j] = 0, 0, 0
+				close_cntr +=1
+		
+		print('%d spins with |A| > 1MHz.' %close_cntr)
 
 		#hyperfine vector
 		self.HFvec = np.array([[self.Azx[j], self.Azy[j], self.Ap[j]] for j in range(self._nr_nucl_spins)])
@@ -644,8 +653,10 @@ class CentralSpinExperiment ():
 			Carr[j][2].append(Carr[j][0][2]) #zx
 			Carr[j][2].append(Carr[j][1][2]) #zy
 			Carr[j][2].append(self.prefactor*np.power(self.r_ij[j],-3)*(1-3*(np.cos(self.theta_ij[j])**2))) #zz
-				
-		return Carr
+		
+		self.Cz_mean = np.mean([Carr[j][2] for j in range(len(self.pair_lst))])
+		
+		return np.multiply(1,Carr)
 		
 	def _dCmn (self, ms, m, n):
 		'''
@@ -775,9 +786,13 @@ class CentralSpinExperiment ():
 		Cmer_arr = [[C[j] for j in self._ind_arr[k]] for k in range(len(self._ind_arr))]
 		ind_test = [[self._ind_arr[k][j] for j in range(len(self._ind_arr[k]))] for k in range(len(self._ind_arr))]
 		
-		print('unsorted index array', self._ind_arr_unsrt)
-		print('grouped', self._grp_lst)
-		print('nuc-nuc coupling strength', Cmer_arr)
+		self.T2est = np.mean([(C[j]**-1) for j in self._ind_arr[0]])
+		
+		#print('unsorted index array', self._ind_arr_unsrt)
+		#print('grouped', self._grp_lst)
+		#print('nuc-nuc coupling strength', Cmer_arr)
+		#print()
+		print('1/coupling mean (s)', self.T2est)
 			
 
 
@@ -850,8 +865,6 @@ class CentralSpinExperiment ():
 			else:
 				for j in range(3): self._over_op_test[j]+=sum(self.HFvec[self._grp_lst[g][k]][j]*self.In_tens[g][k][j] for k in range(len(self._grp_lst[g])))
 	
-		print(np.amax(np.subtract(self._overhauser_op(),self._over_op_test).real),np.amax(np.subtract(self._overhauser_op(),self._over_op_test).imag))
-		print([k for k in [spin for group in self._grp_lst for spin in group]])
 
 
 	def _H_op_ind(self, ms):
@@ -1012,6 +1025,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		self.mu0 = 4*np.pi*10**(-7)
 		self.ZFS = 2.87*10**9
 		self.msArr=[]
+		self.flipArr = []
 
 		self.prefactor = self.mu0*(self.gam_n**2)/(4*np.pi)*self.hbar**2 /self.hbar/(2*np.pi) #Last /hbar/2pi is to convert from Joule to Hz
 
@@ -1042,10 +1056,13 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		
 		self.arr_test = []
 		self.arr_test_clus = []
-		
-		print(self._grp_lst)
+		self.arr_test_clus2 = []
+		count = 0
 		
 		for t in tauarr:
+		
+			print(count/len(tauarr) *100,'%')
+			count+=1
 		
 			if do_compare:
 			
@@ -1066,17 +1083,18 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 				U0_clus = np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]))
 				U1_clus = (np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).conj().T).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]).conj().T)
 				
-				sig_clus *= np.trace(U0_clus.dot(self._block_rho[j].dot(U1_clus)))
+				sig_clus *= np.trace(U0_clus.dot((self._block_rho[j]/np.trace(self._block_rho[j])).dot(U1_clus)))
+				#sig_clus *= (2**-len(self._grp_lst[j]))*np.trace(U0_clus.dot(U1_clus))
 
-			#self.arr_test_clus.append(.5*(1 + sig_clus.real))
+			#self.arr_test_clus2.append(.5*(1 + sig_clus.real))
 			self.arr_test_clus.append(sig_clus.real)
 	
 		plt.figure (figsize=(10,5))
 		if do_compare:
 			plt.plot (tauarr, self.arr_test, 'RoyalBlue', label='Independent')
 			plt.plot (tauarr, self.arr_test, 'o',ms=3)
-		#plt.plot (tauarr, self.arr_test_clus, 'Red', label='Interacting')
-		#plt.plot (tauarr, self.arr_test_clus, 'o',ms=3)
+		plt.plot (tauarr, self.arr_test_clus, 'Red', label='Interacting')
+		plt.plot (tauarr, self.arr_test_clus, 'o',ms=3)
 		plt.legend(fontsize=15)
 		plt.title ('Hahn echo')
 		plt.show()
@@ -1104,7 +1122,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		
 		Cmn = self._Cmn()
 		
-		dCmn = [self._dCmn(ms, pair[index][0], pair[index][0]) for index in range(len(pair_ind))]
+		dCmn = [self._dCmn(ms, pair[index][0], pair[index][1]) for index in range(len(pair_ind))]
 
 		Hms = sum(sum(self.Larm[ms][self._grp_lst[group][j]][h]*self.In_tens[group][j][h] for j in range(len(self._grp_lst[group]))) for h in range(3))
 
@@ -1117,7 +1135,17 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		for cartm in [0,1,2])
 		for index in range(len(pair_ind)))
 		)
-		
+
+#		Hc = (sum(sum(sum(np.asarray(Cmn[pair_ind[index]][cartm][cartn]*self.In_tens[group][pair_enum[index][0]][cartm].dot(self.In_tens[group][pair_enum[index][1]][cartn]))
+#		for cartn in [0,1,2])
+#		for cartm in [0,1,2])
+#		for index in range(len(pair_ind)))
+#		+ sum(sum(sum(np.asarray(dCmn[index][cartm][cartn]*self.In_tens[group][pair_enum[index][0]][cartm].dot(self.In_tens[group][pair_enum[index][1]][cartn]))
+#		for cartn in [0,1,2])
+#		for cartm in [0,1,2])
+#		for index in range(len(pair_ind)))
+#		)
+
 
 		return Hms + Hc #+(self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**len(self._grp_lst[group]))
 
@@ -1137,12 +1165,12 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		
 		H = self._H_op_int(group, ms)
 		
-		U = lin.expm(np.around(-np.multiply(complex(0,1)*tau,H),10))
+		U = lin.expm(-np.multiply(complex(0,1)*tau,H))
 		
 		return U
 
 
-	def Ramsey (self, tau, phi):
+	def Ramsey (self, tau, phi, flip_prob):
 		'''
 		Performs a single Ramsey experiment:
 		(1) Calculates tr(U1* U0 rho_block) for each dum density matrix
@@ -1174,9 +1202,8 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		#calculate probability given by 1 +/- Prod(tr(U1* U0 rho_block))
 		p1 = round(.5*(1+sig.real),5)
 		p0 = round(.5*(1-sig.real),5)
-		print([p0,p1])
 		
-		ms = ran.choice([1,0],p=[p1, p0])
+		ms = ran.choice([1,0],p=[p1,p0])
 		print('Ramsey outcome: ', ms)
 		
 		#Propagate sub density matrices based on Ramsey result. Then calculate full density matrix
@@ -1198,6 +1225,12 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 				self._curr_rho = np.kron(self._curr_rho,self._block_rho[j])
 	
 		self._curr_rho = self._curr_rho/(np.trace(self._curr_rho).real)
+		
+		if ms==1:
+			ms = ran.choice([1,0],p=[1-flip_prob, flip_prob])
+			if ms==0:
+				print('************************** FLIPPED SPIN ****************************',len(self.msArr))
+				self.flipArr.append(len(self.msArr))
 	
 		self.msArr.append(ms)
 		
@@ -1232,8 +1265,8 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 				self._curr_rho = np.kron(self._curr_rho,self._block_rho[j])
 	
 		self._curr_rho = self._curr_rho/(np.trace(self._curr_rho).real)
-	
-		ms = mt.nan
+
+		ms = float('nan') #mt.nan
 		self.msArr.append(ms)
 		
 		#now = time.time()
@@ -1250,7 +1283,6 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 			'prob_Az': pd[1],
 			'outcome': ms,
 		}
-
 
 
 

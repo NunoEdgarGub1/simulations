@@ -71,7 +71,7 @@ class TimeSequence ():
 		self.p_k = np.zeros (self.discr_steps)+1j*np.zeros (self.discr_steps)
 		self.p_k[self.points] = 1/(2.*np.pi)
 
-	def bayesian_update(self, m_n, phase_n, t_n,repetition = None, do_plot=False):
+	def bayesian_update(self, m_n, phase_n, t_n, T2_track = False, T2_est = 1e-3, repetition = None, do_plot=False):
 
 		'''
 		Performs the Bayesian update in Fourier space
@@ -95,6 +95,10 @@ class TimeSequence ():
 		p = p0+p1+p2
 		p = (p/np.sum(np.abs(p)**2)**0.5)
 		p = p/(2*np.pi*np.real(p[self.points]))
+		if T2_track:
+			T2gauss = np.fft.ifftshift(np.abs(np.fft.ifft(np.exp(-(self.beta*1e-3 * T2_est)**2)))**2)
+			print('CONVOLVED', T2_est)
+			p = p*T2gauss
 		self.p_k = np.copy (p)#np.abs(np.copy (p)) ###########
 
 		if do_plot:
@@ -132,7 +136,7 @@ class TimeSequence ():
 			plt.show()
 
 
-	def return_p_fB (self):
+	def return_p_fB (self, T2_track = False, T2_est = 1e-3):
 
 		'''
 		Returns probability distribution in real space

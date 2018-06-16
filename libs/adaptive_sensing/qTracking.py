@@ -8,6 +8,8 @@ import cmath
 import logging, time, timeit
 from importlib import reload
 from scipy.signal import find_peaks_cwt
+from scipy.interpolate import interp1d
+from scipy.optimize import curve_fit
 
 #sys.path.append ('/Users/dalescerri/Documents/GitHub')
 
@@ -28,10 +30,11 @@ matplotlib.rc('ytick', labelsize=18)
 
 class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
-    def __init__ (self, time_interval, overhead, folder):
+    def __init__ (self, time_interval, overhead, folder, trial):
         self.time_interval = time_interval
         self._B_dict = {}
         self.kappa = None
+        self.skip=False
         self.curr_fB_idx = 0
         self.OH = overhead
         self.set_fB = []
@@ -47,6 +50,12 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.timelist = []
         self.widthratlist = []
         self.Hvar = 0
+        self.trial = trial
+        self.mse_lst = []
+        self.norm_lst = []
+        self.FWHM_lst = []
+        self.qmax = []
+        self.cmax = []
 
 
         # The "called modules" is  a list that tracks which functions have been used
@@ -62,13 +71,13 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.nbath = NSpin.SpinExp_cluster1()
         self.nbath.set_experiment(cluster = cluster, nr_spins=nr_spins, concentration = concentration,
                 do_plot = do_plot, eng_bath=eng_bath)
-        print(self.nbath._C_merit())
         self.T2star = self.nbath.T2h
         self.over_op = self.nbath._overhauser_op()
-        print ("T2* at high magnetic field: ", self.T2star)
+        #print ("T2* at high magnetic field: ", self.T2star)
         self.T2starlist.append(self.T2star)
+        self.T2_est = self.nbath.T2est
         self.timelist.append(0)
-        print("numerical T2*", .5*(self.nbath._op_sd(self.over_op[2]).real)**-1,'s')
+        #print("numerical T2*", .5*(self.nbath._op_sd(self.over_op[2]).real)**-1,'s')
 
         if verbose:
             self.nbath.print_nuclear_spins()
@@ -83,33 +92,82 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         p = np.exp(-0.5*(self.beta/self._dfB0)**2)
         p = p/(np.sum(p))
+        az, p_az = self.nbath.get_probability_density()
+        az2 = np.roll(az,-1)
+        if max(az2[:-1]-az[:-1]) > 10:
+            print('Skipped sparse ditstribution:',max(az2[:-1]-az[:-1]),'kHz')
+            self.skip = True
+        self.norm = 1
         self.p_k = np.fft.ifftshift(np.abs(np.fft.ifft(p, self.discr_steps))**2)
         self.renorm_p_k()
         #print('MSE', self.MSE()[0])
         #self.mse_lst.append(self.MSE()[0])
         self.plot_hyperfine_distr()
         
+    def fitting(self, p, paz, az, T2track, T2est):
+        '''
+        Fits the classical distribution to the quantum one
+        
+        Input:
+        p        [array]     : classical probability array
+        paz      [array]     : quantum probability array
+        az       [array]     : bath frequencies
+        T2track  [Boolean]   : if True, colvolves the current classical distribution with a Gaussian (spin bath diffusion)
+        T2est    [float]     : T2 estimate for spin bath diffusion 
+        
+        '''
+        
+        x = self.beta*1e-3
+        y = p
+        f = interp1d(x, y, kind='cubic')
 
-    def plot_hyperfine_distr(self):
-        p, m = self.return_p_fB()
+        def func(x, a):
+            y=a*f(x)
+            return y
+
+        popt, pcov = curve_fit(func, az.real, paz.real, p0=1)
+        fit = func(x, *popt)
+        
+        norm = popt[0]
+        error = np.absolute(pcov[0][0])**0.5
+        
+        return norm, error
+        
+
+    def plot_hyperfine_distr(self, T2track = False, T2est = 1e-3):
+        
+        T2est = self.T2_est
+        
+        p, m = self.return_p_fB(T2_track = T2track, T2_est = T2est)
         p_az, az = self.nbath.get_histogram_Az(nbins = 20)
         az2, p_az2 = self.nbath.get_probability_density()
+        
+        self.norm, self.error = self.fitting(p = p, paz = p_az2, az = az2, T2track = T2track, T2est = T2est)
+        self.norm_lst.append(self.norm)
+        self.mse_lst.append(self.error)
+        if self.step==0:
+            self.qmax.append(0)
+        else:
+            self.qmax.append(az2[np.argmax(p_az2)])
+        self.cmax.append(self.beta[np.argmax(p)]*1e-3)
+        self.FWHM_lst.append(self.FWHM())
+        
         peaks = self.peak_cnt()
         f = ((1/(self.tau0))*np.angle(self.p_k[self.points-1])*1e-6)
         
         fig = plt.figure(figsize = (12,6))
         p0 = 0.5-0.5*np.cos(2*np.pi*self.beta*(int(2**self.opt_k))*self.tau0+self.phase_cappellaro)
         p1 = 0.5+0.5*np.cos(2*np.pi*self.beta*(int(2**self.opt_k))*self.tau0+self.phase_cappellaro)
-        plt.fill_between (self.beta*1e-3, 0, max(p)*p0/max(p0), color='magenta', alpha = 0.1)
-        plt.fill_between (self.beta*1e-3, 0, max(p)*p1/max(p1), color='cyan', alpha = 0.1)
+        plt.fill_between (self.beta*1e-3, 0, max(p*self.norm)*p0/max(p0), color='magenta', alpha = 0.1)
+        plt.fill_between (self.beta*1e-3, 0, max(p*self.norm)*p1/max(p1), color='cyan', alpha = 0.1)
         tarr = np.linspace(min(self.beta)*1e-3,max(self.beta)*1e-3,1000)
         T2star = 5*(self.nbath._op_sd(self.over_op[2]).real)**-1
         T2inv = T2star**-1 *1e-3
-        plt.hlines(.5*max(p),xmin=self.beta[np.argmax(p)]*1e-3-.5*T2inv,xmax=self.beta[np.argmax(p)]*1e-3+.5*T2inv,
+        plt.hlines(.5*max(p*self.norm),xmin=self.beta[np.argmax(p)]*1e-3-.5*T2inv,xmax=self.beta[np.argmax(p)]*1e-3+.5*T2inv,
                   lw=9, color='red')
         # plt.hlines(.5*max(p),xmin=self.beta[np.argmax(p)]*1e-3-.5*self.Hvar,xmax=self.beta[np.argmax(p)]*1e-3+.5*self.Hvar,
         #           lw=9, color='blue')
-        plt.hlines(.5*max(p),xmin=self.beta[np.argmax(p)]*1e-3-.5*self.FWHM(),xmax=self.beta[np.argmax(p)]*1e-3+.5*self.FWHM(),
+        plt.hlines(.5*max(p*self.norm),xmin=self.beta[np.argmax(p)]*1e-3-.5*self.FWHM(),xmax=self.beta[np.argmax(p)]*1e-3+.5*self.FWHM(),
                   lw=3)
         #plt.plot (az, p_az/np.sum(p_az), 'o', color='royalblue', label = 'spin-bath')
         #plt.plot (az, p_az/np.sum(p_az), '--', color='royalblue')
@@ -117,25 +175,22 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         #plt.plot (az, p_az/max(p_az) * max(p), '--', color='royalblue')
         #plt.plot (az2, p_az2/np.sum(p_az2), '^', color='k', label = 'spin-bath')
         #plt.plot (az2, p_az2/np.sum(p_az2), ':', color='k')
-        plt.plot (az2, p_az2/max(p_az2) *max(p), '^', color='k', label = 'spin-bath')
-        plt.plot (az2, p_az2/max(p_az2) *max(p), ':', color='k')
-        plt.xlabel (' hyperfine (kHz)', fontsize=18)
+        plt.plot (az2, p_az2 , '^', color='k', label = 'spin-bath')
+        plt.plot (az2, p_az2 , ':', color='k')
         #plt.plot (self.beta*1e-3, max(p)*p0/max(p0) * (p /max(p)), color='crimson', linewidth = 2, label = 'classical')
         #plt.plot (self.beta*1e-3, max(p)*p1/max(p1) * (p /max(p)), color='blue', linewidth = 2, label = 'classical')
-        plt.plot (self.beta*1e-3, p, color='green', linewidth = 2, label = 'classical')
+        plt.plot (self.beta*1e-3, p*self.norm , color='green', linewidth = 2, label = 'classical')
         # plt.fill_between(az2[0:int(len(az2)/2)], 
-        # (p_az2/max(p_az2) *max(p))[0:int(len(az2)/2)], 
-        # p[self.MSE()[1][0:int(len(az2)/2)]], alpha=.5, color='crimson')
+        # (p_az2)[0:int(len(az2)/2)], 
+        # (p*self.norm)[self.MSE()[1][0:int(len(az2)/2)]], alpha=.5, color='crimson')
         # plt.fill_between(az2[int(len(az2)/2):], 
-        # (p_az2/max(p_az2) *max(p))[int(len(az2)/2):], 
-        # p[self.MSE()[1][int(len(az2)/2):]], alpha=.5, color='crimson')
-        plt.xlabel (' hyperfine (kHz)', fontsize=18)
-        plt.axvline(np.average(az2, weights=p_az2/np.sum(p_az2)),color='blue', ls='--')
-        plt.axvline(np.average(self.beta*1e-3, weights=p),color='green', ls='--')
+        # (p_az2)[int(len(az2)/2):], 
+        # (p*self.norm)[self.MSE()[1][int(len(az2)/2):]], alpha=.5, color='crimson')
         for pj in range(len(peaks)):
             plt.axvline(self.beta[peaks[pj][0]]*1e-3)
-            print(self.beta[peaks[pj][0]]*1e-3)
+        plt.xlabel (' hyperfine (kHz)', fontsize=18)
         plt.legend()
+        #plt.ylim(0,self.norm)
         #plt.savefig('trial_%.04d_%.04d'%(self.trial,self.step))
         plt.show()
         self.p_az_old = p_az2/max(p_az2)
@@ -153,7 +208,13 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         plt.plot (az2, self.p_az_old , 'o', color='r')
         plt.plot (az2, self.p_az_old , ':', color='r')
         plt.xlabel (' hyperfine (kHz)', fontsize=18)
+        T2gauss = np.exp(-(self.beta*1e-3 * self.T2_est)**2)
+        p_broad = np.convolve(p,T2gauss,'same')
+        #plt.plot(self.beta*1e-3,p/max(p))
+        #plt.plot(self.beta*1e-3,p_broad/max(p_broad))
+        plt.xlim(min(az2), max(az2))
         plt.legend()
+        plt.ticklabel_format(useOffset=False)
         #plt.savefig('trial2_%.04d'%(self.trial))
         plt.show()
         
@@ -166,7 +227,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         for freq in az2:
             beta_mse_ind.append(min(range(len(self.beta)), key=lambda j: abs(self.beta[j] - freq*1e3)))   
             
-        return(((p[beta_mse_ind]- p_az2/max(p_az2)*max(p))**2).mean().real), beta_mse_ind
+        return((((p[beta_mse_ind])- p_az2)**2).mean().real), beta_mse_ind
     
     def FWHM(self):
 
@@ -181,6 +242,17 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         return FWHM
     
     def peak_cnt(self,tol=1e-3):
+        '''
+        Count peaks of classical distribution within some threshold. 
+        Used to reduce measurement time if multiple peaks are detected.
+        
+        Input:
+        tol   [float]  : min. height for peak to be considered. Change to be a fraction of max(p)
+        
+        Output:
+        peaks [list]   : a list of maxima for the classical distribution
+        
+        '''
         
         p, m = self.return_p_fB()
         peaks = pd.peakdetect(p, lookahead=1)[0]
@@ -241,8 +313,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         '''
 
         az0, pd0 = np.real(self.nbath.get_probability_density())
-        m = self.nbath.Ramsey (tau=t, phi = theta)
+        m = self.nbath.Ramsey (tau=t, phi = theta, flip_prob = .1)
         az, pd = np.real(self.nbath.get_probability_density())
+        self.fliplist = self.nbath.flipArr
 
         if do_plot:
             self.plot_hyperfine_distr()
@@ -276,35 +349,50 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         az, pd = np.real(self.nbath.get_probability_density())
 
         self.plot_distr()
+        
+    def hahn (self):
+    
+        tauarr = np.linspace(0,1000e-6,200)
 
-    def find_optimal_k (self, do_debug=True):
+        self.nbath.Hahn_Echo (tauarr = tauarr, phi = 0, do_compare=False)
+
+
+    def find_optimal_k (self, T2_track, do_debug=True):
         
         width, fom = self.return_std (verbose=True)
-        if self.multi_peak:
-            if self.opt_k > 0:
-                self.opt_k = self.opt_k-1
-            else:
-                self.opt_k = self.opt_k 
-                
-        if (2**self.opt_k)*self.tau0 > 1e-3/self.FWHM():
-            while (2**self.opt_k)*self.tau0 > 1e-3/self.FWHM() and self.opt_k>=0:
-                self.opt_k = self.opt_k-1
-            print('Ramsey time exceeded 1/FWHM, reduced measurement time')
-        else:
-            self.opt_k = self.opt_k+1
-
-#         print('Optimal k. width = ', width/1000, 'kHz  --- optk+1 = ',np.log(1/(width*self.tau0))/np.log(2), ' -- frq = ', 0.001/(self.tau0*2**self.opt_k), 'kHz')
-#         #print('width: ', width)
         
-#         #TEMPORARY fix for when opt_k is negative. In case flag is raised, best to reset simulation for now
-#         if self.opt_k<0:
-#             print('K IS NEGATIVE',self.opt_k)
-#             self.opt_k = 0
-#         if do_debug:
-#             print ("Optimal k = ", self.opt_k)
+        if T2_track:
+            print('Optimal k. width = ', width/1000, 'kHz  --- optk+1 = ',np.log(1/(width*self.tau0))/np.log(2), ' -- frq = ', 0.001/(self.tau0*2**self.opt_k), 'kHz')
+            #print('width: ', width)
+            
+            self.opt_k = np.int(np.log(1/(width*self.tau0))/np.log(2)) +1
+        
+            #TEMPORARY fix for when opt_k is negative. In case flag is raised, best to reset simulation for now
+            if self.opt_k<0:
+                print('K IS NEGATIVE',self.opt_k)
+                self.opt_k = 0
+            if do_debug:
+                print ("Optimal k = ", self.opt_k)
+
+        else:
+            if self.multi_peak:
+                print(self.multi_peak)
+                if self.opt_k > 0:
+                    self.opt_k = self.opt_k-1
+                else:
+                    self.opt_k = self.opt_k 
+                    
+            else:
+                if (2**self.opt_k)*self.tau0 > 1e-3/self.FWHM():
+                    while (2**self.opt_k)*self.tau0 > 1e-3/self.FWHM() and self.opt_k>=0:
+                        self.opt_k = self.opt_k-1
+                    print('Ramsey time exceeded 1/FWHM, reduced measurement time')
+                else:
+                    self.opt_k = self.opt_k+1
+
         return self.opt_k
 
-    def adptv_tracking_single_step (self, k, M, do_debug=False):
+    def adptv_tracking_single_step (self, k, M, T2_track=False, do_debug=False):
 
         t_i = int(2**k)
         ttt = -2**(k+1)
@@ -324,21 +412,28 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             print('Phase',self.phase_cappellaro)
             self.m_res = self.ramsey (theta=self.phase_cappellaro, t = t_i*self.tau0, do_plot=False)#do_debug)
             m_list.append(self.m_res)
-            self.bayesian_update (m_n = self.m_res, phase_n = self.phase_cappellaro, t_n = t_i, do_plot=False)
+            if m==0:
+                self.bayesian_update (m_n = self.m_res, phase_n = self.phase_cappellaro, t_n = t_i, T2_track = T2_track, T2_est = self.T2_est, do_plot=False)
+            else:
+                self.bayesian_update (m_n = self.m_res, phase_n = self.phase_cappellaro, t_n = t_i, T2_track = False, T2_est = self.T2_est, do_plot=False)
             self.peak_cnt()
+            print('multiple peaks', self.multi_peak)
             T2star = 5*(self.nbath._op_sd(self.over_op[2]).real)**-1
             FWHM = self.FWHM()*1e3
             #Has to remain below 1 so that the FWHM is an upperbound to 1/T2*
             self.widthratlist.append((1/FWHM)/T2star)
             self.T2starlist.append(.5*(self.nbath._op_sd(self.over_op[2]).real)**-1)
             self.timelist.append(self.timelist[-1] + t_i*self.tau0)
+            #self.mse_lst.append(self.MSE()[0])
 
-            self.step+=1
             if do_debug:
                 print ("Estimation step: t_units=", t_i, "    -- res:", self.m_res)
 
             if do_debug:
-                self.plot_hyperfine_distr()
+                if m==0:
+                    self.plot_hyperfine_distr(T2track = T2_track, T2est = self.T2_est)
+                else:
+                    self.plot_hyperfine_distr(T2track = False, T2est = self.T2_est)
 
         return m_list
 
@@ -346,7 +441,10 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
     def qTracking (self, M=1, nr_steps = 1, do_plot = False, do_debug=False):
 
         '''
-        Simulates adaptive tracking protocol
+        Simulates adaptive tracking protocol.
+        1) Spin bath narrowing
+        2) Free evolution time (spin bath diffusion rate ~1/T2)
+        3) Spin bath tracking
 
         Input: do_plot [bool], do_debug [bool]
         '''
@@ -355,18 +453,59 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.running_time = 0
 
         for i in range(nr_steps):
-            self.opt_k = self.find_optimal_k (do_debug = do_debug)
+            self.opt_k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
             # print ("CURRENT k: ", self.opt_k+1)
             # m_list = self.adptv_tracking_single_step (k = self.opt_k+1, M=M, do_debug = do_debug)
             print ("CURRENT k: ", self.opt_k)
-            m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, do_debug = do_debug)
+            m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, T2_track=False, do_debug = do_debug)
             p = self.return_p_fB()[0]
             maxp = list(p).index(max(p))
             # if self.beta[maxp]!=0:
             # 	self.tau0 = 1/(2*np.pi*abs(self.beta[maxp]))
             # 	print(self.tau0)
             #print(self.phaselist)
-        self.freeevo (ms_curr=self.m_res, t=1e4*self.tau0)
+        for j in range(1):
+            self.freeevo (ms_curr=self.m_res, t=10e-3)
+        
+        for i in range(nr_steps):
+            if i==0:
+                track=True
+            else:
+                track=False
+            self.opt_k = self.find_optimal_k (T2_track = track, do_debug = do_debug)
+            # print ("CURRENT k: ", self.opt_k+1)
+            # m_list = self.adptv_tracking_single_step (k = self.opt_k+1, M=M, do_debug = do_debug)
+            print ("CURRENT k: ", self.opt_k)
+            m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, T2_track=track,  do_debug = do_debug)
+            p = self.return_p_fB()[0]
+            maxp = list(p).index(max(p))
+            # if self.beta[maxp]!=0:
+            # 	self.tau0 = 1/(2*np.pi*abs(self.beta[maxp]))
+            # 	print(self.tau0)
+            #print(self.phaselist)
+            
+        if do_debug:
+            fig = plt.figure(figsize = (12,6))
+            plt.plot(self.qmax, 'o', c='r', label = 'quantum')
+            plt.plot(self.cmax, 'o', c='b', label = 'classical')
+            plt.plot(self.qmax, c='r', lw=2, ls=':')
+            plt.plot(self.cmax, c='b', lw=2, ls=':')
+            plt.axvspan(nr_steps*M,nr_steps*M+1, color = 'k', alpha=0.1, label = 'free evo')
+            plt.xlabel('Experiment number', fontsize = 20)
+            plt.ylabel('Frequency (kHz)', fontsize = 20)
+            plt.legend()
+            plt.grid(True)
+            plt.show()
+            
+            fig = plt.figure(figsize = (12,6))
+            plt.plot([abs(self.cmax[j] - self.qmax[j])/self.FWHM_lst[j] for j in range(len(self.cmax))], 'o', c='g')
+            plt.plot([abs(self.cmax[j] - self.qmax[j])/self.FWHM_lst[j] for j in range(len(self.cmax))], c='g', lw=2, ls=':')
+            plt.axvspan(nr_steps*M,nr_steps*M+1, color = 'k', alpha=0.1)
+            plt.xlabel('Experiment number', fontsize = 20)
+            plt.ylabel('$|\delta F|$/FWHM', fontsize = 20)
+            plt.grid(True)
+            plt.show()
+            
 
 
     def simulate(self, track, do_save = False, do_plot = False, kappa = None, do_debug=False):
