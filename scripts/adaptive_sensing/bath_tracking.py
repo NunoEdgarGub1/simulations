@@ -51,7 +51,7 @@ while trialno < 10:
     '''
     exp = qtrack.TimeSequenceQ(time_interval=100e-6, overhead=0, folder=folder, trial=trialno)
     exp.set_spin_bath (cluster=np.zeros(7), nr_spins=7, concentration=0.01, verbose=True, do_plot = False, eng_bath=False)
-    exp.set_msmnt_params (tau0 = 1e-6, T2 = exp.T2star, G=5, F=3, N=10)
+    exp.set_msmnt_params (tau0 = 1e-6, t_read = 10e-6, T2 = exp.T2star, G=5, F=3, N=10)
     exp.initialize()
     
     if not exp.skip:      

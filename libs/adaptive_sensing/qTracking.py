@@ -298,7 +298,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         result = np.random.choice (2, 1, p=[p0, p1])
         return result[0]
 
-    def ramsey (self, t=0., theta=0., do_plot = False):
+    def ramsey (self, t=0., t_read=10e-6, theta=0., do_plot = False):
 
         '''
         Ramsey experiment simulation
@@ -313,7 +313,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         '''
 
         az0, pd0 = np.real(self.nbath.get_probability_density())
-        m = self.nbath.Ramsey (tau=t, phi = theta, flip_prob = .1)
+        m = self.nbath.Ramsey (tau=t, t_read=t_read, phi = theta, flip_prob = .1)
         az, pd = np.real(self.nbath.get_probability_density())
         self.fliplist = self.nbath.flipArr
 
@@ -410,7 +410,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             print('Ramsey time', t_i*self.tau0)
             self.phase_cappellaro = 0.5*np.angle (self.p_k[int(ttt+self.points)])
             print('Phase',self.phase_cappellaro)
-            self.m_res = self.ramsey (theta=self.phase_cappellaro, t = t_i*self.tau0, do_plot=False)#do_debug)
+            self.m_res = self.ramsey (theta=self.phase_cappellaro, t = t_i*self.tau0, t_read = self.t_read, do_plot=False)#do_debug)
             m_list.append(self.m_res)
             if m==0:
                 self.bayesian_update (m_n = self.m_res, phase_n = self.phase_cappellaro, t_n = t_i, T2_track = T2_track, T2_est = self.T2_est, do_plot=False)
