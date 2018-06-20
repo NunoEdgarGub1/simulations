@@ -273,10 +273,10 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         '''
 
         self.renorm_p_k()
-        print ("|p_(-1)| = ", np.abs(self.p_k[self.points-1]))
+        #print ("|p_(-1)| = ", np.abs(self.p_k[self.points-1]))
         self.Hvar = (2*np.pi*np.abs(self.p_k[self.points-1]))**(-2)-1
         #self.Hvarlist.append(Hvar)
-        print('Hvar',self.Hvar)
+        #print('Hvar',self.Hvar)
         std_H = ((abs(cmath.sqrt(self.Hvar)))/(2*np.pi*self.tau0))
         #fom = self.figure_of_merit()
         if verbose:
@@ -359,11 +359,10 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
     def find_optimal_k (self, T2_track, do_debug=True):
         
-        width, fom = self.return_std (verbose=True)
+        width, fom = self.return_std (verbose=do_debug)
         
         if T2_track:
-            print('Optimal k. width = ', width/1000, 'kHz  --- optk+1 = ',np.log(1/(width*self.tau0))/np.log(2), ' -- frq = ', 0.001/(self.tau0*2**self.opt_k), 'kHz')
-            #print('width: ', width)
+            #print('Optimal k. width = ', width/1000, 'kHz  --- optk+1 = ',np.log(1/(width*self.tau0))/np.log(2), ' -- frq = ', 0.001/(self.tau0*2**self.opt_k), 'kHz')
             
             self.opt_k = np.int(np.log(1/(width*self.tau0))/np.log(2)) +1
         
@@ -396,20 +395,14 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         t_i = int(2**k)
         ttt = -2**(k+1)
-        t0 = self.running_time
-
-        #print ("idx_capp = ", ttt+self.points)
 
         m_list = []
-        #print('Ramsey time', t_i*self.tau0)
-        #print('tau_0 time', self.tau0)
-        #self.phase_cappellaro = 0.5*np.angle (self.p_k[int(ttt+self.points)])
-        #print('Phase',self.phase_cappellaro)
+        t2_list = []
 
         for m in range(M):
-            print('Ramsey time', t_i*self.tau0)
+            #print('Ramsey time', t_i*self.tau0)
             self.phase_cappellaro = 0.5*np.angle (self.p_k[int(ttt+self.points)])
-            print('Phase',self.phase_cappellaro)
+            #print('Phase',self.phase_cappellaro)
             self.m_res = self.ramsey (theta=self.phase_cappellaro, t = t_i*self.tau0, do_plot=False)#do_debug)
             m_list.append(self.m_res)
             if m==0:
@@ -417,8 +410,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             else:
                 self.bayesian_update (m_n = self.m_res, phase_n = self.phase_cappellaro, t_n = t_i, T2_track = False, T2_est = self.T2_est, do_plot=False)
             self.peak_cnt()
-            print('multiple peaks', self.multi_peak)
+            #print('multiple peaks', self.multi_peak)
             T2star = 5*(self.nbath._op_sd(self.over_op[2]).real)**-1
+            t2_list.append(T2star)
             FWHM = self.FWHM()*1e3
             #Has to remain below 1 so that the FWHM is an upperbound to 1/T2*
             self.widthratlist.append((1/FWHM)/T2star)
@@ -428,6 +422,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
             if do_debug:
                 print ("Estimation step: t_units=", t_i, "    -- res:", self.m_res)
+                print ("Current T2* = ", T2star*1e6, ' us')
+                print (self.T2starlist)
 
             if do_debug:
                 if m==0:
@@ -437,7 +433,61 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         return m_list
 
+    def bath_narrowing (self, M=1, target_T2star = 20e-6, max_nr_steps=50, do_plot = False, do_debug = False):
 
+        try:
+            t2star = self.T2starlist[-1]
+        except:
+            t2star = 0
+
+        i = 0
+        while ((t2star<target_T2star) and (i<max_nr_steps)):
+            #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
+            self.opt_k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
+            #print ("CURRENT k: ", self.opt_k)
+            m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, T2_track=False, do_debug = do_debug) 
+            t2star = self.T2starlist[-1]
+            i+=1
+
+        if do_plot:
+            plt.figure(figsize = (8, 5))
+            plt.plot (np.array(self.T2starlist)*1e6, linewidth=2, color='royalblue')
+            plt.plot (np.array(self.T2starlist)*1e6, 'o', color='royalblue')
+            plt.xlabel ('step nr', fontsize=18)
+            plt.ylabel ('T2* (us)')
+            plt.show()
+ 
+
+    def bath_narrowing_v2 (self, M=1, target_T2star = 20e-6, max_nr_steps=50, do_plot = False, do_debug = False):
+
+        '''
+        In this implementation of the narrowing algorithm, I try to always to steps (k) and (k-1) together
+        so that we avoid multi-peaked distributions
+        '''
+
+        try:
+            t2star = self.T2starlist[-1]
+        except:
+            t2star = 0 
+
+        i = 0
+        while ((t2star<target_T2star) and (i<max_nr_steps)):
+            #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
+            self.opt_k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
+            #print ("CURRENT k: ", self.opt_k)
+            m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, T2_track=False, do_debug = do_debug) 
+            m_list = self.adptv_tracking_single_step (k = self.opt_k-1, M=M, T2_track=False, do_debug = do_debug) 
+            t2star = self.T2starlist[-1]
+            i+=1
+
+        if do_plot:
+            plt.figure(figsize = (8, 5))
+            plt.plot (np.array(self.T2starlist)*1e6, linewidth=2, color='royalblue')
+            plt.plot (np.array(self.T2starlist)*1e6, 'o', color='royalblue')
+            plt.xlabel ('step nr', fontsize=18)
+            plt.ylabel ('T2* (us)')
+            plt.show()
+ 
     def qTracking (self, M=1, nr_steps = 1, do_plot = False, do_debug=False):
 
         '''
@@ -449,21 +499,10 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         Input: do_plot [bool], do_debug [bool]
         '''
 
-        self._called_modules.append('adaptive_tracking_estimation')
-        self.running_time = 0
+        self._called_modules.append('qTracking')
 
-        for i in range(nr_steps):
-            self.opt_k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
-            # print ("CURRENT k: ", self.opt_k+1)
-            # m_list = self.adptv_tracking_single_step (k = self.opt_k+1, M=M, do_debug = do_debug)
-            print ("CURRENT k: ", self.opt_k)
-            m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, T2_track=False, do_debug = do_debug)
-            p = self.return_p_fB()[0]
-            maxp = list(p).index(max(p))
-            # if self.beta[maxp]!=0:
-            # 	self.tau0 = 1/(2*np.pi*abs(self.beta[maxp]))
-            # 	print(self.tau0)
-            #print(self.phaselist)
+        # need some way to quantify which narrowing protocol is better
+        self.bath_narrowing_v2 (M=M, target_T2star = 20e-6, max_nr_steps=50, do_plot = True, do_debug = True)
         for j in range(1):
             self.freeevo (ms_curr=self.m_res, t=10e-3)
         
@@ -475,7 +514,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             self.opt_k = self.find_optimal_k (T2_track = track, do_debug = do_debug)
             # print ("CURRENT k: ", self.opt_k+1)
             # m_list = self.adptv_tracking_single_step (k = self.opt_k+1, M=M, do_debug = do_debug)
-            print ("CURRENT k: ", self.opt_k)
+            #print ("CURRENT k: ", self.opt_k)
             m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, T2_track=track,  do_debug = do_debug)
             p = self.return_p_fB()[0]
             maxp = list(p).index(max(p))

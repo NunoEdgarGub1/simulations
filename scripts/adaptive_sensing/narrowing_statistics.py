@@ -40,20 +40,45 @@ fid1 = 1.
 track = True
 
 folder = 'C:/'
+max_steps = 10
+nr_reps = 5
+M=2
 
-while trialno < 10:
-    '''
-    If eng_bath==True (engineered bath), set nr_spins to a larger number that how many spins are required. 
-    
-    len(cluster) determines the nuber of 'seed' spins.
-    The values in cluster denotes the number of neighbours selected from nr_spins spins based on proximity to the seed spins.
-    
-    '''
+results = np.zeros((nr_reps, 2*M*max_steps+1))
+i = 0
+
+while (i <nr_reps):
+
     exp = qtrack.TimeSequenceQ(time_interval=100e-6, overhead=0, folder=folder, trial=trialno)
     exp.set_spin_bath (cluster=np.zeros(7), nr_spins=7, concentration=0.01, verbose=True, do_plot = False, eng_bath=False)
     exp.set_msmnt_params (tau0 = 1e-6, T2 = exp.T2star, G=5, F=3, N=10)
     exp.initialize()
     
     if not exp.skip:      
-        exp.qTracking (do_debug = True, M=1, nr_steps = Nstep)
-        trialno+=1
+        exp.bath_narrowing_v2 (M=M, target_T2star = 5000e-6, max_nr_steps=max_steps, do_plot = True, do_debug = False)
+        l = len (exp.T2starlist)
+        results [i, :l] = exp.T2starlist/exp.T2starlist[0]
+        i += 1
+
+print ('Processing results statistics...')
+nr_bins = 100
+res_hist = np.zeros((nr_bins+1, 2*M*max_steps+1))
+bin_edges = np.zeros((nr_bins+1, 2*M*max_steps+1))
+
+for j in range(2*M*max_steps+1):
+    a = np.histogram(results[:nr_bins,j], bins=np.linspace (0, 15, nr_bins+1))
+    res_hist [:len(a[0]), j] = a[0]
+    bin_edges [:len(a[1]), j] = a[1]
+
+[X, Y] = np.meshgrid (np.arange(2*M*max_steps+1), np.linspace (0, 15, nr_bins+1))
+
+plt.pcolor (X, Y, res_hist)
+plt.xlabel ('nr of narrowing steps', fontsize = 18)
+plt.ylabel ('T2*/T2*_init', fontsize = 18)
+plt.show()
+
+# things to do:
+# - save data for debugging
+
+
+
