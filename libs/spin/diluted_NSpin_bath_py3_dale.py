@@ -1170,7 +1170,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		return U
 
 
-	def Ramsey (self, tau, phi, flip_prob):
+	def Ramsey (self, tau, t_read, phi, flip_prob):
 		'''
 		Performs a single Ramsey experiment:
 		(1) Calculates tr(U1* U0 rho_block) for each dum density matrix
@@ -1186,6 +1186,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		
 		sig = 1 #seed value for total sig
 		phi = phi+np.pi
+		tflip = 0 #get finite value if flip happens, else set to 0
 		
 		#calculate Prod(tr(U1* U0 rho_block))
 		for j in range(len(self._grp_lst)):
@@ -1206,33 +1207,78 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		ms = ran.choice([1,0],p=[p1,p0])
 		print('Ramsey outcome: ', ms)
 		
-		#Propagate sub density matrices based on Ramsey result. Then calculate full density matrix
-		for j in range(len(self._grp_lst)):
-			if len(self._grp_lst)>1:
-				#evolution operator depending on Ramsey result:
-				U_in = [self._U_op_int(j, 0, tau), self._U_op_int(j, 1, tau)]
-				
-				U0 = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0])
-				U1 = np.multiply(np.exp(complex(0,1)*phi/2),U_in[1])
-		
-			U = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0])+((-1)**(ms+1))*np.multiply(np.exp(complex(0,1)*phi/2),U_in[1])
-			
-			self._block_rho[j] = U.dot(self._block_rho[j].dot(U.conj().T))
-			
-			if j==0:
-				self._curr_rho = self._block_rho[j]
-			else:
-				self._curr_rho = np.kron(self._curr_rho,self._block_rho[j])
-	
-		self._curr_rho = self._curr_rho/(np.trace(self._curr_rho).real)
-		
 		if ms==1:
 			ms = ran.choice([1,0],p=[1-flip_prob, flip_prob])
 			if ms==0:
-				print('************************** FLIPPED SPIN ****************************',len(self.msArr))
+				print('************************** FLIPPED SPIN ****************************',)
 				self.flipArr.append(len(self.msArr))
-	
-		self.msArr.append(ms)
+				
+				#random flip time during readout
+				tflip = np.random.uniform(0,t_read)
+		
+		#Propagate sub density matrices based on Ramsey result. Then calculate full density matrix
+		#tflip = 0 means no flip happened during readout, only a phase is picked up by the bath
+		
+		if tflip==0:
+			for j in range(len(self._grp_lst)):
+				if len(self._grp_lst)>1:
+					#evolution operator depending on Ramsey result:
+					U_in = [self._U_op_int(j, 0, tau), self._U_op_int(j, 1, tau)]
+					
+					U0 = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0])
+					U1 = np.multiply(np.exp(complex(0,1)*phi/2),U_in[1])
+			
+				U = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0])+((-1)**(ms+1))*np.multiply(np.exp(complex(0,1)*phi/2),U_in[1])
+				
+				U_read = self._U_op_int(j, ms, t_read)
+				U_read_phi = np.multiply(np.exp(((-1)**(ms+1))*complex(0,1)*phi/2),U_read)
+				
+				U_glob = U_read_phi.dot(U)
+				
+				self._block_rho[j] = U_glob.dot(self._block_rho[j].dot(U_glob.conj().T))
+				
+				if j==0:
+					self._curr_rho = self._block_rho[j]
+				else:
+					self._curr_rho = np.kron(self._curr_rho,self._block_rho[j])
+		
+			self._curr_rho = self._curr_rho/(np.trace(self._curr_rho).real)
+			self.msArr.append(ms)
+			
+		else:
+			for j in range(len(self._grp_lst)):
+				if len(self._grp_lst)>1:
+					#evolution operator depending on Ramsey result:
+					U_in = [self._U_op_int(j, 0, tau), self._U_op_int(j, 1, tau)]
+					
+					U0 = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0])
+					U1 = np.multiply(np.exp(complex(0,1)*phi/2),U_in[1])
+			
+				#phase phi cancels out for readout, but will incl it for completion
+				#ms=1 for 10e-6 - tflip
+				U_noflip = self._U_op_int(j, 1, tflip)
+					
+				#flip at tflip, ms=0
+				U_flip = self._U_op_int(j, 0, t_read - tflip)
+			
+				U = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0])+((-1)**(ms+1))*np.multiply(np.exp(complex(0,1)*phi/2),U_in[1])
+				U_noflip_phi = np.multiply(np.exp(complex(0,1)*phi/2),U_noflip)
+				U_flip_phi = np.multiply(np.exp(-complex(0,1)*phi/2),U_flip)
+				
+				U_glob = U_flip.dot(U_noflip.dot(U))
+				
+				self._block_rho[j] = U_glob.dot(self._block_rho[j].dot(U_glob.conj().T))
+				
+				if j==0:
+					self._curr_rho = self._block_rho[j]
+				else:
+					self._curr_rho = np.kron(self._curr_rho,self._block_rho[j])
+		
+			self._curr_rho = self._curr_rho/(np.trace(self._curr_rho).real)
+			
+			#To feed incorrect result to Bayesian update
+			ms=1
+			self.msArr.append(ms)
 		
 		#now = time.time()
 		#print 'Ram', now-program_starts

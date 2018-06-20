@@ -21,7 +21,7 @@ class TimeSequence ():
 		self.nr_time_steps = nr_time_steps
 		self.plot_idx = 0
 
-	def set_msmnt_params (self, G, F, N=6, tau0=20e-9, T2 = 1e-6, fid0=0.88, fid1=1.):
+	def set_msmnt_params (self, G, F, N=6, tau0=20e-9, t_read=10e-6, T2 = 1e-6, fid0=0.88, fid1=1.):
 
 		'''
 		Set measurement parameters
@@ -38,6 +38,7 @@ class TimeSequence ():
 		# Experimental parameters
 		self.N = N
 		self.tau0 = tau0
+		self.t_read = t_read
 		self.T2 = T2
 		self.fid0 = fid0
 		self.fid1 = fid1
