@@ -72,8 +72,10 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.nbath.set_experiment(cluster = cluster, nr_spins=nr_spins, concentration = concentration,
                 do_plot = do_plot, eng_bath=eng_bath)
         self.T2star = self.nbath.T2h
+
+        #why do we need this here? -CB
         self.over_op = self.nbath._overhauser_op()
-        #print ("T2* at high magnetic field: ", self.T2star)
+
         self.T2starlist.append(self.T2star)
         self.T2_est = self.nbath.T2est
         self.timelist.append(0)
@@ -81,6 +83,14 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         if verbose:
             self.nbath.print_nuclear_spins()
+
+    def reset_unpolarized_bath (self):
+        self.nbath.reset_bath()
+        self.T2starlist = []
+        self.timelist = []
+        self.T2starlist.append(self.T2star)
+        self.T2_est = self.nbath.T2est
+        self.timelist.append(0)
 
     def init_a_priory (self):
         pass
@@ -95,7 +105,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         az, p_az = self.nbath.get_probability_density()
         az2 = np.roll(az,-1)
         if max(az2[:-1]-az[:-1]) > 10:
-            print('Skipped sparse ditstribution:',max(az2[:-1]-az[:-1]),'kHz')
+            print('Skipped sparse distribution:',max(az2[:-1]-az[:-1]),'kHz')
             self.skip = True
         self.norm = 1
         self.p_k = np.fft.ifftshift(np.abs(np.fft.ifft(p, self.discr_steps))**2)
@@ -433,61 +443,6 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         return m_list
 
-    def bath_narrowing (self, M=1, target_T2star = 20e-6, max_nr_steps=50, do_plot = False, do_debug = False):
-
-        try:
-            t2star = self.T2starlist[-1]
-        except:
-            t2star = 0
-
-        i = 0
-        while ((t2star<target_T2star) and (i<max_nr_steps)):
-            #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
-            self.opt_k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
-            #print ("CURRENT k: ", self.opt_k)
-            m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, T2_track=False, do_debug = do_debug) 
-            t2star = self.T2starlist[-1]
-            i+=1
-
-        if do_plot:
-            plt.figure(figsize = (8, 5))
-            plt.plot (np.array(self.T2starlist)*1e6, linewidth=2, color='royalblue')
-            plt.plot (np.array(self.T2starlist)*1e6, 'o', color='royalblue')
-            plt.xlabel ('step nr', fontsize=18)
-            plt.ylabel ('T2* (us)')
-            plt.show()
- 
-
-    def bath_narrowing_v2 (self, M=1, target_T2star = 20e-6, max_nr_steps=50, do_plot = False, do_debug = False):
-
-        '''
-        In this implementation of the narrowing algorithm, I try to always to steps (k) and (k-1) together
-        so that we avoid multi-peaked distributions
-        '''
-
-        try:
-            t2star = self.T2starlist[-1]
-        except:
-            t2star = 0 
-
-        i = 0
-        while ((t2star<target_T2star) and (i<max_nr_steps)):
-            #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
-            self.opt_k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
-            #print ("CURRENT k: ", self.opt_k)
-            m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, T2_track=False, do_debug = do_debug) 
-            m_list = self.adptv_tracking_single_step (k = self.opt_k-1, M=M, T2_track=False, do_debug = do_debug) 
-            t2star = self.T2starlist[-1]
-            i+=1
-
-        if do_plot:
-            plt.figure(figsize = (8, 5))
-            plt.plot (np.array(self.T2starlist)*1e6, linewidth=2, color='royalblue')
-            plt.plot (np.array(self.T2starlist)*1e6, 'o', color='royalblue')
-            plt.xlabel ('step nr', fontsize=18)
-            plt.ylabel ('T2* (us)')
-            plt.show()
- 
     def qTracking (self, M=1, nr_steps = 1, do_plot = False, do_debug=False):
 
         '''
@@ -572,3 +527,85 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
                 self.non_tracking_estimation (do_plot=do_plot)
         self.nr_time_steps = self.curr_step
 
+
+
+class BathNarrowing (TimeSequenceQ):
+
+    def non_adaptive (self, M=1, target_T2star = 20e-6, max_nr_steps=50, do_plot = False, do_debug = False):
+
+        try:
+            t2star = self.T2starlist[-1]
+        except:
+            t2star = 0
+
+        k = self.find_optimal_k (T2_track = False, do_debug = do_debug)-1
+
+        i = 0
+        while ((t2star<target_T2star) and (i<max_nr_steps)):
+            m_list = self.adptv_tracking_single_step (k, M=M, T2_track=False, do_debug = do_debug)
+            t2star = self.T2starlist[-1]
+            k+=1
+            i+=1
+
+        if do_plot:
+            plt.figure(figsize = (8, 5))
+            plt.plot (np.array(self.T2starlist)*1e6, linewidth=2, color='royalblue')
+            plt.plot (np.array(self.T2starlist)*1e6, 'o', color='royalblue')
+            plt.xlabel ('step nr', fontsize=18)
+            plt.ylabel ('T2* (us)')
+            plt.show()
+ 
+    def adaptive_1step (self, M=1, target_T2star = 20e-6, max_nr_steps=50, do_plot = False, do_debug = False):
+
+        try:
+            t2star = self.T2starlist[-1]
+        except:
+            t2star = 0
+
+        i = 0
+        while ((t2star<target_T2star) and (i<max_nr_steps)):
+            #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
+            self.opt_k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
+            #print ("CURRENT k: ", self.opt_k)
+            m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, T2_track=False, do_debug = do_debug) 
+            t2star = self.T2starlist[-1]
+            i+=1
+
+        if do_plot:
+            plt.figure(figsize = (8, 5))
+            plt.plot (np.array(self.T2starlist)*1e6, linewidth=2, color='royalblue')
+            plt.plot (np.array(self.T2starlist)*1e6, 'o', color='royalblue')
+            plt.xlabel ('step nr', fontsize=18)
+            plt.ylabel ('T2* (us)')
+            plt.show()
+ 
+    def adaptive_2steps (self, M=1, target_T2star = 20e-6, max_nr_steps=50, do_plot = False, do_debug = False):
+
+        '''
+        In this implementation of the narrowing algorithm, I try to always to steps (k) and (k-1) together
+        so that we avoid multi-peaked distributions
+        '''
+
+        try:
+            t2star = self.T2starlist[-1]
+        except:
+            t2star = 0 
+
+        i = 0
+        while ((t2star<target_T2star) and (i<max_nr_steps)):
+            #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
+            self.opt_k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
+            #print ("CURRENT k: ", self.opt_k)
+            m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, T2_track=False, do_debug = do_debug) 
+            m_list = self.adptv_tracking_single_step (k = self.opt_k-1, M=M, T2_track=False, do_debug = do_debug) 
+            t2star = self.T2starlist[-1]
+            i+=1
+
+        if do_plot:
+            plt.figure(figsize = (8, 5))
+            plt.plot (np.array(self.T2starlist)*1e6, linewidth=2, color='royalblue')
+            plt.plot (np.array(self.T2starlist)*1e6, 'o', color='royalblue')
+            plt.xlabel ('step nr', fontsize=18)
+            plt.ylabel ('T2* (us)')
+            plt.show()
+ 

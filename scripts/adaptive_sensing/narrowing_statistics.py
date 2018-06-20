@@ -41,24 +41,34 @@ track = True
 
 folder = 'C:/'
 max_steps = 10
-nr_reps = 5
-M=2
+nr_reps = 3
+M=3
 
 results = np.zeros((nr_reps, 2*M*max_steps+1))
 i = 0
 
+exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, folder=folder, trial=trialno)
+exp.set_spin_bath (cluster=np.zeros(7), nr_spins=7, concentration=0.01, verbose=True, do_plot = False, eng_bath=False)
+exp.set_msmnt_params (tau0 = 1e-6, T2 = exp.T2star, G=5, F=3, N=10)
+exp.initialize()
+
 while (i <nr_reps):
 
-    exp = qtrack.TimeSequenceQ(time_interval=100e-6, overhead=0, folder=folder, trial=trialno)
-    exp.set_spin_bath (cluster=np.zeros(7), nr_spins=7, concentration=0.01, verbose=True, do_plot = False, eng_bath=False)
-    exp.set_msmnt_params (tau0 = 1e-6, T2 = exp.T2star, G=5, F=3, N=10)
-    exp.initialize()
-    
-    if not exp.skip:      
-        exp.bath_narrowing_v2 (M=M, target_T2star = 5000e-6, max_nr_steps=max_steps, do_plot = True, do_debug = False)
+    print ("Repetition nr: ", i+1)
+  
+    if not exp.skip: 
+        exp.reset_unpolarized_bath()  
+        exp.initialize()   
+        exp.adaptive_2steps (M=M, target_T2star = 5000e-6, max_nr_steps=max_steps, do_plot = True, do_debug = True)
         l = len (exp.T2starlist)
         results [i, :l] = exp.T2starlist/exp.T2starlist[0]
         i += 1
+
+    else:
+        exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, folder=folder, trial=trialno)
+        exp.set_spin_bath (cluster=np.zeros(7), nr_spins=7, concentration=0.01, verbose=True, do_plot = False, eng_bath=False)
+        exp.set_msmnt_params (tau0 = 1e-6, T2 = exp.T2star, G=5, F=3, N=10)
+        exp.initialize()
 
 print ('Processing results statistics...')
 nr_bins = 100
@@ -79,6 +89,10 @@ plt.show()
 
 # things to do:
 # - save data for debugging
+# - how do I reset the bath to unpolarized? It would be good to compare 
+# different runs of the protocol on the same bath, in addition to 
+# runs of the protocols on different baths
+# - need to save some sort of movie that can help us identify problems
 
 
 

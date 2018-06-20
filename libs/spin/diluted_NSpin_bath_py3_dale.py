@@ -630,6 +630,37 @@ class CentralSpinExperiment ():
 			'outcome': None,
 		}
 
+
+	def reset_bath (self, do_plot = True):
+
+		print ("Reset bath...")
+
+		self._evol_dict = {}
+		self._curr_rho = np.eye(2**self._nr_nucl_spins)/np.trace(np.eye(2**self._nr_nucl_spins))
+
+
+		#Create sub matrices based on result of group algo
+		if self._clus:
+			self._block_rho = []
+			for j in range(len(self._grp_lst)):
+				self._block_rho.append(np.multiply(np.eye(2**len(self._grp_lst[j])),(2**-len(self._grp_lst[j]))))
+		
+		
+		if do_plot:
+			self.exp.plot_spin_bath_info()
+		
+		pd = np.real(self.get_probability_density())
+		self.values_Az_kHz = pd[0]
+		stat = self.get_overhauser_stat()
+		self._evol_dict ['0'] = {
+			'mean_OH': np.real(stat[0]),
+			'std_OH': np.real(stat[1]),
+			'prob_Az': pd[1],
+			'outcome': None,
+		}
+
+
+
 	def _Cmn (self):
 		'''
 		Calculates Cmn tensor for every pair in self.pair_lst
@@ -1170,7 +1201,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		return U
 
 
-	def Ramsey (self, tau, t_read, phi, flip_prob):
+	def Ramsey (self, tau,  phi, flip_prob = 0, t_read = 0, verbose = False):
 		'''
 		Performs a single Ramsey experiment:
 		(1) Calculates tr(U1* U0 rho_block) for each dum density matrix
@@ -1205,7 +1236,8 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		p0 = round(.5*(1-sig.real),5)
 		
 		ms = ran.choice([1,0],p=[p1,p0])
-		print('Ramsey outcome: ', ms)
+		if verbose:
+			print('Ramsey outcome: ', ms)
 		
 		if ms==1:
 			ms = ran.choice([1,0],p=[1-flip_prob, flip_prob])
