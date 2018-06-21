@@ -147,7 +147,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         return norm, error
         
 
-    def plot_hyperfine_distr(self, T2track = False, T2est = 1e-3):
+    def plot_hyperfine_distr(self, T2track = False, T2est = 1e-3, do_save = True):
         
         T2est = self.T2_est
         
@@ -205,8 +205,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         fwhm = self.FWHM()
         plt.xlim((-5*fwhm, +5*fwhm))
         #plt.ylim(0,self.norm)
-        #plt.savefig('trial_%.04d_%.04d'%(self.trial,self.step))
-        plt.show()
+        if do_save:
+            plt.savefig(os.path.join(self.folder+'/distr_plts', 'trial_%.04d_%.04d.png'%(self.trial,self.step)))
+        #plt.show()
         self.p_az_old = p_az2/max(p_az2)
         self.step+=1
         
@@ -407,7 +408,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         return self.opt_k
 
-    def adptv_tracking_single_step (self, k, M, T2_track=False, do_debug=False):
+    def adptv_tracking_single_step (self, k, M, T2_track=False, do_debug=False, do_save = False):
 
         t_i = int(2**k)
         ttt = -2**(k+1)
@@ -438,13 +439,13 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
                 print ("Current T2* = ", int(self.T2starlist[-1]*1e8)/100., ' us')
 
                 if m==0:
-                    self.plot_hyperfine_distr(T2track = T2_track, T2est = self.T2_est)
+                    self.plot_hyperfine_distr(T2track = T2_track, T2est = self.T2_est, do_save = do_save)
                 else:
-                    self.plot_hyperfine_distr(T2track = False, T2est = self.T2_est)
+                    self.plot_hyperfine_distr(T2track = False, T2est = self.T2_est, do_save = do_save)
 
         return m_list
 
-    def qTracking (self, M=1, nr_steps = 1, do_plot = False, do_debug=False):
+    def qTracking (self, M=1, nr_steps = 1, do_plot = False, do_debug=False, do_save = False):
 
         '''
         Simulates adaptive tracking protocol.
@@ -471,7 +472,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             # print ("CURRENT k: ", self.opt_k+1)
             # m_list = self.adptv_tracking_single_step (k = self.opt_k+1, M=M, do_debug = do_debug)
             #print ("CURRENT k: ", self.opt_k)
-            m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, T2_track=track,  do_debug = do_debug)
+            m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, T2_track=track,  do_debug = do_debug, do_save = do_save)
             p = self.return_p_fB()[0]
             maxp = list(p).index(max(p))
             # if self.beta[maxp]!=0:
@@ -504,7 +505,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
 class BathNarrowing (TimeSequenceQ):
 
-    def non_adaptive (self, M=1, target_T2star = 20e-6, max_nr_steps=50, do_plot = False, do_debug = False):
+    def non_adaptive (self, M=1, target_T2star = 20e-6, max_nr_steps=50, do_plot = False, do_debug = False, do_save = False):
 
         try:
             t2star = self.T2starlist[-1]
@@ -515,7 +516,7 @@ class BathNarrowing (TimeSequenceQ):
 
         i = 0
         while ((t2star<target_T2star) and (i<max_nr_steps)):
-            m_list = self.adptv_tracking_single_step (k=k, M=M, T2_track=False, do_debug = do_debug)
+            m_list = self.adptv_tracking_single_step (k=k, M=M, T2_track=False, do_debug = do_debug, do_save = do_save)
             t2star = self.T2starlist[-1]
             k+=1
             i+=1
@@ -540,7 +541,7 @@ class BathNarrowing (TimeSequenceQ):
             #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
             k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
             #print ("CURRENT k: ", self.opt_k)
-            m_list = self.adptv_tracking_single_step (k = k, M=M, T2_track=False, do_debug = do_debug) 
+            m_list = self.adptv_tracking_single_step (k = k, M=M, T2_track=False, do_debug = do_debug, do_save = do_save)
             t2star = self.T2starlist[-1]
             i+=1
 
@@ -552,7 +553,7 @@ class BathNarrowing (TimeSequenceQ):
             plt.ylabel ('T2* (us)')
             plt.show()
  
-    def adaptive_2steps (self, M=1, target_T2star = 20e-6, max_nr_steps=50, do_plot = False, do_debug = False):
+    def adaptive_2steps (self, M=1, target_T2star = 20e-6, max_nr_steps=50, do_plot = False, do_debug = False, do_save = False):
 
         '''
         In this implementation of the narrowing algorithm, I try to always to steps (k) and (k-1) together
@@ -569,8 +570,8 @@ class BathNarrowing (TimeSequenceQ):
             #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
             k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
             #print ("CURRENT k: ", self.opt_k)
-            m_list = self.adptv_tracking_single_step (k = k, M=M, T2_track=False, do_debug = do_debug) 
-            m_list = self.adptv_tracking_single_step (k = k-1, M=M, T2_track=False, do_debug = do_debug) 
+            m_list = self.adptv_tracking_single_step (k = k, M=M, T2_track=False, do_debug = do_debug, do_save = do_save)
+            m_list = self.adptv_tracking_single_step (k = k-1, M=M, T2_track=False, do_debug = do_debug, do_save = do_save)
             t2star = self.T2starlist[-1]
             i+=1
 

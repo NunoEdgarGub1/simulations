@@ -101,7 +101,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 				#here we could do it general, with a general function
 				# passed as a string
 				exp.adaptive_2steps (M=self.M, target_T2star = 5000e-6, 
-						max_nr_steps=max_steps, do_plot = do_plot, do_debug = do_debug)
+						max_nr_steps=max_steps, do_plot = do_plot, do_debug = do_debug, do_save = do_save)
 				l = len (exp.T2starlist)
 				self.results [i, :l] = exp.T2starlist/exp.T2starlist[0]
 				i += 1
