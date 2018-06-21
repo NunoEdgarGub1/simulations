@@ -501,34 +501,6 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             plt.show()
             
 
-
-    def simulate(self, track, do_save = False, do_plot = False, kappa = None, do_debug=False):
-        self.k_array = self.K-np.arange(self.K+1)
-        self.init_apriori ()
-
-        total_units = 0
-        self.curr_step = -1
-
-        self.prev_estim = 0
-        self.total_time = np.array([])
-
-        self.running_time = 0
-        self.nr_estimations = 0
-
-        while (self.running_time < self.time_interval):
-            if not(track):
-                self.init_apriori ()
-
-            self.curr_step = self.curr_step + 1
-
-            if track:
-                self.adaptive_tracking_estimation(do_plot=do_plot, do_debug=do_debug)
-            else:
-                self.non_tracking_estimation (do_plot=do_plot)
-        self.nr_time_steps = self.curr_step
-
-
-
 class BathNarrowing (TimeSequenceQ):
 
     def non_adaptive (self, M=1, target_T2star = 20e-6, max_nr_steps=50, do_plot = False, do_debug = False):
@@ -542,7 +514,7 @@ class BathNarrowing (TimeSequenceQ):
 
         i = 0
         while ((t2star<target_T2star) and (i<max_nr_steps)):
-            m_list = self.adptv_tracking_single_step (k, M=M, T2_track=False, do_debug = do_debug)
+            m_list = self.adptv_tracking_single_step (k=k, M=M, T2_track=False, do_debug = do_debug)
             t2star = self.T2starlist[-1]
             k+=1
             i+=1
@@ -565,9 +537,9 @@ class BathNarrowing (TimeSequenceQ):
         i = 0
         while ((t2star<target_T2star) and (i<max_nr_steps)):
             #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
-            self.opt_k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
+            k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
             #print ("CURRENT k: ", self.opt_k)
-            m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, T2_track=False, do_debug = do_debug) 
+            m_list = self.adptv_tracking_single_step (k = k, M=M, T2_track=False, do_debug = do_debug) 
             t2star = self.T2starlist[-1]
             i+=1
 
@@ -594,10 +566,10 @@ class BathNarrowing (TimeSequenceQ):
         i = 0
         while ((t2star<target_T2star) and (i<max_nr_steps)):
             #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
-            self.opt_k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
+            k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
             #print ("CURRENT k: ", self.opt_k)
-            m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, T2_track=False, do_debug = do_debug) 
-            m_list = self.adptv_tracking_single_step (k = self.opt_k-1, M=M, T2_track=False, do_debug = do_debug) 
+            m_list = self.adptv_tracking_single_step (k = k, M=M, T2_track=False, do_debug = do_debug) 
+            m_list = self.adptv_tracking_single_step (k = k-1, M=M, T2_track=False, do_debug = do_debug) 
             t2star = self.T2starlist[-1]
             i+=1
 

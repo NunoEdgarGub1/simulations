@@ -2,25 +2,17 @@
 import numpy as np
 import random
 from matplotlib import rc, cm
-import matplotlib
 import os, sys
 import h5py
-import logging, time, timeit
-import re
-
-import matplotlib.pyplot as plt
-import inspect
-from scipy import signal
-from simulations.libs.math import statistics as stat
-from tools import toolbox_delft as toolbox
-from simulations.libs.adaptive_sensing import adaptive_tracking as track_libOH
+import logging, time
+import sys
+import matplotlib
+from matplotlib import pyplot as plt
+from simulations.libs.adaptive_sensing import qTracking as qtrack
 from tools import data_object as DO
 from importlib import reload
 
-
-reload (stat)
-reload (track_libOH)
-reload (DO)
+reload (qtrack)
 matplotlib.rc('xtick', labelsize=18) 
 matplotlib.rc('ytick', labelsize=18)
 
@@ -33,19 +25,20 @@ class ExpStatistics (DO.DataObjectHDF5):
 		self._called_modules = []
 
 	def set_sim_params (self, nr_reps, overhead=0):
-		self.reps = nr_reps
+		self.nr_reps = nr_reps
 		self.overhead = overhead
 		self._called_modules = []
 
-	def set_msmnt_params (self, M, N=8, tau0=20e-9, T2 = 100e-6, fid0=1., fid1=0.):
+	def set_msmnt_params (self, M, N=8, tau0=20e-9, fid0=1., fid1=0.):
 		self.N = N
 		self.tau0 = tau0
-		self.T2 = T2
 		self.fid0 = fid0
 		self.fid1 = fid1
-		self.F = F
-		self.G = G
-		self.K = N-1
+		self.M = M
+
+	def set_bath_params (self, nr_spins=7, concentration=0.01):
+		self.nr_spins = nr_spins
+		self.conc = concentration
 
 	def print_parameters(self):
 		print ("##### Parameters:")
@@ -74,65 +67,131 @@ class ExpStatistics (DO.DataObjectHDF5):
 
 		return f
 
-	def simulate_same_bath (self, string_id = '', do_save = False):
+	def simulate_same_bath (self, max_steps, string_id = '', 
+				do_save = False, do_plot = False, do_debug = False):
 
 		self._called_modules.append('simulate')		
 
 		if do_save:
 			f = self.__generate_file (title = string_id)
 
-		for r in np.arange(self.reps):
-			sys.stdout.write(str(r)+', ')	
+		trialno = 0
 
-			T = track_libOH.TimeSequence_overhead (time_interval = self.time_interval, overhead = self.overhead, folder = self.folder)
-			T.track = track
-			T.set_msmnt_params (N = self.N, G = self.G, F = self.F, T2 = self.T2, fid0 = self.fid0, fid1 = self.fid1)
+		self.results = np.zeros((self.nr_reps, 2*self.M*max_steps+1))
+		i = 0
 
-			attr_list = [a for a in dir(self) if not a.startswith('__') and not callable(getattr(self,a))]
-			for a in attr_list:
-				setattr (T, a, getattr(self,a))
+		exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, 
+				folder=self.folder, trial=0)
+		exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
+				 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)
+		exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=5, F=3, N=10)
+		exp.initialize()
 
-			T.reset_called_modules()
-			T.setup_protocol()
+		while (i < self.nr_reps):
 
-			T.curr_rep = r
-			T.prev_estim = 0 
-			T.init_apriori()
-			T.curr_B_idx = 0
+			print ("Repetition nr: ", i+1)
 
-			if track:
-				T.simulate (track = True, do_plot = do_plot, do_debug=do_debug)
-				T.curr_B_idx = 0
-
+			if not exp.skip:
+				exp.reset_unpolarized_bath()
+				exp.initialize()
+				#here we could do it general, with a general function
+				# passed as a string
+				exp.adaptive_2steps (M=self.M, target_T2star = 5000e-6, 
+						max_nr_steps=max_steps, do_plot = do_plot, do_debug = do_debug)
+				l = len (exp.T2starlist)
+				self.results [i, :l] = exp.T2starlist/exp.T2starlist[0]
+				i += 1
+			else:
+				exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, 
+						folder=self.folder, trial=trialno)
+				exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
+					 	concentration=self.conc, verbose=True, do_plot = False, eng_bath=False)
+				exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=5, F=3, N=10)
+				exp.initialize()
 				if do_save:
+					# what parameters do we have to save??
+					# - parameters of the bath
+					# - measurement outcomes
+					# - bath evolution
+					# - evolution of T2*
 					rep_nr = str(r).zfill(dig)
 					grp = f.create_group(rep_nr+'_track')
 					self.__save_values (obj = T, file_handle = grp)
-			else:
-				T.simulate(track = False, do_plot = do_plot)
-				T.dur_sens_time = (T.tau0*(T.G*(2**T.N-1)+T.F*(2**T.N-T.N-1)))
-				T.dur_OH_time = (T.G*T.N+0.5*(T.F*T.N*(T.N-1)))*T.OH
-				if do_save:
-					rep_nr = str(r).zfill(dig)
-					grp = f.create_group(rep_nr+'_no_track')
-					self.__save_values (obj = T, file_handle = grp)
 
 		if do_save:
-
-			try:
-				f.create_dataset ('fom_array', data = self.fom_array)
-			except:
-				print ("fom_array not found")
-
-			grp = f.create_group('code')
-
-			for i in T._called_modules:
-				try:
-					grp.attrs[i] = inspect.getsource(getattr(T, i))
-				except:
-					print ("Non-existing function: ", i)
 			f.close()
 
+	def simulate_different_bath (self, max_steps, string_id = '', 
+				do_save = False, do_plot = False, do_debug = False):
+
+		self._called_modules.append('simulate')		
+
+		if do_save:
+			f = self.__generate_file (title = string_id)
+
+		trialno = 0
+
+		self.results = np.zeros((self.nr_reps, 2*self.M*max_steps+1))
+		i = 0
+
+		while (i < self.nr_reps):
+
+			try:
+				exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, 
+						folder=self.folder, trial=0)
+				exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
+						 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)
+				exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=5, F=3, N=10)
+				exp.initialize()
+
+				print ("Repetition nr: ", i+1)
+
+				if not exp.skip:
+					exp.adaptive_2steps (M=self.M, target_T2star = 5000e-6, 
+							max_nr_steps=max_steps, do_plot = do_plot, do_debug = do_debug)
+					l = len (exp.T2starlist)
+					self.results [i, :l] = exp.T2starlist/exp.T2starlist[0]
+					i += 1
+
+					if do_save:
+						# what parameters do we have to save??
+						# - parameters of the bath
+						# - measurement outcomes
+						# - bath evolution
+						# - evolution of T2*
+						rep_nr = str(r).zfill(dig)
+						grp = f.create_group(rep_nr+'_track')
+						self.__save_values (obj = T, file_handle = grp)
+			except:
+				pass
+
+		if do_save:
+			f.close()
+
+
+
+	def analysis (self, nr_bins=100):
+		print ('Processing results statistics...')
+		res_hist = np.zeros((nr_bins+1, 2*self.M*self.max_steps+1))
+		bin_edges = np.zeros((nr_bins+1, 2*self.M*self.max_steps+1))
+
+		for j in range(2*self.M*self.max_steps+1):
+			a = np.histogram(self.results[:nr_bins,j], bins=np.linspace (0, 15, nr_bins+1))
+			res_hist [:len(a[0]), j] = a[0]
+			bin_edges [:len(a[1]), j] = a[1]
+
+		[X, Y] = np.meshgrid (np.arange(2*self.M*self.max_steps+1), 
+				np.linspace (0, 15, nr_bins+1))
+
+		plt.pcolor (X, Y, res_hist)
+		plt.xlabel ('nr of narrowing steps', fontsize = 18)
+		plt.ylabel ('T2*/T2*_init', fontsize = 18)
+		plt.show()
+
+
+
+
+'''
 	def load (self, stamp, folder):
 
 		self.folder = folder
@@ -289,3 +348,4 @@ class ExpStatistics (DO.DataObjectHDF5):
 		plt.axis ([0, 100, 0, 1.1*max(self.nr_occur_sensing_time)])
 		plt.show()
 
+'''
