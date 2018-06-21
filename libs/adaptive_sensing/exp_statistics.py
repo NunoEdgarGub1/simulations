@@ -48,26 +48,33 @@ class ExpStatistics (DO.DataObjectHDF5):
 			if ((type (self.__dict__[k]) is float) or (type (self.__dict__[k]) is int) or (type (self.__dict__[k]) is str)):
 				print (' - - ', k, ': ', self.__dict__[k])
 
+	def set_plot_saving (self, value):
+		self._save_plots = value
+
 	def __save_values(self, obj, file_handle):
 		for k in obj.__dict__.keys():
 			if ((type (obj.__dict__[k]) is float) or (type (obj.__dict__[k]) is int) or (type (obj.__dict__[k]) is str)):
 				file_handle.attrs[k] = obj.__dict__[k] 
 
 	def __generate_file (self, title = ''):
-		fName = time.strftime ('%Y%m%d_%H%M%S')+ '_qTrack'
 
-		if not os.path.exists(os.path.join(self.folder, fName+'.hdf5')):
+		fName = time.strftime ('%Y%m%d_%H%M%S')+ '_qTrack'
+		newpath = os.path.join (self.folder, fName) 
+		if not os.path.exists(newpath):
+			os.makedirs(newpath)
+
+		if not os.path.exists(os.path.join(newpath, fName+'.hdf5')):
 			mode = 'w'
 		else:
 			mode = 'r+'
 			print ('Output file already exists!')
 
-		f = h5py.File(os.path.join(self.folder, fName+'.hdf5'), mode)
+		f = h5py.File(os.path.join(newpath, fName+'.hdf5'), mode)
 		for k in self.__dict__.keys():
 			if ((type (self.__dict__[k]) is float) or (type (self.__dict__[k]) is int) or (type (self.__dict__[k]) is str)):
 				f.attrs[k] = self.__dict__[k]
 
-		return f
+		return f, newpath
 
 	def simulate_same_bath (self, max_steps, string_id = '', 
 				do_save = False, do_plot = False, do_debug = False):
@@ -129,10 +136,11 @@ class ExpStatistics (DO.DataObjectHDF5):
 	def simulate_different_bath (self, max_steps, string_id = '', 
 				do_save = False, do_plot = False, do_debug = False):
 
-		self._called_modules.append('simulate')		
+		self._called_modules.append('simulate')
+		newpath = self.folder
 
 		if do_save:
-			f = self.__generate_file (title = string_id)
+			f, newpath = self.__generate_file (title = string_id)
 
 		trialno = 0
 
@@ -143,7 +151,8 @@ class ExpStatistics (DO.DataObjectHDF5):
 
 			#try:
 			exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, 
-					folder=self.folder, trial=0)
+					folder=newpath, trial=0)
+			exp._save_plots = self._save_plots
 			exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
 					 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)
 			exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=5, F=3, N=10)

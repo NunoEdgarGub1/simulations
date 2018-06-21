@@ -57,6 +57,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.qmax = []
         self.cmax = []
         self._flip_prob = 0
+        self._save_plots = False
 
 
         # The "called modules" is  a list that tracks which functions have been used
@@ -205,8 +206,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         fwhm = self.FWHM()
         plt.xlim((-5*fwhm, +5*fwhm))
         #plt.ylim(0,self.norm)
-        if do_save:
-            plt.savefig(os.path.join(self.folder+'/distr_plts', 'trial_%.04d_%.04d.png'%(self.trial,self.step)))
+        if self._save_plots:
+            plt.savefig(os.path.join(self.folder+'/', 'trial_%.04d_%.04d.png'%(self.trial,self.step)))
         #plt.show()
         self.p_az_old = p_az2/max(p_az2)
         self.step+=1
