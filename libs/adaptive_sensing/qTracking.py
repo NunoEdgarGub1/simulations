@@ -71,19 +71,17 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         # Spin bath initialization
         self.nbath = NSpin.SpinExp_cluster1()
         self.nbath.set_experiment(cluster = cluster, nr_spins=nr_spins, concentration = concentration,
-                do_plot = do_plot, eng_bath=eng_bath)
+                do_plot = False, eng_bath=eng_bath)
         self.T2star = self.nbath.T2h
 
-        #why do we need this here? -CB
         self.over_op = self.nbath._overhauser_op()
 
         self.T2starlist.append(self.T2star)
         self.T2_est = self.nbath.T2est
         self.timelist.append(0)
-        #print("numerical T2*", .5*(self.nbath._op_sd(self.over_op[2]).real)**-1,'s')
 
-        if verbose:
-            self.nbath.print_nuclear_spins()
+        #if verbose:
+            #self.nbath.print_nuclear_spins()
 
     def reset_unpolarized_bath (self):
         self.nbath.reset_bath()
@@ -93,16 +91,17 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.T2_est = self.nbath.T2est
         self.timelist.append(0)
 
+        self.opt_k=0
+
+
     def set_flip_prob (self, value):
         self._flip_prob = value
 
     def init_a_priory (self):
         pass
 
-    def initialize (self):
-        # B_std = 1/(sqrt(2)*pi*T2_star)
+    def initialize (self, do_plot=False):
         self._dfB0 = 1/(np.sqrt(2)*np.pi*self.tau0)
-        #print ("std fB: ", self._dfB0*1e-3, " kHz")
 
         p = np.exp(-0.5*(self.beta/self._dfB0)**2)
         p = p/(np.sum(p))
@@ -114,9 +113,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.norm = 1
         self.p_k = np.fft.ifftshift(np.abs(np.fft.ifft(p, self.discr_steps))**2)
         self.renorm_p_k()
-        #print('MSE', self.MSE()[0])
-        #self.mse_lst.append(self.MSE()[0])
-        self.plot_hyperfine_distr()
+
+        if do_plot:
+            self.plot_hyperfine_distr()
         
     def fitting(self, p, paz, az, T2track, T2est):
         '''
@@ -177,12 +176,12 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         tarr = np.linspace(min(self.beta)*1e-3,max(self.beta)*1e-3,1000)
         T2star = 5*(self.nbath._op_sd(self.over_op[2]).real)**-1
         T2inv = T2star**-1 *1e-3
-        plt.hlines(.5*max(p*self.norm),xmin=self.beta[np.argmax(p)]*1e-3-.5*T2inv,xmax=self.beta[np.argmax(p)]*1e-3+.5*T2inv,
-                  lw=9, color='red')
+        #plt.hlines(.5*max(p*self.norm),xmin=self.beta[np.argmax(p)]*1e-3-.5*T2inv,xmax=self.beta[np.argmax(p)]*1e-3+.5*T2inv,
+        #          lw=9, color='red')
         # plt.hlines(.5*max(p),xmin=self.beta[np.argmax(p)]*1e-3-.5*self.Hvar,xmax=self.beta[np.argmax(p)]*1e-3+.5*self.Hvar,
         #           lw=9, color='blue')
-        plt.hlines(.5*max(p*self.norm),xmin=self.beta[np.argmax(p)]*1e-3-.5*self.FWHM(),xmax=self.beta[np.argmax(p)]*1e-3+.5*self.FWHM(),
-                  lw=3)
+        #plt.hlines(.5*max(p*self.norm),xmin=self.beta[np.argmax(p)]*1e-3-.5*self.FWHM(),xmax=self.beta[np.argmax(p)]*1e-3+.5*self.FWHM(),
+        #          lw=3)
         #plt.plot (az, p_az/np.sum(p_az), 'o', color='royalblue', label = 'spin-bath')
         #plt.plot (az, p_az/np.sum(p_az), '--', color='royalblue')
         #plt.plot (az, p_az/max(p_az) * max(p), 'o', color='royalblue', label = 'spin-bath')
@@ -203,7 +202,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         for pj in range(len(peaks)):
             plt.axvline(self.beta[peaks[pj][0]]*1e-3)
         plt.xlabel (' hyperfine (kHz)', fontsize=18)
-        plt.legend()
+        fwhm = self.FWHM()
+        plt.xlim((-5*fwhm, +5*fwhm))
         #plt.ylim(0,self.norm)
         #plt.savefig('trial_%.04d_%.04d'%(self.trial,self.step))
         plt.show()
@@ -305,6 +305,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         A = 0.5
         B = -0.5
 
+        #we should be updating the value of T2 in the classical Ramsey
+        # shouldn't we?
         Bp = np.exp(-(t/self.T2)**2)*np.cos(self.curr_acc_phase+theta)
         p0 = (1-A)-B*Bp
         p1 = A+B*Bp
@@ -437,7 +439,6 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             if do_debug:
                 print ("Estimation step: t_units=", t_i, "    -- res:", self.m_res)
                 print ("Current T2* = ", T2star*1e6, ' us')
-                print (self.T2starlist)
 
             if do_debug:
                 if m==0:
