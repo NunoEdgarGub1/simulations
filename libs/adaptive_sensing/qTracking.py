@@ -56,6 +56,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.FWHM_lst = []
         self.qmax = []
         self.cmax = []
+        self._flip_prob = 0
 
 
         # The "called modules" is  a list that tracks which functions have been used
@@ -91,6 +92,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.T2starlist.append(self.T2star)
         self.T2_est = self.nbath.T2est
         self.timelist.append(0)
+
+    def set_flip_prob (self, value):
+        self._flip_prob = value
 
     def init_a_priory (self):
         pass
@@ -323,7 +327,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         '''
 
         az0, pd0 = np.real(self.nbath.get_probability_density())
-        m = self.nbath.Ramsey (tau=t, phi = theta, flip_prob = .1)
+        m = self.nbath.Ramsey (tau=t, phi = theta, flip_prob = self._flip_prob)
         az, pd = np.real(self.nbath.get_probability_density())
         self.fliplist = self.nbath.flipArr
 

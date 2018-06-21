@@ -640,6 +640,8 @@ class CentralSpinExperiment ():
 
 
 		#Create sub matrices based on result of group algo
+		# (for now, we don't really use it so self._clus is set to True
+		# but the number of groups is set to 1)
 		if self._clus:
 			self._block_rho = []
 			for j in range(len(self._grp_lst)):

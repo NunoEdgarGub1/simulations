@@ -85,6 +85,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 		exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
 				 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)
 		exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=5, F=3, N=10)
+		exp.set_flip_prob (0)
 		exp.initialize()
 
 		while (i < self.nr_reps):
@@ -107,6 +108,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 				exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
 					 	concentration=self.conc, verbose=True, do_plot = False, eng_bath=False)
 				exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=5, F=3, N=10)
+				exp.set_flip_prob (0)
 				exp.initialize()
 				if do_save:
 					# what parameters do we have to save??
@@ -142,6 +144,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 				exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
 						 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)
 				exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=5, F=3, N=10)
+				exp.set_flip_prob (0)
 				exp.initialize()
 
 				print ("Repetition nr: ", i+1)
