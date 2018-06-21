@@ -428,7 +428,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             #t2_list.append(T2star)
             FWHM = self.FWHM()*1e3
             #Has to remain below 1 so that the FWHM is an upperbound to 1/T2*
-            self.widthratlist.append((1/FWHM)/T2star)
+            #self.widthratlist.append((1/FWHM)/T2star)
             self.T2starlist.append(.5*(self.nbath._op_sd(self.over_op[2]).real)**-1)
             self._curr_T2star = self.T2starlist[-1]
             self.timelist.append(self.timelist[-1] + t_i*self.tau0)
