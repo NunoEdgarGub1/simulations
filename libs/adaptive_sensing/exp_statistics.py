@@ -19,7 +19,7 @@ matplotlib.rc('ytick', labelsize=18)
 
 class ExpStatistics (DO.DataObjectHDF5):
 
-	def __init__ (self, folder = 'D:/Research/WorkData/adptv_tracking_sim/'):
+	def __init__ (self, folder = 'D:/Research/WorkData/'):
 		self.folder = folder
 		self.auto_set = False
 		self._called_modules = []
@@ -52,7 +52,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 				file_handle.attrs[k] = obj.__dict__[k] 
 
 	def __generate_file (self, title = ''):
-		fName = time.strftime ('%Y%m%d_%H%M%S')+ '_adptvTracking'
+		fName = time.strftime ('%Y%m%d_%H%M%S')+ '_qTrack'
 
 		if not os.path.exists(os.path.join(self.folder, fName+'.hdf5')):
 			mode = 'w'
@@ -118,8 +118,8 @@ class ExpStatistics (DO.DataObjectHDF5):
 					# - bath evolution
 					# - evolution of T2*
 					rep_nr = str(r).zfill(dig)
-					grp = f.create_group(rep_nr+'_track')
-					self.__save_values (obj = T, file_handle = grp)
+					grp = f.create_group(rep_nr)
+					self.__save_values (obj = exp, file_handle = grp)
 
 		if do_save:
 			f.close()
@@ -165,8 +165,8 @@ class ExpStatistics (DO.DataObjectHDF5):
 						# - bath evolution
 						# - evolution of T2*
 						rep_nr = str(r).zfill(dig)
-						grp = f.create_group(rep_nr+'_track')
-						self.__save_values (obj = T, file_handle = grp)
+						grp = f.create_group(rep_nr)
+						self.__save_values (obj = exp, file_handle = grp)
 			except:
 				pass
 

@@ -416,9 +416,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         t2_list = []
 
         for m in range(M):
-            #print('Ramsey time', t_i*self.tau0)
             self.phase_cappellaro = 0.5*np.angle (self.p_k[int(ttt+self.points)])
-            #print('Phase',self.phase_cappellaro)
             self.m_res = self.ramsey (theta=self.phase_cappellaro, t = t_i*self.tau0, do_plot=False)#do_debug)
             m_list.append(self.m_res)
             if m==0:
@@ -426,21 +424,19 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             else:
                 self.bayesian_update (m_n = self.m_res, phase_n = self.phase_cappellaro, t_n = t_i, T2_track = False, T2_est = self.T2_est, do_plot=False)
             self.peak_cnt()
-            #print('multiple peaks', self.multi_peak)
-            T2star = 5*(self.nbath._op_sd(self.over_op[2]).real)**-1
-            t2_list.append(T2star)
+            #T2star = 5*(self.nbath._op_sd(self.over_op[2]).real)**-1
+            #t2_list.append(T2star)
             FWHM = self.FWHM()*1e3
             #Has to remain below 1 so that the FWHM is an upperbound to 1/T2*
             self.widthratlist.append((1/FWHM)/T2star)
             self.T2starlist.append(.5*(self.nbath._op_sd(self.over_op[2]).real)**-1)
+            self._curr_T2star = self.T2starlist[-1]
             self.timelist.append(self.timelist[-1] + t_i*self.tau0)
-            #self.mse_lst.append(self.MSE()[0])
 
             if do_debug:
-                print ("Estimation step: t_units=", t_i, "    -- res:", self.m_res)
-                print ("Current T2* = ", T2star*1e6, ' us')
+                print ("Ramsey estim: tau =", t_i*self.tau0*1e6, "us --- phase: ", self.phase_cappellaro, "   -- res:", self.m_res)
+                print ("Current T2* = ", int(self.T2starlist[-1]*1e8)/100., ' us')
 
-            if do_debug:
                 if m==0:
                     self.plot_hyperfine_distr(T2track = T2_track, T2est = self.T2_est)
                 else:
