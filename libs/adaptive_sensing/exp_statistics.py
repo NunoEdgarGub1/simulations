@@ -13,6 +13,8 @@ from tools import data_object as DO
 from importlib import reload
 
 reload (qtrack)
+reload (DO)
+
 matplotlib.rc('xtick', labelsize=18) 
 matplotlib.rc('ytick', labelsize=18)
 
@@ -118,8 +120,8 @@ class ExpStatistics (DO.DataObjectHDF5):
 					# - bath evolution
 					# - evolution of T2*
 					rep_nr = str(r).zfill(dig)
-					grp = f.create_group(rep_nr)
-					self.__save_values (obj = exp, file_handle = grp)
+					grp = f.create_group('rep_'+rep_nr)
+					DO.save_object_to_file (obj = exp, f = grp)
 
 		if do_save:
 			f.close()
@@ -139,36 +141,42 @@ class ExpStatistics (DO.DataObjectHDF5):
 
 		while (i < self.nr_reps):
 
-			try:
-				exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, 
-						folder=self.folder, trial=0)
-				exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
-						 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)
-				exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=5, F=3, N=10)
-				exp.set_flip_prob (0)
-				exp.initialize()
+			#try:
+			exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, 
+					folder=self.folder, trial=0)
+			exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
+					 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)
+			exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=5, F=3, N=10)
+			exp.set_flip_prob (0)
+			exp.initialize()
 
-				print ("Repetition nr: ", i+1)
+			print ("Repetition nr: ", i+1)
 
-				if not exp.skip:
-					exp.nbath.print_nuclear_spins()
-					exp.adaptive_2steps (M=self.M, target_T2star = 5000e-6, 
-							max_nr_steps=max_steps, do_plot = do_plot, do_debug = do_debug)
-					l = len (exp.T2starlist)
-					self.results [i, :l] = exp.T2starlist/exp.T2starlist[0]
-					i += 1
+			if not exp.skip:
+				exp.nbath.print_nuclear_spins()
+				exp.adaptive_2steps (M=self.M, target_T2star = 5000e-6, 
+						max_nr_steps=max_steps, do_plot = do_plot, do_debug = do_debug)
+				l = len (exp.T2starlist)
+				self.results [i, :l] = exp.T2starlist/exp.T2starlist[0]
+				i += 1
 
-					if do_save:
-						# what parameters do we have to save??
-						# - parameters of the bath
-						# - measurement outcomes
-						# - bath evolution
-						# - evolution of T2*
-						rep_nr = str(r).zfill(dig)
-						grp = f.create_group(rep_nr)
-						self.__save_values (obj = exp, file_handle = grp)
-			except:
-				pass
+				if do_save:
+					# what parameters do we have to save??
+					# - parameters of the bath
+					# - measurement outcomes
+					# - bath evolution
+					# - evolution of T2*
+					rep_nr = str(i).zfill(len(str(self.nr_reps)))
+					grp = f.create_group('rep_'+rep_nr)
+					self.save_object_to_file (obj = exp, f = grp)
+					grp_nbath = grp.create_group ('nbath')
+					self.save_object_to_file (obj = exp.nbath, f = grp_nbath)
+					# NO, saving everything becomes big too quick
+					# we need a more specialized approach
+					# where we state which params we want to save
+
+			#except Exception as e: 
+			#	print(e)
 
 		if do_save:
 			f.close()
@@ -194,163 +202,3 @@ class ExpStatistics (DO.DataObjectHDF5):
 		plt.show()
 
 
-
-
-'''
-	def load (self, stamp, folder):
-
-		self.folder = folder
-		name = toolbox.file_in_folder(folder=self.folder, timestamp = stamp)
-		self.name = name
-		f = h5py.File(os.path.join(self.folder, name),'r')
-		for k in f.attrs.keys():
-			setattr (self, k, f.attrs [k])
-
-		try:
-			dig = len(str(self.reps))
-		except:
-			dig = len('99')
-			self.reps = 100
-
-		if ('adptvTracking' in name):
-			self.track_dict = {}
-			self.track = True
-		else:
-			self.no_track_dict = {}
-			self.track = False
-
-		for r in np.arange (self.reps):
-			rep_nr = str(r).zfill(dig)
-
-			if ('adptvTracking' in name):
-				grp = f['/'+rep_nr+'_track']
-				self.track_dict[str(r)] = {}
-				for k in grp.keys():
-					self.track_dict[str(r)][k] = grp[k].value
-				if ('figure_of_merit' in grp.keys()):
-					self.fom_exists = True
-				else:
-					self.fom_exists = False
-			else:
-				try:
-					grp = f['/'+rep_nr+'_no_track']
-				except:
-					grp = f['/0'+rep_nr+'_no_track']
-				self.no_track_dict[str(r)] = {}
-				for k in grp.keys():
-					self.no_track_dict[str(r)][k] = grp[k].value
-
-		try:
-			self.fom_array = f['fom_array'].value
-		except:
-			pass
-		f.close()
-			
-	def analysis (self, reps = 'all'):
-		self._called_modules.append('analysis')
-
-		if self.track:
-			dictionary = self.track_dict
-		else:
-			dictionary = self.no_track_dict
-
-		if (reps =='all'):
-			reps = np.arange(self.reps)
-
-		#discard instances that go out of range (|fB|>24 MHz)
-		n_samples = 0
-		msqe = 0
-		new_reps = []
-		for i in reps:
-			d = dictionary[str(i)]
-			ind_over = np.where(np.abs(d['set_B_field'])>24e6)
-			if (len(ind_over [0]) == 0):
-				new_reps.append(i)
-		print ("Discarding out-of-bound instances. Number of usable instances:", len(new_reps),'/',len(reps))
-		reps = new_reps
-		self.usable_reps = reps
-		self.reps = len(reps)
-
-		self.processed_dict = {}
-		n_used = 0
-		n_total = 0
-		self.wf_estim_std = np.zeros(len(self.usable_reps))
-		self.avg_sensing_time = np.zeros(len(self.usable_reps))
-		self.rmse = np.zeros(len(self.usable_reps))
-
-		idx = 0
-		for i in self.usable_reps:
-			d = dictionary[str(i)]
-			self.processed_dict[str(idx)] = {}
-			self.processed_dict[str(idx)]['set_B_field'] = d['set_B_field']
-			self.processed_dict[str(idx)]['est_field'] = d['est_B_field']
-			self.processed_dict[str(idx)]['time_track'] = d['time_track']
-
-			data = self.processed_dict[str(idx)]
-			t = data['time_track']
-			field = data['set_B_field']
-			est_field = data['est_field']
-			estim_var = (1./(t[-1]))*np.sum((np.abs(field[1:]-est_field[1:])**2)*(t[1:]-t[:-1]))
-			estim_std = (estim_var)**0.5
-			self.wf_estim_std [idx] = estim_std
-			self.rmse [idx] = np.mean(np.abs(field-est_field))
-
-			t = d['time_track']
-			dt = t[1:]-t[:-1]
-			self.avg_sensing_time [idx] = np.mean(dt)
-			if (idx==0):
-				max_range = np.max(dt)*2
-			nr_occurs, bin_edges = np.histogram (dt, range = (0, max_range), bins=1000)
-			if idx==0:
-				nr_occur_sensing_time = nr_occurs 
-			else:
-				nr_occur_sensing_time = nr_occur_sensing_time + nr_occurs
-			
-			idx += 1
-
-		self.nr_occur_sensing_time = nr_occur_sensing_time
-		self.hist_bin_edges = 0.5*(bin_edges[1:]+bin_edges[:-1])
-
-		return self.wf_estim_std, 0
-
-
-	def plot_wf_estim_std_vs_rep (self, do_plot = True):
-
-		if do_plot:
-			plt.figure(figsize=(15, 6))
-			plt.plot (self.wf_estim_std*1e-3, 'RoyalBlue', linewidth =3)
-			plt.plot (self.wf_estim_std*1e-3, 'o', color='crimson')
-			plt.ylabel ('waveform estimation error [kHz]', fontsize=18)
-			plt.xlabel ('Repetition number', fontsize=18)
-			plt.show()
-
-			nr_occurs, bin_edges = np.histogram (self.wf_estim_std*1e-3, bins=1000)
-			bins = 0.5*(bin_edges[1:]+bin_edges[:-1])
-			print (len(bins),len(nr_occurs))
-			plt.figure (figsize = (20, 5))
-			plt.plot (bins, nr_occurs, 'RoyalBlue', linewidth = 2)
-			plt.plot (bins, nr_occurs, 'o', color = 'RoyalBlue', markersize = 2)
-			plt.xlabel ('waveform error [kHz]', fontsize=18)
-			plt.ylabel ('fraction of occurences', fontsize=18)
-			plt.show()
-
-		print ("Average waveform estimation error: ", np.mean (self.wf_estim_std*1e-3), " -- std: ", np.std(self.wf_estim_std*1e-3))
-		ind = np.where (np.abs(self.wf_estim_std-np.mean(self.wf_estim_std))<3*np.std(self.wf_estim_std))
-		print ("Excluding outliers: ", np.mean (self.wf_estim_std[ind]*1e-3), " -- std: ", np.std(self.wf_estim_std[ind]*1e-3))
-		if self.track:		
-			return np.mean (self.wf_estim_std*1e-3), 0
-		else:
-			return np.mean (self.wf_estim_std*1e-3)
-
-	def hist_sensing_times (self, reps = 'all', do_plot = True):
-
-		plt.figure(figsize=(20, 5))
-		self.nr_occur_sensing_time = self.nr_occur_sensing_time/np.sum(self.nr_occur_sensing_time+0.)
-		plt.plot (self.hist_bin_edges*1e6, self.nr_occur_sensing_time, 'RoyalBlue', linewidth = 2)
-		plt.plot (self.hist_bin_edges*1e6, self.nr_occur_sensing_time, 'o', color = 'crimson')
-		plt.xlabel ('sensing times [us]', fontsize=18)
-		plt.ylabel ('fraction of occurences', fontsize=18)
-		plt.axis ([0, 100, 0, 1.1*max(self.nr_occur_sensing_time)])
-		plt.show()
-
-'''

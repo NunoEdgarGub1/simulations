@@ -12,7 +12,7 @@ reload (expStat)
 
 exp = expStat.ExpStatistics (folder = 'C:/Users/cristian/Research/Work-Data/')
 exp.set_sim_params (nr_reps=1)
-exp.set_msmnt_params (M=3, N=10, tau0=1e-6, fid0=1., fid1=0.)
+exp.set_msmnt_params (M=1, N=10, tau0=1e-6, fid0=1., fid1=0.)
 exp.set_bath_params (nr_spins = 7, concentration = 0.01)
 exp.simulate_different_bath (max_steps = 3, do_plot=True, do_debug = True, do_save=True)
 #exp.analysis (nr_bins=50)
