@@ -99,7 +99,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 				#here we could do it general, with a general function
 				# passed as a string
 				exp.adaptive_2steps (M=self.M, target_T2star = 5000e-6, 
-						max_nr_steps=max_steps, do_plot = do_plot, do_debug = do_debug)
+						max_nr_steps=max_steps, do_plot = do_plot, do_debug = do_debug, do_save = do_save)
 				l = len (exp.T2starlist)
 				self.results [i, :l] = exp.T2starlist/exp.T2starlist[0]
 				i += 1
@@ -141,7 +141,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 
 			try:
 				exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, 
-						folder=self.folder, trial=0)
+						folder=self.folder, trial=i)
 				exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
 						 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)
 				exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=5, F=3, N=10)
@@ -153,7 +153,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 				if not exp.skip:
 					exp.nbath.print_nuclear_spins()
 					exp.adaptive_2steps (M=self.M, target_T2star = 5000e-6, 
-							max_nr_steps=max_steps, do_plot = do_plot, do_debug = do_debug)
+							max_nr_steps=max_steps, do_plot = do_plot, do_debug = do_debug, do_save = do_save)
 					l = len (exp.T2starlist)
 					self.results [i, :l] = exp.T2starlist/exp.T2starlist[0]
 					i += 1
