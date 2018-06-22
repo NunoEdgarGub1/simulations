@@ -39,6 +39,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 		self.fid0 = fid0
 		self.fid1 = fid1
 		self.M = M
+		self.K = N-1
 
 	def set_bath_params (self, nr_spins=7, concentration=0.01):
 		self.nr_spins = nr_spins
@@ -131,7 +132,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 					# - evolution of T2*
 					rep_nr = str(r).zfill(dig)
 					grp = f.create_group('rep_'+rep_nr)
-					DO.save_object_params_to_file (obj = exp, f = grp, params_list= ['T2starlist'])
+					self.save_object_params_to_file (obj = exp, f = grp, params_list= ['T2starlist'])
 
 		if do_save:
 			f.close()

@@ -415,18 +415,21 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         return self.opt_k
 
-    def adptv_tracking_single_step (self, k, M, T2_track=False, do_debug=False, do_save = False, do_plot=False):
+    def single_estimation_step (self, k, M, T2_track=False, adptv_phase = True, 
+                do_debug=False, do_save = False, do_plot=False):
 
         t_i = int(2**k)
-        ttt = -2**(k+1) #is this correct, now? Before we had (K-k), now k... maybe this should be changed?
-
+        #ttt = -2**(k+1) #is this correct, now? Before we had (K-k), now k... maybe this should be changed?
+        ttt = -2**(self.K-k)
         m_list = []
         t2_list = []
 
-        #ctrl_phase = 0.5*np.angle (self.p_k[int(ttt+self.points)])
 
         for m in range(M):
-            ctrl_phase = np.pi*m/M
+            if adptv_phase:
+                ctrl_phase = 0.5*np.angle (self.p_k[int(ttt+self.points)])
+            else:
+                ctrl_phase = np.pi*m/M
             m_res = self.ramsey (theta=ctrl_phase, t = t_i*self.tau0, do_plot=False)#do_debug)
             m_list.append(m_res)
             if m==0:
@@ -539,7 +542,7 @@ class BathNarrowing (TimeSequenceQ):
 
         i = 0
         while ((t2star<target_T2star) and (i<max_nr_steps)):
-            m_list = self.adptv_tracking_single_step (k=k, M=M, T2_track=False, 
+            m_list = self.single_estimation_step (k=k, M=M, T2_track=False, adptv_phase = False,
                 do_debug = do_debug, do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
             k+=1
@@ -558,21 +561,14 @@ class BathNarrowing (TimeSequenceQ):
 
         i = 0
         while ((t2star<target_T2star) and (i<max_nr_steps)):
-            #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
             k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
-            #print ("CURRENT k: ", self.opt_k)
-            m_list = self.adptv_tracking_single_step (k = k, M=M, T2_track=False, 
-                    do_debug = do_debug, do_save = do_save, do_plot=do_plot)
+            m_list = self.single_estimation_step (k=k, M=M, T2_track=False, adptv_phase = True,
+                do_debug = do_debug, do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
             i+=1
 
         if do_plot:
-            plt.figure(figsize = (8, 5))
-            plt.plot (np.array(self.T2starlist)*1e6, linewidth=2, color='royalblue')
-            plt.plot (np.array(self.T2starlist)*1e6, 'o', color='royalblue')
-            plt.xlabel ('step nr', fontsize=18)
-            plt.ylabel ('T2* (us)')
-            plt.show()
+            self._plot_T2star_list()
  
     def adaptive_2steps (self, M=1, target_T2star = 20e-6, max_nr_steps=50, 
                 do_plot = False, do_debug = False, do_save = False):
@@ -592,18 +588,13 @@ class BathNarrowing (TimeSequenceQ):
             #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
             k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
             #print ("CURRENT k: ", self.opt_k)
-            m_list = self.adptv_tracking_single_step (k = k, M=M, T2_track=False, 
-                    do_debug = do_debug, do_save = do_save, do_plot=do_plot)
-            m_list = self.adptv_tracking_single_step (k = k-1, M=M, T2_track=False,
-                    do_debug = do_debug, do_save = do_save, do_plot=do_plot)
+            m_list = self.single_estimation_step (k=k, M=M, T2_track=False, adptv_phase = True,
+                do_debug = do_debug, do_save = do_save, do_plot=do_plot)
+            m_list = self.single_estimation_step (k=k-1, M=M, T2_track=False, adptv_phase = True,
+                do_debug = do_debug, do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
             i+=1
 
         if do_plot:
-            plt.figure(figsize = (8, 5))
-            plt.plot (np.array(self.T2starlist)*1e6, linewidth=2, color='royalblue')
-            plt.plot (np.array(self.T2starlist)*1e6, 'o', color='royalblue')
-            plt.xlabel ('step nr', fontsize=18)
-            plt.ylabel ('T2* (us)')
-            plt.show()
+            self._plot_T2star_list()
  
