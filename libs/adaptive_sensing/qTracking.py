@@ -30,7 +30,7 @@ matplotlib.rc('ytick', labelsize=18)
 
 class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
-    def __init__ (self, time_interval, overhead, folder, trial):
+    def __init__ (self, time_interval, overhead, folder):
         self.time_interval = time_interval
         self._B_dict = {}
         self.kappa = None
@@ -50,7 +50,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.timelist = []
         self.widthratlist = []
         self.Hvar = 0
-        self.trial = trial
+        self.curr_rep = 0
         self.mse_lst = []
         self.norm_lst = []
         self.FWHM_lst = []
@@ -206,15 +206,15 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         # plt.fill_between(az2[int(len(az2)/2):], 
         # (p_az2)[int(len(az2)/2):], 
         # (p*self.norm)[self.MSE()[1][int(len(az2)/2):]], alpha=.5, color='crimson')
-        for pj in range(len(peaks)):
-            plt.axvline(self.beta[peaks[pj][0]]*1e-3)
+        #for pj in range(len(peaks)):
+        #    plt.axvline(self.beta[peaks[pj][0]]*1e-3)
         plt.xlabel (' hyperfine (kHz)', fontsize=18)
         fwhm = self.FWHM()
         plt.xlim((-5*fwhm, +5*fwhm))
         #plt.ylim(0,self.norm)
         if self._save_plots:
-            plt.savefig(os.path.join(self.folder+'/', 'trial_%.04d_%.04d.png'%(self.trial,self.step)))
-        #plt.show()
+            plt.savefig(os.path.join(self.folder+'/', 'rep_%.04d_%.04d.png'%(self.curr_rep,self.step)))
+        plt.close("all")
         self.p_az_old = p_az2/max(p_az2)
         self.step+=1
         
@@ -415,36 +415,39 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         return self.opt_k
 
-    def adptv_tracking_single_step (self, k, M, T2_track=False, do_debug=False, do_save = False):
+    def adptv_tracking_single_step (self, k, M, T2_track=False, do_debug=False, do_save = False, do_plot=False):
 
         t_i = int(2**k)
-        ttt = -2**(k+1)
+        ttt = -2**(k+1) #is this correct, now? Before we had (K-k), now k... maybe this should be changed?
 
         m_list = []
         t2_list = []
 
+        #ctrl_phase = 0.5*np.angle (self.p_k[int(ttt+self.points)])
+
         for m in range(M):
-            phase_cappellaro = 0.5*np.angle (self.p_k[int(ttt+self.points)])
-            m_res = self.ramsey (theta=self.phase_cappellaro, t = t_i*self.tau0, do_plot=False)#do_debug)
+            ctrl_phase = np.pi*m/M
+            m_res = self.ramsey (theta=ctrl_phase, t = t_i*self.tau0, do_plot=False)#do_debug)
             m_list.append(m_res)
             if m==0:
-                self.bayesian_update (m_n = m_res, phase_n = phase_cappellaro, t_n = t_i, T2_track = T2_track, T2_est = self.T2_est, do_plot=False)
+                self.bayesian_update (m_n = m_res, phase_n = ctrl_phase, t_n = t_i, T2_track = T2_track, T2_est = self.T2_est, do_plot=False)
             else:
-                self.bayesian_update (m_n = m_res, phase_n = phase_cappellaro, t_n = t_i, T2_track = False, T2_est = self.T2_est, do_plot=False)
+                self.bayesian_update (m_n = m_res, phase_n = ctrl_phase, t_n = t_i, T2_track = False, T2_est = self.T2_est, do_plot=False)
             FWHM = self.FWHM()*1e3
             #Has to remain below 1 so that the FWHM is an upperbound to 1/T2*
             #self.widthratlist.append((1/FWHM)/T2star)
             self.outcomes_list.append(m_res)
-            self.phase_list.append(phase_cappellaro)
+            self.phase_list.append(ctrl_phase)
             self.tau_list.append (t_i*self.tau0)
             self.T2starlist.append(.5*(self.nbath._op_sd(self.over_op[2]).real)**-1)
             self._curr_T2star = self.T2starlist[-1]
             self.timelist.append(self.timelist[-1] + t_i*self.tau0)
 
             if do_debug:
-                print ("Ramsey estim: tau =", t_i*self.tau0*1e6, "us --- phase: ", self.phase_cappellaro, "   -- res:", self.m_res)
+                print ("Ramsey estim: tau =", t_i*self.tau0*1e6, "us --- phase: ", ctrl_phase, "   -- res:", self.m_res)
                 print ("Current T2* = ", int(self.T2starlist[-1]*1e8)/100., ' us')
 
+            if do_plot:
                 if m==0:
                     self.plot_hyperfine_distr(T2track = T2_track, T2est = self.T2_est, do_save = do_save)
                 else:
@@ -512,7 +515,20 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
 class BathNarrowing (TimeSequenceQ):
 
-    def non_adaptive (self, M=1, target_T2star = 20e-6, max_nr_steps=50, do_plot = False, do_debug = False, do_save = False):
+    def _plot_T2star_list (self):
+        plt.figure(figsize = (8, 5))
+        plt.plot (np.array(self.T2starlist)*1e6, linewidth=2, color='royalblue')
+        plt.plot (np.array(self.T2starlist)*1e6, 'o', color='royalblue')
+        plt.xlabel ('step nr', fontsize=18)
+        plt.ylabel ('T2* (us)')
+
+        if self._save_plots:
+            plt.savefig(os.path.join(self.folder+'/', 
+                    'rep_%.04d_%.04d.png'%(self.curr_rep,self.step+1)))
+        plt.show()
+
+    def non_adaptive (self, M=1, target_T2star = 20e-6, max_nr_steps=50, 
+                do_plot = False, do_debug = False, do_save = False):
 
         try:
             t2star = self.T2starlist[-1]
@@ -523,20 +539,17 @@ class BathNarrowing (TimeSequenceQ):
 
         i = 0
         while ((t2star<target_T2star) and (i<max_nr_steps)):
-            m_list = self.adptv_tracking_single_step (k=k, M=M, T2_track=False, do_debug = do_debug, do_save = do_save)
+            m_list = self.adptv_tracking_single_step (k=k, M=M, T2_track=False, 
+                do_debug = do_debug, do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
             k+=1
             i+=1
 
         if do_plot:
-            plt.figure(figsize = (8, 5))
-            plt.plot (np.array(self.T2starlist)*1e6, linewidth=2, color='royalblue')
-            plt.plot (np.array(self.T2starlist)*1e6, 'o', color='royalblue')
-            plt.xlabel ('step nr', fontsize=18)
-            plt.ylabel ('T2* (us)')
-            plt.show()
+            self._plot_T2star_list()
  
-    def adaptive_1step (self, M=1, target_T2star = 20e-6, max_nr_steps=50, do_plot = False, do_debug = False):
+    def adaptive_1step (self, M=1, target_T2star = 20e-6, max_nr_steps=50, 
+            do_plot = False, do_debug = False):
 
         try:
             t2star = self.T2starlist[-1]
@@ -548,7 +561,8 @@ class BathNarrowing (TimeSequenceQ):
             #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
             k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
             #print ("CURRENT k: ", self.opt_k)
-            m_list = self.adptv_tracking_single_step (k = k, M=M, T2_track=False, do_debug = do_debug, do_save = do_save)
+            m_list = self.adptv_tracking_single_step (k = k, M=M, T2_track=False, 
+                    do_debug = do_debug, do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
             i+=1
 
@@ -560,7 +574,8 @@ class BathNarrowing (TimeSequenceQ):
             plt.ylabel ('T2* (us)')
             plt.show()
  
-    def adaptive_2steps (self, M=1, target_T2star = 20e-6, max_nr_steps=50, do_plot = False, do_debug = False, do_save = False):
+    def adaptive_2steps (self, M=1, target_T2star = 20e-6, max_nr_steps=50, 
+                do_plot = False, do_debug = False, do_save = False):
 
         '''
         In this implementation of the narrowing algorithm, I try to always to steps (k) and (k-1) together
@@ -577,8 +592,10 @@ class BathNarrowing (TimeSequenceQ):
             #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
             k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
             #print ("CURRENT k: ", self.opt_k)
-            m_list = self.adptv_tracking_single_step (k = k, M=M, T2_track=False, do_debug = do_debug, do_save = do_save)
-            m_list = self.adptv_tracking_single_step (k = k-1, M=M, T2_track=False, do_debug = do_debug, do_save = do_save)
+            m_list = self.adptv_tracking_single_step (k = k, M=M, T2_track=False, 
+                    do_debug = do_debug, do_save = do_save, do_plot=do_plot)
+            m_list = self.adptv_tracking_single_step (k = k-1, M=M, T2_track=False,
+                    do_debug = do_debug, do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
             i+=1
 

@@ -7,6 +7,8 @@ import h5py
 import logging, time
 import sys
 import matplotlib
+import msvcrt
+
 from matplotlib import pyplot as plt
 from simulations.libs.adaptive_sensing import qTracking as qtrack
 from tools import data_object as DO
@@ -58,7 +60,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 
 	def __generate_file (self, title = ''):
 
-		fName = time.strftime ('%Y%m%d_%H%M%S')+ '_qTrack'
+		fName = time.strftime ('%Y%m%d_%H%M%S')+ '_qTrack'+title
 		newpath = os.path.join (self.folder, fName) 
 		if not os.path.exists(newpath):
 			os.makedirs(newpath)
@@ -90,7 +92,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 		i = 0
 
 		exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, 
-				folder=self.folder, trial=0)
+				folder=self.folder)
 		exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
 				 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)
 		exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=5, F=3, N=10)
@@ -105,6 +107,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 				exp.reset_unpolarized_bath()
 				exp.initialize()
 				exp.nbath.print_nuclear_spins()
+				exp.curr_rep = i
 				#here we could do it general, with a general function
 				# passed as a string
 				exp.adaptive_2steps (M=self.M, target_T2star = 5000e-6, 
@@ -137,21 +140,17 @@ class ExpStatistics (DO.DataObjectHDF5):
 				do_save = False, do_plot = False, do_debug = False):
 
 		self._called_modules.append('simulate')
+		self.results = []
 		newpath = self.folder
 
 		if do_save:
 			f, newpath = self.__generate_file (title = string_id)
 
-		trialno = 0
-
-		self.results = np.zeros((self.nr_reps, 2*self.M*max_steps+1))
 		i = 0
-
 		while (i < self.nr_reps):
-
+			
 			#try:
-			exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, 
-					folder=newpath, trial=0)
+			exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, folder=newpath)
 			exp._save_plots = self._save_plots
 			exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
 					 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)
@@ -160,13 +159,16 @@ class ExpStatistics (DO.DataObjectHDF5):
 			exp.initialize()
 
 			print ("Repetition nr: ", i+1)
+			exp.curr_rep = i
 
 			if not exp.skip:
 				exp.nbath.print_nuclear_spins()
-				exp.adaptive_2steps (M=self.M, target_T2star = 5000e-6, 
+				exp.non_adaptive (M=self.M, target_T2star = 5000e-6, 
 						max_nr_steps=max_steps, do_plot = do_plot, do_debug = do_debug)
 				l = len (exp.T2starlist)
-				self.results [i, :l] = exp.T2starlist/exp.T2starlist[0]
+				if (self.results == []):
+					self.results = np.zeros((self.nr_reps, l))
+				self.results [i, :] = exp.T2starlist/exp.T2starlist[0]
 				i += 1
 
 				if do_save:
@@ -186,24 +188,29 @@ class ExpStatistics (DO.DataObjectHDF5):
 		if do_save:
 			f.close()
 
-
+		self.total_steps = l
+		self.newpath = newpath
 
 	def analysis (self, nr_bins=100):
 		print ('Processing results statistics...')
-		res_hist = np.zeros((nr_bins+1, 2*self.M*self.max_steps+1))
-		bin_edges = np.zeros((nr_bins+1, 2*self.M*self.max_steps+1))
+		max_value = np.max(self.results)
+		res_hist = np.zeros((nr_bins+1, self.total_steps))
+		bin_edges = np.zeros((nr_bins+1, self.total_steps))
 
-		for j in range(2*self.M*self.max_steps+1):
-			a = np.histogram(self.results[:nr_bins,j], bins=np.linspace (0, 15, nr_bins+1))
+		for j in range(self.total_steps):
+			a = np.histogram(self.results[:nr_bins,j], bins=np.linspace (0, max_value, nr_bins+1))
 			res_hist [:len(a[0]), j] = a[0]
 			bin_edges [:len(a[1]), j] = a[1]
 
-		[X, Y] = np.meshgrid (np.arange(2*self.M*self.max_steps+1), 
-				np.linspace (0, 15, nr_bins+1))
+		[X, Y] = np.meshgrid (np.arange(self.total_steps), 
+				np.linspace (0, max_value, nr_bins+1))
 
+		plt.figure ()
 		plt.pcolor (X, Y, res_hist)
 		plt.xlabel ('nr of narrowing steps', fontsize = 18)
 		plt.ylabel ('T2*/T2*_init', fontsize = 18)
+		if self._save_plots:
+			plt.savefig(os.path.join(self.newpath+'/analysis.png'))
 		plt.show()
 
 
