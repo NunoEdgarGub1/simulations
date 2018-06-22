@@ -128,7 +128,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 					# - evolution of T2*
 					rep_nr = str(r).zfill(dig)
 					grp = f.create_group('rep_'+rep_nr)
-					DO.save_object_to_file (obj = exp, f = grp)
+					DO.save_object_params_to_file (obj = exp, f = grp, params_list= ['T2starlist'])
 
 		if do_save:
 			f.close()
@@ -170,19 +170,15 @@ class ExpStatistics (DO.DataObjectHDF5):
 				i += 1
 
 				if do_save:
-					# what parameters do we have to save??
-					# - parameters of the bath
-					# - measurement outcomes
-					# - bath evolution
-					# - evolution of T2*
 					rep_nr = str(i).zfill(len(str(self.nr_reps)))
 					grp = f.create_group('rep_'+rep_nr)
-					self.save_object_to_file (obj = exp, f = grp)
+					self.save_object_all_vars_to_file (obj = exp, f = grp)
+					self.save_object_params_list_to_file (obj = exp, f = grp, 
+							params_list= ['T2starlist', 'outcomes_list', 'tau_list', 'phase_list'])
 					grp_nbath = grp.create_group ('nbath')
-					self.save_object_to_file (obj = exp.nbath, f = grp_nbath)
-					# NO, saving everything becomes big too quick
-					# we need a more specialized approach
-					# where we state which params we want to save
+					self.save_object_all_vars_to_file (obj = exp.nbath, f = grp_nbath)
+					self.save_object_params_list_to_file (obj = exp.nbath, f = grp_nbath, 
+							params_list= ['Ao', 'Ap', 'Azx', 'Azy', 'values_Az_kHz', 'r_ij', 'theta_ij'])
 
 			#except Exception as e: 
 			#	print(e)

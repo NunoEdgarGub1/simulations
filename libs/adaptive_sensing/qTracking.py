@@ -58,6 +58,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.cmax = []
         self._flip_prob = 0
         self._save_plots = False
+        self.outcomes_list = []
+        self.phase_list = []
+        self.tau_list = []
 
 
         # The "called modules" is  a list that tracks which functions have been used
@@ -94,6 +97,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         self.opt_k=0
 
+        self.outcomes_list = []
+        self.phase_list = []
+        self.tau_list = []
 
     def set_flip_prob (self, value):
         self._flip_prob = value
@@ -418,19 +424,19 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         t2_list = []
 
         for m in range(M):
-            self.phase_cappellaro = 0.5*np.angle (self.p_k[int(ttt+self.points)])
-            self.m_res = self.ramsey (theta=self.phase_cappellaro, t = t_i*self.tau0, do_plot=False)#do_debug)
-            m_list.append(self.m_res)
+            phase_cappellaro = 0.5*np.angle (self.p_k[int(ttt+self.points)])
+            m_res = self.ramsey (theta=self.phase_cappellaro, t = t_i*self.tau0, do_plot=False)#do_debug)
+            m_list.append(m_res)
             if m==0:
-                self.bayesian_update (m_n = self.m_res, phase_n = self.phase_cappellaro, t_n = t_i, T2_track = T2_track, T2_est = self.T2_est, do_plot=False)
+                self.bayesian_update (m_n = m_res, phase_n = phase_cappellaro, t_n = t_i, T2_track = T2_track, T2_est = self.T2_est, do_plot=False)
             else:
-                self.bayesian_update (m_n = self.m_res, phase_n = self.phase_cappellaro, t_n = t_i, T2_track = False, T2_est = self.T2_est, do_plot=False)
-            self.peak_cnt()
-            #T2star = 5*(self.nbath._op_sd(self.over_op[2]).real)**-1
-            #t2_list.append(T2star)
+                self.bayesian_update (m_n = m_res, phase_n = phase_cappellaro, t_n = t_i, T2_track = False, T2_est = self.T2_est, do_plot=False)
             FWHM = self.FWHM()*1e3
             #Has to remain below 1 so that the FWHM is an upperbound to 1/T2*
             #self.widthratlist.append((1/FWHM)/T2star)
+            self.outcomes_list.append(m_res)
+            self.phase_list.append(phase_cappellaro)
+            self.tau_list.append (t_i*self.tau0)
             self.T2starlist.append(.5*(self.nbath._op_sd(self.over_op[2]).real)**-1)
             self._curr_T2star = self.T2starlist[-1]
             self.timelist.append(self.timelist[-1] + t_i*self.tau0)

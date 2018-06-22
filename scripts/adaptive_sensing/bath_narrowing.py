@@ -11,7 +11,7 @@ reload (qtrack)
 reload (expStat)
 
 exp = expStat.ExpStatistics (folder = 'C:/Users/cristian/Research/Work-Data/')
-exp.set_sim_params (nr_reps=1)
+exp.set_sim_params (nr_reps=3)
 exp.set_msmnt_params (M=1, N=10, tau0=1e-6, fid0=1., fid1=0.)
 exp.set_bath_params (nr_spins = 7, concentration = 0.01)
 exp.set_plot_saving (True)
