@@ -1218,7 +1218,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		'''
 		
 		sig = 1 #seed value for total sig
-		phi = phi+np.pi
+		phi = phi#+np.pi
 		tflip = 0 #get finite value if flip happens, else set to 0
 		
 		#calculate Prod(tr(U1* U0 rho_block))

@@ -7,7 +7,7 @@ import h5py
 import logging, time
 import sys
 import matplotlib
-import msvcrt
+#import msvcrt
 
 from matplotlib import pyplot as plt
 from simulations.libs.adaptive_sensing import qTracking as qtrack

@@ -90,9 +90,12 @@ class TimeSequence ():
 			m_old = max(y_old)
 
 		p_old = np.copy(self.p_k)
-		p0 = p_old*((1-m_n)-((-1)**m_n)*(self.fid0+1.-self.fid1)/2.) 
-		p1 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(1j*(phase_n))*np.roll(p_old, shift = -t_n)) 
-		p2 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(-1j*(phase_n))*np.roll(p_old, shift = +t_n)) 
+#		p0 = p_old*((1-m_n)-((-1)**m_n)*(self.fid0+1.-self.fid1)/2.)
+#		p1 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(1j*(phase_n))*np.roll(p_old, shift = -t_n))
+#		p2 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(-1j*(phase_n))*np.roll(p_old, shift = +t_n))
+		p0 = p_old*.5*(1 + ((-1)**m_n)*(self.fid0-self.fid1))
+		p1 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(1j*(np.pi+phase_n))*np.roll(p_old, shift = -t_n))
+		p2 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(-1j*(np.pi+phase_n))*np.roll(p_old, shift = +t_n))
 		p = p0+p1+p2
 		p = (p/np.sum(np.abs(p)**2)**0.5)
 		p = p/(2*np.pi*np.real(p[self.points]))
@@ -100,7 +103,7 @@ class TimeSequence ():
 			T2gauss = np.fft.ifftshift(np.abs(np.fft.ifft(np.exp(-(self.beta*1e-3 * T2_est)**2)))**2)
 			print('CONVOLVED', T2_est)
 			p = p*T2gauss
-		self.p_k = np.copy (p)#np.abs(np.copy (p)) ###########
+		self.p_k = np.copy (p)
 
 		if do_plot:
 
