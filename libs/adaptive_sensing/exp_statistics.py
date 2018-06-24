@@ -79,17 +79,20 @@ class ExpStatistics (DO.DataObjectHDF5):
 
 		return f, newpath
 
-	def simulate_same_bath (self, max_steps, string_id = '', 
+
+	def simulate_same_bath (self, max_steps, string_id = '',
 				do_save = False, do_plot = False, do_debug = False):
 
-		self._called_modules.append('simulate')		
+		self._called_modules.append('simulate')
+		self.results = []
+		newpath = self.folder
 
 		if do_save:
-			f = self.__generate_file (title = string_id)
+			f, newpath = self.__generate_file (title = string_id)
 
-		trialno = 0
+		#trialno = 0
 
-		self.results = np.zeros((self.nr_reps, 2*self.M*max_steps+1))
+		#self.results = np.zeros((self.nr_reps, 2*self.M*max_steps+1))
 		i = 0
 
 		exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, 
@@ -114,30 +117,39 @@ class ExpStatistics (DO.DataObjectHDF5):
 				exp.adaptive_2steps (M=self.M, target_T2star = 5000e-6, 
 						max_nr_steps=max_steps, do_plot = do_plot, do_debug = do_debug, do_save = do_save)
 				l = len (exp.T2starlist)
-				self.results [i, :l] = exp.T2starlist/exp.T2starlist[0]
+				if (self.results == []):
+					self.results = np.zeros((self.nr_reps, l))
+				self.results [i, :] = exp.T2starlist/exp.T2starlist[0]
 				i += 1
 			else:
-				exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, 
-						folder=self.folder, trial=trialno)
+				exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, folder=newpath)
 				exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
 					 	concentration=self.conc, verbose=True, do_plot = False, eng_bath=False)
 				exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=5, F=3, N=10)
 				exp.set_flip_prob (0)
-				exp.initialize(do_plot=do_plot)
+				exp.initialize()
+
 				if do_save:
-					# what parameters do we have to save??
-					# - parameters of the bath
-					# - measurement outcomes
-					# - bath evolution
-					# - evolution of T2*
-					rep_nr = str(r).zfill(dig)
+					rep_nr = str(i).zfill(len(str(self.nr_reps)))
 					grp = f.create_group('rep_'+rep_nr)
-					self.save_object_params_to_file (obj = exp, f = grp, params_list= ['T2starlist'])
+					self.save_object_all_vars_to_file (obj = exp, f = grp)
+					self.save_object_params_list_to_file (obj = exp, f = grp, 
+							params_list= ['T2starlist', 'outcomes_list', 'tau_list', 'phase_list'])
+					grp_nbath = grp.create_group ('nbath')
+					self.save_object_all_vars_to_file (obj = exp.nbath, f = grp_nbath)
+					self.save_object_params_list_to_file (obj = exp.nbath, f = grp_nbath, 
+							params_list= ['Ao', 'Ap', 'Azx', 'Azy', 'values_Az_kHz', 'r_ij', 'theta_ij'])
+
+
 
 		if do_save:
 			f.close()
 
-	def simulate_different_bath (self, max_steps, string_id = '', 
+		self.total_steps = l
+		self.newpath = newpath
+
+
+	def simulate_different_bath (self, max_steps, string_id = '',
 				do_save = False, do_plot = False, do_debug = False):
 
 		self._called_modules.append('simulate')
@@ -170,6 +182,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 				if (self.results == []):
 					self.results = np.zeros((self.nr_reps, l))
 				self.results [i, :] = exp.T2starlist/exp.T2starlist[0]
+				print(exp.T2starlist/exp.T2starlist[0])
 				i += 1
 
 				if do_save:

@@ -77,6 +77,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.nbath.set_experiment(cluster = cluster, nr_spins=nr_spins, concentration = concentration,
                 do_plot = False, eng_bath=eng_bath)
         self.T2star = self.nbath.T2h
+        print('AAAAA', 1/self.T2star *1e-3)
 
         self.over_op = self.nbath._overhauser_op()
 
@@ -110,7 +111,13 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
     def initialize (self, do_plot=False):
         self._dfB0 = 1/(np.sqrt(2)*np.pi*self.tau0)
 
-        p = np.exp(-0.5*(self.beta/self._dfB0)**2)
+        p = np.exp(-0.5*(self.beta/self._dfB0)**2) #[1 for j in range(len(self.beta))]
+#        p2 = np.copy(p)
+#        for freq in range(len(p2)):
+#            if abs(self.beta[freq]*1e-3) < abs(1/self.T2star)*1e-3:
+#                p[freq] = p[freq]
+#            else:
+#                p[freq] = 0
         p = p/(np.sum(p))
         az, p_az = self.nbath.get_probability_density()
         az2 = np.roll(az,-1)
@@ -210,10 +217,11 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         #    plt.axvline(self.beta[peaks[pj][0]]*1e-3)
         plt.xlabel (' hyperfine (kHz)', fontsize=18)
         fwhm = self.FWHM()
-        plt.xlim((-5*fwhm, +5*fwhm))
+        #plt.xlim((-5*fwhm, +5*fwhm))
         #plt.ylim(0,self.norm)
         if self._save_plots:
             plt.savefig(os.path.join(self.folder+'/', 'rep_%.04d_%.04d.png'%(self.curr_rep,self.step)))
+        plt.show()
         plt.close("all")
         self.p_az_old = p_az2/max(p_az2)
         self.step+=1
@@ -277,15 +285,16 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         '''
         
         p, m = self.return_p_fB()
-        peaks = pd.peakdetect(p, lookahead=1)[0]
-        peaks = [peak for peak in peaks if peak[1]>tol]
-        if len(peaks)>1:
+		
+        av_p = np.average(self.beta*1e-3, weights=p)
+        max_p = self.beta[list(p).index(max(p))]*1e-3
+		
+        if abs(av_p - max_p) > tol:
             self.multi_peak = True
+            print('Multiple peaks detected')
         else:
             self.multi_peak = False
-            
-        return peaks 
-        
+				
     def return_std (self, verbose=False):
 
         '''
@@ -403,8 +412,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
                 if self.opt_k > 0:
                     self.opt_k = self.opt_k-1
                 else:
-                    self.opt_k = self.opt_k 
-                    
+                    self.opt_k = self.opt_k
+			
             else:
                 if (2**self.opt_k)*self.tau0 > 1e-3/self.FWHM():
                     while (2**self.opt_k)*self.tau0 > 1e-3/self.FWHM() and self.opt_k>=0:
