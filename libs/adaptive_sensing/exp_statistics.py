@@ -137,7 +137,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 		if do_save:
 			f.close()
 
-	def simulate_different_bath (self, max_steps, string_id = '', 
+	def simulate_different_bath (self, funct_name, max_steps, string_id = '', 
 				do_save = False, do_plot = False, do_debug = False):
 
 		self._called_modules.append('simulate')
@@ -145,7 +145,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 		newpath = self.folder
 
 		if do_save:
-			f, newpath = self.__generate_file (title = string_id)
+			f, newpath = self.__generate_file (title = '_'+funct_name+'_'+string_id)
 
 		i = 0
 		while (i < self.nr_reps):
@@ -165,8 +165,10 @@ class ExpStatistics (DO.DataObjectHDF5):
 
 			if not exp.skip:
 				exp.nbath.print_nuclear_spins()
-				exp.non_adaptive (M=self.M, max_nr_steps=max_steps, 
+				a = getattr(exp, funct_name) (M=self.M, max_nr_steps=max_steps, 
 						do_plot = do_plot, do_debug = do_debug)
+				#exp.non_adaptive (M=self.M, max_nr_steps=max_steps, 
+				#		do_plot = do_plot, do_debug = do_debug)
 				l = len (exp.T2starlist)
 				if (self.results == []):
 					self.results = np.zeros((self.nr_reps, l))

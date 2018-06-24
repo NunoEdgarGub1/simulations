@@ -210,7 +210,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         #    plt.axvline(self.beta[peaks[pj][0]]*1e-3)
         plt.xlabel (' hyperfine (kHz)', fontsize=18)
         fwhm = self.FWHM()
-        plt.xlim((-5*fwhm, +5*fwhm))
+        plt.xlim((max(-1000, m*1e-3-5*fwhm), min (1000, m*1e-3+5*fwhm)))
         #plt.ylim(0,self.norm)
         if self._save_plots:
             plt.savefig(os.path.join(self.folder+'/', 'rep_%.04d_%.04d.png'%(self.curr_rep,self.step)))
@@ -433,9 +433,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             m_res = self.ramsey (theta=ctrl_phase, t = t_i*self.tau0, do_plot=False)#do_debug)
             m_list.append(m_res)
             if m==0:
-                self.bayesian_update (m_n = m_res, phase_n = ctrl_phase, t_n = t_i, T2_track = T2_track, T2_est = self.T2_est, do_plot=False)
+                self.bayesian_update (m_n = m_res, phase_n = int(ctrl_phase*180/3.14), t_n = t_i, T2_track = T2_track, T2_est = self.T2_est, do_plot=False)
             else:
-                self.bayesian_update (m_n = m_res, phase_n = ctrl_phase, t_n = t_i, T2_track = False, T2_est = self.T2_est, do_plot=False)
+                self.bayesian_update (m_n = m_res, phase_n = int (ctrl_phase*180/3.14), t_n = t_i, T2_track = False, T2_est = self.T2_est, do_plot=False)
             FWHM = self.FWHM()*1e3
             #Has to remain below 1 so that the FWHM is an upperbound to 1/T2*
             #self.widthratlist.append((1/FWHM)/T2star)
@@ -552,7 +552,7 @@ class BathNarrowing (TimeSequenceQ):
             self._plot_T2star_list()
  
     def adaptive_1step (self, M=1, max_nr_steps=50, 
-            do_plot = False, do_debug = False):
+                do_plot = False, do_debug = False, do_save = False):
 
         try:
             t2star = self.T2starlist[-1]
