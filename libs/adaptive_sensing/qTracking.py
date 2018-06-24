@@ -433,9 +433,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             m_res = self.ramsey (theta=ctrl_phase, t = t_i*self.tau0, do_plot=False)#do_debug)
             m_list.append(m_res)
             if m==0:
-                self.bayesian_update (m_n = m_res, phase_n = int(ctrl_phase*180/3.14), t_n = t_i, T2_track = T2_track, T2_est = self.T2_est, do_plot=False)
+                self.bayesian_update (m_n = m_res, phase_n = ctrl_phase, t_n = t_i, T2_track = T2_track, T2_est = self.T2_est, do_plot=False)
             else:
-                self.bayesian_update (m_n = m_res, phase_n = int (ctrl_phase*180/3.14), t_n = t_i, T2_track = False, T2_est = self.T2_est, do_plot=False)
+                self.bayesian_update (m_n = m_res, phase_n = ctrl_phase, t_n = t_i, T2_track = False, T2_est = self.T2_est, do_plot=False)
             FWHM = self.FWHM()*1e3
             #Has to remain below 1 so that the FWHM is an upperbound to 1/T2*
             #self.widthratlist.append((1/FWHM)/T2star)
@@ -447,7 +447,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             self.timelist.append(self.timelist[-1] + t_i*self.tau0)
 
             if do_debug:
-                print ("Ramsey estim: tau =", t_i*self.tau0*1e6, "us --- phase: ", ctrl_phase, "   -- res:", self.m_res)
+                print ("Ramsey estim: tau =", t_i*self.tau0*1e6, "us --- phase: ", int (ctrl_phase*180/3.14), "   -- res:", m_res)
                 print ("Current T2* = ", int(self.T2starlist[-1]*1e8)/100., ' us')
 
             if do_plot:
