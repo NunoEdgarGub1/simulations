@@ -156,6 +156,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 			exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
 					 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)
 			exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=5, F=3, N=10)
+			exp.target_T2star = 2**(exp.K)*exp.tau0
 			exp.set_flip_prob (0)
 			exp.initialize()
 
@@ -164,8 +165,8 @@ class ExpStatistics (DO.DataObjectHDF5):
 
 			if not exp.skip:
 				exp.nbath.print_nuclear_spins()
-				exp.non_adaptive (M=self.M, target_T2star = 5000e-6, 
-						max_nr_steps=max_steps, do_plot = do_plot, do_debug = do_debug)
+				exp.non_adaptive (M=self.M, max_nr_steps=max_steps, 
+						do_plot = do_plot, do_debug = do_debug)
 				l = len (exp.T2starlist)
 				if (self.results == []):
 					self.results = np.zeros((self.nr_reps, l))
