@@ -415,7 +415,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         return self.opt_k
 
-    def single_estimation_step (self, k, M, T2_track=False, adptv_phase = True, 
+    def single_estimation_step (self, k, T2_track=False, adptv_phase = True, 
                 do_debug=False, do_save = False, do_plot=False):
 
         t_i = int(2**k)
@@ -424,6 +424,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         m_list = []
         t2_list = []
 
+        M = self.G + self.F*k
 
         for m in range(M):
             if adptv_phase:
@@ -447,7 +448,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             self.timelist.append(self.timelist[-1] + t_i*self.tau0)
 
             if do_debug:
-                print ("Ramsey estim: tau =", t_i*self.tau0*1e6, "us --- phase: ", int (ctrl_phase*180/3.14), "   -- res:", m_res)
+                print ("Ramsey estim: ", m,"/", M)
+                print ("Params: tau =", t_i*self.tau0*1e6, "us --- phase: ", int (ctrl_phase*180/3.14), "   -- res:", m_res)
                 print ("Current T2* = ", int(self.T2starlist[-1]*1e8)/100., ' us')
 
             if do_plot:
@@ -530,7 +532,7 @@ class BathNarrowing (TimeSequenceQ):
                     'rep_%.04d_%.04d.png'%(self.curr_rep,self.step+1)))
         plt.show()
 
-    def non_adaptive (self, M=1, max_nr_steps=50, 
+    def fully_non_adaptive (self, max_nr_steps=50, 
                 do_plot = False, do_debug = False, do_save = False):
 
         try:
@@ -542,7 +544,7 @@ class BathNarrowing (TimeSequenceQ):
 
         i = 0
         while ((t2star<self.target_T2star) and (i<max_nr_steps)):
-            m_list = self.single_estimation_step (k=k, M=M, T2_track=False, adptv_phase = False,
+            m_list = self.single_estimation_step (k=k, T2_track=False, adptv_phase = False,
                 do_debug = do_debug, do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
             k+=1
@@ -550,8 +552,30 @@ class BathNarrowing (TimeSequenceQ):
 
         if do_plot:
             self._plot_T2star_list()
+
+    def non_adaptive_tau (self, max_nr_steps=50, 
+                do_plot = False, do_debug = False, do_save = False):
+
+        try:
+            t2star = self.T2starlist[-1]
+        except:
+            t2star = 0
+
+        k = self.find_optimal_k (T2_track = False, do_debug = do_debug)-1
+
+        i = 0
+        while ((t2star<self.target_T2star) and (i<max_nr_steps)):
+            m_list = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True,
+                do_debug = do_debug, do_save = do_save, do_plot=do_plot)
+            t2star = self.T2starlist[-1]
+            k+=1
+            i+=1
+
+        if do_plot:
+            self._plot_T2star_list()
+
  
-    def adaptive_1step (self, M=1, max_nr_steps=50, 
+    def adaptive_1step (self, max_nr_steps=50, 
                 do_plot = False, do_debug = False, do_save = False):
 
         try:
@@ -562,7 +586,7 @@ class BathNarrowing (TimeSequenceQ):
         i = 0
         while ((t2star<self.target_T2star) and (i<max_nr_steps)):
             k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
-            m_list = self.single_estimation_step (k=k, M=M, T2_track=False, adptv_phase = True,
+            m_list = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True,
                 do_debug = do_debug, do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
             i+=1
@@ -570,7 +594,7 @@ class BathNarrowing (TimeSequenceQ):
         if do_plot:
             self._plot_T2star_list()
  
-    def adaptive_2steps (self, M=1, max_nr_steps=50, 
+    def adaptive_2steps (self, max_nr_steps=50, 
                 do_plot = False, do_debug = False, do_save = False):
 
         '''
@@ -588,9 +612,9 @@ class BathNarrowing (TimeSequenceQ):
             #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
             k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
             #print ("CURRENT k: ", self.opt_k)
-            m_list = self.single_estimation_step (k=k, M=M, T2_track=False, adptv_phase = True,
+            m_list = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True,
                 do_debug = do_debug, do_save = do_save, do_plot=do_plot)
-            m_list = self.single_estimation_step (k=k-1, M=M, T2_track=False, adptv_phase = True,
+            m_list = self.single_estimation_step (k=k-1, T2_track=False, adptv_phase = True,
                 do_debug = do_debug, do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
             i+=1

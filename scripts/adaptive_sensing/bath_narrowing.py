@@ -12,9 +12,12 @@ reload (expStat)
 
 exp = expStat.ExpStatistics (folder = 'C:/Users/cristian/Research/Work-Data/')
 exp.set_sim_params (nr_reps=2)
-exp.set_msmnt_params (M=5, N=9, tau0=1e-6, fid0=1., fid1=0.)
+exp.set_msmnt_params (G=5, F=1, N=9, tau0=1e-6, fid0=1., fid1=0.)
 exp.set_bath_params (nr_spins = 7, concentration = 0.01)
 exp.set_plot_saving (True)
-exp.simulate_different_bath (funct_name = 'adaptive_1step', string_id = '', max_steps = 10, 
+
+# available functions: 'fully_non_adaptive', 'non_adaptive_tau', 
+#    'adaptive_1step', 'adaptive_2steps'
+exp.simulate_different_bath (funct_name = 'non_adaptive_tau', string_id = '', max_steps = 10, 
         do_plot=True, do_debug = True, do_save=True)
 exp.analysis (nr_bins=25)
