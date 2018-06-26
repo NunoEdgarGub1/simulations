@@ -43,7 +43,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.plot_idx = 0
         self.step=0
         self.phase_cappellaro = 0
-        self.opt_k = 0
+        self.k = 0
         self.m_res = 0
         self.multi_peak = False
         self.T2starlist = []
@@ -54,6 +54,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.mse_lst = []
         self.norm_lst = []
         self.FWHM_lst = []
+        self.Hvarlist = []
         self.qmax = []
         self.cmax = []
         self._flip_prob = 0
@@ -95,7 +96,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.T2_est = self.nbath.T2est
         self.timelist.append(0)
 
-        self.opt_k=0
+        self.k=0
 
         self.outcomes_list = []
         self.phase_list = []
@@ -110,7 +111,13 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
     def initialize (self, do_plot=False):
         self._dfB0 = 1/(np.sqrt(2)*np.pi*self.tau0)
 
-        p = np.exp(-0.5*(self.beta/self._dfB0)**2)
+        p = np.exp(-0.5*(self.beta/self._dfB0)**2) #[1 for j in range(len(self.beta))]
+#        p2 = np.copy(p)
+#        for freq in range(len(p2)):
+#            if abs(self.beta[freq]*1e-3) < abs(1/self.T2star)*1e-3:
+#                p[freq] = p[freq]
+#            else:
+#                p[freq] = 0
         p = p/(np.sum(p))
         az, p_az = self.nbath.get_probability_density()
         az2 = np.roll(az,-1)
@@ -171,13 +178,12 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             self.qmax.append(az2[np.argmax(p_az2)])
         self.cmax.append(self.beta[np.argmax(p)]*1e-3)
         self.FWHM_lst.append(self.FWHM())
-        
-        peaks = self.peak_cnt()
+		
         f = ((1/(self.tau0))*np.angle(self.p_k[self.points-1])*1e-6)
         
         fig = plt.figure(figsize = (12,6))
-        p0 = 0.5-0.5*np.cos(2*np.pi*self.beta*(int(2**self.opt_k))*self.tau0+self.phase_cappellaro)
-        p1 = 0.5+0.5*np.cos(2*np.pi*self.beta*(int(2**self.opt_k))*self.tau0+self.phase_cappellaro)
+        p0 = 0.5-0.5*np.cos(2*np.pi*self.beta*(int(2**self.k))*self.tau0+self.phase_cappellaro)
+        p1 = 0.5+0.5*np.cos(2*np.pi*self.beta*(int(2**self.k))*self.tau0+self.phase_cappellaro)
         plt.fill_between (self.beta*1e-3, 0, max(p*self.norm)*p0/max(p0), color='magenta', alpha = 0.1)
         plt.fill_between (self.beta*1e-3, 0, max(p*self.norm)*p1/max(p1), color='cyan', alpha = 0.1)
         tarr = np.linspace(min(self.beta)*1e-3,max(self.beta)*1e-3,1000)
@@ -210,10 +216,11 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         #    plt.axvline(self.beta[peaks[pj][0]]*1e-3)
         plt.xlabel (' hyperfine (kHz)', fontsize=18)
         fwhm = self.FWHM()
-        plt.xlim((max(-1000, m*1e-3-5*fwhm), min (1000, m*1e-3+5*fwhm)))
+        #plt.xlim((-5*fwhm, +5*fwhm))
         #plt.ylim(0,self.norm)
         if self._save_plots:
             plt.savefig(os.path.join(self.folder+'/', 'rep_%.04d_%.04d.png'%(self.curr_rep,self.step)))
+        plt.show()
         plt.close("all")
         self.p_az_old = p_az2/max(p_az2)
         self.step+=1
@@ -277,15 +284,16 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         '''
         
         p, m = self.return_p_fB()
-        peaks = pd.peakdetect(p, lookahead=1)[0]
-        peaks = [peak for peak in peaks if peak[1]>tol]
-        if len(peaks)>1:
+		
+        av_p = np.average(self.beta*1e-3, weights=p)
+        max_p = self.beta[list(p).index(max(p))]*1e-3
+		
+        if abs(av_p - max_p) > tol:
             self.multi_peak = True
+            print('Multiple peaks detected, Opt k = ',self.k)
         else:
             self.multi_peak = False
-            
-        return peaks 
-        
+				
     def return_std (self, verbose=False):
 
         '''
@@ -297,7 +305,10 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.renorm_p_k()
         #print ("|p_(-1)| = ", np.abs(self.p_k[self.points-1]))
         self.Hvar = (2*np.pi*np.abs(self.p_k[self.points-1]))**(-2)-1
-        #self.Hvarlist.append(Hvar)
+        self.Hvarlist.append(self.Hvar)
+#        plt.scatter(range(len(self.Hvarlist)),self.Hvarlist)
+#        plt.plot(self.Hvarlist)
+#        plt.show()
         #print('Hvar',self.Hvar)
         std_H = ((abs(cmath.sqrt(self.Hvar)))/(2*np.pi*self.tau0))
         #fom = self.figure_of_merit()
@@ -386,47 +397,48 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         width, fom = self.return_std (verbose=do_debug)
         
         if T2_track:
-            #print('Optimal k. width = ', width/1000, 'kHz  --- optk+1 = ',np.log(1/(width*self.tau0))/np.log(2), ' -- frq = ', 0.001/(self.tau0*2**self.opt_k), 'kHz')
+            #print('Optimal k. width = ', width/1000, 'kHz  --- optk+1 = ',np.log(1/(width*self.tau0))/np.log(2), ' -- frq = ', 0.001/(self.tau0*2**self.k), 'kHz')
             
-            self.opt_k = np.int(np.log(1/(width*self.tau0))/np.log(2)) +1
+            self.k = np.int(np.log(1/(width*self.tau0))/np.log(2)) +1
         
             #TEMPORARY fix for when opt_k is negative. In case flag is raised, best to reset simulation for now
-            if self.opt_k<0:
-                print('K IS NEGATIVE',self.opt_k)
-                self.opt_k = 0
+            if self.k<0:
+                print('K IS NEGATIVE',self.k)
+                self.k = 0
             if do_debug:
-                print ("Optimal k = ", self.opt_k)
+                print ("Optimal k = ", self.k)
 
         else:
             if self.multi_peak:
                 print(self.multi_peak)
-                if self.opt_k > 0:
-                    self.opt_k = self.opt_k-1
+                if self.k > 0:
+                    self.k = self.k-1
                 else:
-                    self.opt_k = self.opt_k 
-                    
+                    self.k = self.k
+			
             else:
-                if (2**self.opt_k)*self.tau0 > 1e-3/self.FWHM():
-                    while (2**self.opt_k)*self.tau0 > 1e-3/self.FWHM() and self.opt_k>=0:
-                        self.opt_k = self.opt_k-1
+                if (2**self.k)*self.tau0 > 1e-3/self.FWHM():
+                    while (2**self.k)*self.tau0 > 1e-3/self.FWHM() and self.k>=0:
+                        self.k = self.k-1
                     print('Ramsey time exceeded 1/FWHM, reduced measurement time')
                 else:
-                    self.opt_k = self.opt_k+1
+                    self.k = self.k+1
 
-        return self.opt_k
+        return self.k
 
-    def single_estimation_step (self, k, T2_track=False, adptv_phase = True, 
+    def single_estimation_step (self, k, M, T2_track=False, adptv_phase = True, 
                 do_debug=False, do_save = False, do_plot=False):
 
-        t_i = int(2**k)
+        self.k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
+        t_i = int(2**self.k)
         #ttt = -2**(k+1) #is this correct, now? Before we had (K-k), now k... maybe this should be changed?
-        ttt = -2**(self.K-k)
+        ttt = -2**(self.K-self.k)
         m_list = []
         t2_list = []
 
-        M = self.G + self.F*k
 
         for m in range(M):
+            self.peak_cnt(tol = 10)
             if adptv_phase:
                 ctrl_phase = 0.5*np.angle (self.p_k[int(ttt+self.points)])
             else:
@@ -448,8 +460,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             self.timelist.append(self.timelist[-1] + t_i*self.tau0)
 
             if do_debug:
-                print ("Ramsey estim: ", m,"/", M)
-                print ("Params: tau =", t_i*self.tau0*1e6, "us --- phase: ", int (ctrl_phase*180/3.14), "   -- res:", m_res)
+                print ("Ramsey estim: tau =", t_i*self.tau0*1e6, "us --- phase: ", ctrl_phase, "   -- res:", m_res)
                 print ("Current T2* = ", int(self.T2starlist[-1]*1e8)/100., ' us')
 
             if do_plot:
@@ -458,6 +469,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
                 else:
                     self.plot_hyperfine_distr(T2track = False, T2est = self.T2_est, do_save = do_save)
 
+        print(m_list)
         return m_list
 
     def qTracking (self, M=1, nr_steps = 1, do_plot = False, do_debug=False, do_save = False):
@@ -483,11 +495,11 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
                 track=True
             else:
                 track=False
-            self.opt_k = self.find_optimal_k (T2_track = track, do_debug = do_debug)
-            # print ("CURRENT k: ", self.opt_k+1)
-            # m_list = self.adptv_tracking_single_step (k = self.opt_k+1, M=M, do_debug = do_debug)
-            #print ("CURRENT k: ", self.opt_k)
-            m_list = self.adptv_tracking_single_step (k = self.opt_k, M=M, T2_track=track,  do_debug = do_debug, do_save = do_save)
+            self.k = self.find_optimal_k (T2_track = track, do_debug = do_debug)
+            # print ("CURRENT k: ", self.k+1)
+            # m_list = self.adptv_tracking_single_step (k = self.k+1, M=M, do_debug = do_debug)
+            #print ("CURRENT k: ", self.k)
+            m_list = self.adptv_tracking_single_step (k = self.k, M=M, T2_track=track,  do_debug = do_debug, do_save = do_save)
             p = self.return_p_fB()[0]
             maxp = list(p).index(max(p))
             # if self.beta[maxp]!=0:
@@ -532,7 +544,7 @@ class BathNarrowing (TimeSequenceQ):
                     'rep_%.04d_%.04d.png'%(self.curr_rep,self.step+1)))
         plt.show()
 
-    def fully_non_adaptive (self, max_nr_steps=50, 
+    def non_adaptive (self, M=1, target_T2star = 20e-6, max_nr_steps=50, 
                 do_plot = False, do_debug = False, do_save = False):
 
         try:
@@ -540,44 +552,22 @@ class BathNarrowing (TimeSequenceQ):
         except:
             t2star = 0
 
-        k = self.find_optimal_k (T2_track = False, do_debug = do_debug)-1
+        self.k = self.find_optimal_k (T2_track = False, do_debug = do_debug)-1
 
         i = 0
-        while ((k<self.K) and (i<max_nr_steps)):
-            m_list = self.single_estimation_step (k=k, T2_track=False, adptv_phase = False,
+        while ((t2star<target_T2star) and (i<max_nr_steps)):
+            m_list = self.single_estimation_step (k=self.k, M=M, T2_track=False, adptv_phase = False,
                 do_debug = do_debug, do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
-            k+=1
+            self.k+=1
             i+=1
         
 
         if do_plot:
             self._plot_T2star_list()
-
-    def non_adaptive_tau (self, max_nr_steps=50, 
-                do_plot = False, do_debug = False, do_save = False):
-
-        try:
-            t2star = self.T2starlist[-1]
-        except:
-            t2star = 0
-
-        k = self.find_optimal_k (T2_track = False, do_debug = do_debug)-1
-
-        i = 0
-        while ((t2star<self.K) and (i<max_nr_steps)):
-            m_list = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True,
-                do_debug = do_debug, do_save = do_save, do_plot=do_plot)
-            t2star = self.T2starlist[-1]
-            k+=1
-            i+=1
-
-        if do_plot:
-            self._plot_T2star_list()
-
  
-    def adaptive_1step (self, max_nr_steps=50, 
-                do_plot = False, do_debug = False, do_save = False):
+    def adaptive_1step (self, M=1, target_T2star = 20e-6, max_nr_steps=50, 
+            do_plot = False, do_debug = False):
 
         try:
             t2star = self.T2starlist[-1]
@@ -585,9 +575,15 @@ class BathNarrowing (TimeSequenceQ):
             t2star = 0
 
         i = 0
+<<<<<<< .mine
         while ((t2star<self.K) and (i<max_nr_steps)):
             k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
             m_list = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True,
+=======
+        while ((t2star<target_T2star) and (i<max_nr_steps)):
+            #self.k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
+            m_list = self.single_estimation_step (k=self.k, M=M, T2_track=False, adptv_phase = True,
+>>>>>>> .theirs
                 do_debug = do_debug, do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
             i+=1
@@ -595,7 +591,7 @@ class BathNarrowing (TimeSequenceQ):
         if do_plot:
             self._plot_T2star_list()
  
-    def adaptive_2steps (self, max_nr_steps=50, 
+    def adaptive_2steps (self, M=1, target_T2star = 20e-6, max_nr_steps=50, 
                 do_plot = False, do_debug = False, do_save = False):
 
         '''
@@ -609,13 +605,17 @@ class BathNarrowing (TimeSequenceQ):
             t2star = 0 
 
         i = 0
+<<<<<<< .mine
         while ((t2star<self.K) and (i<max_nr_steps)):
+=======
+        while ((t2star<target_T2star) and (i<max_nr_steps)):
+>>>>>>> .theirs
             #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
-            k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
-            #print ("CURRENT k: ", self.opt_k)
-            m_list = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True,
+            #self.k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
+            #print ("CURRENT k: ", self.k)
+            m_list = self.single_estimation_step (k=self.k, M=M, T2_track=False, adptv_phase = True,
                 do_debug = do_debug, do_save = do_save, do_plot=do_plot)
-            m_list = self.single_estimation_step (k=k-1, T2_track=False, adptv_phase = True,
+            m_list = self.single_estimation_step (k=self.k-1, M=M, T2_track=False, adptv_phase = True,
                 do_debug = do_debug, do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
             i+=1
