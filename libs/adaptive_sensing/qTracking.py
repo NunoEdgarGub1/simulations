@@ -575,16 +575,11 @@ class BathNarrowing (TimeSequenceQ):
             t2star = 0
 
         i = 0
-<<<<<<< .mine
+
         while ((t2star<self.K) and (i<max_nr_steps)):
             k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
             m_list = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True,
-=======
-        while ((t2star<target_T2star) and (i<max_nr_steps)):
-            #self.k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
-            m_list = self.single_estimation_step (k=self.k, M=M, T2_track=False, adptv_phase = True,
->>>>>>> .theirs
-                do_debug = do_debug, do_save = do_save, do_plot=do_plot)
+                            do_debug = do_debug, do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
             i+=1
 
@@ -605,17 +600,17 @@ class BathNarrowing (TimeSequenceQ):
             t2star = 0 
 
         i = 0
-<<<<<<< .mine
+
         while ((t2star<self.K) and (i<max_nr_steps)):
-=======
-        while ((t2star<target_T2star) and (i<max_nr_steps)):
->>>>>>> .theirs
+
             #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
             #self.k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
             #print ("CURRENT k: ", self.k)
-            m_list = self.single_estimation_step (k=self.k, M=M, T2_track=False, adptv_phase = True,
+            k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
+
+            m_list = self.single_estimation_step (k=k, M=M, T2_track=False, adptv_phase = True,
                 do_debug = do_debug, do_save = do_save, do_plot=do_plot)
-            m_list = self.single_estimation_step (k=self.k-1, M=M, T2_track=False, adptv_phase = True,
+            m_list = self.single_estimation_step (k=k, M=M, T2_track=False, adptv_phase = True,
                 do_debug = do_debug, do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
             i+=1
