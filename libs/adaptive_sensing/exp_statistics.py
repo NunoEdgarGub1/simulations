@@ -141,7 +141,8 @@ class ExpStatistics (DO.DataObjectHDF5):
 				do_save = False, do_plot = False, do_debug = False):
 
 		self._called_modules.append('simulate')
-		self.results = []
+		R = int(self.G*self.N*self.F*self.N*(self.N-1)/2)
+		self.results = np.zeros((self.nr_reps, R))
 		newpath = self.folder
 
 		if do_save:
@@ -170,9 +171,8 @@ class ExpStatistics (DO.DataObjectHDF5):
 				#exp.non_adaptive (M=self.M, max_nr_steps=max_steps, 
 				#		do_plot = do_plot, do_debug = do_debug)
 				l = len (exp.T2starlist)
-				if (self.results == []):
-					self.results = np.zeros((self.nr_reps, l))
-				self.results [i, :] = exp.T2starlist/exp.T2starlist[0]
+				self.results [i, :l] = exp.T2starlist/exp.T2starlist[0]
+				self.results [i, l:R] = (exp.T2starlist[-1]/exp.T2starlist[0])*np.ones(R-l)
 				i += 1
 
 				if do_save:
