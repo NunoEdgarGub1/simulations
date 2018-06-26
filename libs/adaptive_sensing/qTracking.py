@@ -216,8 +216,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         #    plt.axvline(self.beta[peaks[pj][0]]*1e-3)
         plt.xlabel (' hyperfine (kHz)', fontsize=18)
         fwhm = self.FWHM()
-        #plt.xlim((-5*fwhm, +5*fwhm))
-        #plt.ylim(0,self.norm)
+        plt.xlim((max(-1000, m*1e-3-15*fwhm), min (1000, m*1e-3+15*fwhm)))
         if self._save_plots:
             plt.savefig(os.path.join(self.folder+'/', 'rep_%.04d_%.04d.png'%(self.curr_rep,self.step)))
         plt.show()
@@ -426,7 +425,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         return self.k
 
-    def single_estimation_step (self, k, M, T2_track=False, adptv_phase = True, 
+    def single_estimation_step (self, k, T2_track=False, adptv_phase = True, 
                 do_debug=False, do_save = False, do_plot=False):
 
         self.k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
@@ -436,6 +435,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         m_list = []
         t2_list = []
 
+        M = self.G + self.F*k
 
         for m in range(M):
             self.peak_cnt(tol = 10)
@@ -567,7 +567,7 @@ class BathNarrowing (TimeSequenceQ):
             self._plot_T2star_list()
  
     def adaptive_1step (self, M=1, target_T2star = 20e-6, max_nr_steps=50, 
-            do_plot = False, do_debug = False):
+            do_plot = False, do_debug = False, do_save = False):
 
         try:
             t2star = self.T2starlist[-1]
