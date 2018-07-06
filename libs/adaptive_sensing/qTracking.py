@@ -108,8 +108,11 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
     def init_a_priory (self):
         pass
 
-    def initialize (self, do_plot=False):
-        self._dfB0 = 1/(np.sqrt(2)*np.pi*self.tau0)
+    def initialize (self, T2star=None, do_plot=False):
+        if (T2star == None):
+            T2star = self.tau0
+
+        self._dfB0 = 1/(np.sqrt(2)*np.pi*T2star*4)
 
         p = np.exp(-0.5*(self.beta/self._dfB0)**2) #[1 for j in range(len(self.beta))]
 #        p2 = np.copy(p)
@@ -129,7 +132,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.renorm_p_k()
 
         if do_plot:
-            self.plot_hyperfine_distr()
+            self.plot_hyperfine_distr(tau=1e-3, theta=0)
         
     def fitting(self, p, paz, az, T2track, T2est):
         '''
@@ -161,7 +164,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         return norm, error
         
 
-    def plot_hyperfine_distr(self, T2track = False, T2est = 1e-3, do_save = True):
+    def plot_hyperfine_distr(self, tau, theta, T2track = False, T2est = 1e-3, do_save = True):
         
         T2est = self.T2_est
         
@@ -182,8 +185,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         f = ((1/(self.tau0))*np.angle(self.p_k[self.points-1])*1e-6)
         
         fig = plt.figure(figsize = (12,6))
-        p0 = 0.5-0.5*np.cos(2*np.pi*self.beta*(int(2**self.k))*self.tau0+self.phase_cappellaro)
-        p1 = 0.5+0.5*np.cos(2*np.pi*self.beta*(int(2**self.k))*self.tau0+self.phase_cappellaro)
+        p0 = 0.5-0.5*np.cos(2*np.pi*self.beta*tau+theta)
+        p1 = 0.5+0.5*np.cos(2*np.pi*self.beta*tau+theta)
         plt.fill_between (self.beta*1e-3, 0, max(p*self.norm)*p0/max(p0), color='magenta', alpha = 0.1)
         plt.fill_between (self.beta*1e-3, 0, max(p*self.norm)*p1/max(p1), color='cyan', alpha = 0.1)
         tarr = np.linspace(min(self.beta)*1e-3,max(self.beta)*1e-3,1000)
@@ -352,7 +355,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.fliplist = self.nbath.flipArr
 
         if do_plot:
-            self.plot_hyperfine_distr()
+            self.plot_hyperfine_distr(tau=t, theta = theta)
             #title = 'Ramsey: tau = '+str(int(t*1e9))+' ns -- phase: '+str(int(theta*180/3.14))+' deg'
             #plt.figure (figsize = (8,4))
             #plt.plot (az0, pd0, linewidth=2, color = 'RoyalBlue')
@@ -390,7 +393,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         self.nbath.Hahn_Echo (tauarr = tauarr, phi = 0, do_compare=False)
 
-
+    '''
     def find_optimal_k (self, T2_track, do_debug=True):
         
         width, fom = self.return_std (verbose=do_debug)
@@ -424,21 +427,37 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
                     self.k = self.k+1
 
         return self.k
+    '''
+
+    def find_optimal_k (self, strategy='fwhm', do_debug=True):
+        
+        width, fom = self.return_std (verbose=do_debug)
+        k = np.int(np.log(1/(width*self.tau0))/np.log(2)) +1
+        if k<0:
+            print('K IS NEGATIVE',k)
+            self.k = 0
+        if do_debug:
+            print ("Optimal k = ", k)
+
+        if (strategy == 't2star_limit'):
+            if (2**k)*self.tau0 > 1e-3/self.FWHM():
+                while (2**k)*self.tau0 > 1e-3/self.FWHM() and k>=0:
+                    k = k-1
+                print('Ramsey time exceeded 1/FWHM, reduced measurement time')
+        return k
 
     def single_estimation_step (self, k, T2_track=False, adptv_phase = True, 
                 do_debug=False, do_save = False, do_plot=False):
 
-        self.k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
-        t_i = int(2**self.k)
-        #ttt = -2**(k+1) #is this correct, now? Before we had (K-k), now k... maybe this should be changed?
-        ttt = -2**(self.K-self.k)
+        t_i = int(2**k)
+        ttt = -2**(self.K-k)
         m_list = []
         t2_list = []
 
         M = self.G + self.F*k
 
         for m in range(M):
-            self.peak_cnt(tol = 10)
+            #self.peak_cnt(tol = 10)
             if adptv_phase:
                 ctrl_phase = 0.5*np.angle (self.p_k[int(ttt+self.points)])
             else:
@@ -460,17 +479,18 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             self.timelist.append(self.timelist[-1] + t_i*self.tau0)
 
             if do_debug:
-                print ("Ramsey estim: tau =", t_i*self.tau0*1e6, "us --- phase: ", ctrl_phase, "   -- res:", m_res)
+                print ("Ramsey estim: ", m,"/", M)
+                print ("Params: tau =", t_i*self.tau0*1e6, "us --- phase: ", int (ctrl_phase*180/3.14), "   -- res:", m_res)
                 print ("Current T2* = ", int(self.T2starlist[-1]*1e8)/100., ' us')
 
             if do_plot:
                 if m==0:
-                    self.plot_hyperfine_distr(T2track = T2_track, T2est = self.T2_est, do_save = do_save)
+                    self.plot_hyperfine_distr(tau=t_i*self.tau0, theta = ctrl_phase, 
+                            T2track = T2_track, T2est = self.T2_est, do_save = do_save)
                 else:
-                    self.plot_hyperfine_distr(T2track = False, T2est = self.T2_est, do_save = do_save)
+                    self.plot_hyperfine_distr(tau=t_i*self.tau0, theta = ctrl_phase,
+                            T2track = False, T2est = self.T2_est, do_save = do_save)
 
-        print(m_list)
-        return m_list
 
     def qTracking (self, M=1, nr_steps = 1, do_plot = False, do_debug=False, do_save = False):
 
@@ -544,29 +564,7 @@ class BathNarrowing (TimeSequenceQ):
                     'rep_%.04d_%.04d.png'%(self.curr_rep,self.step+1)))
         plt.show()
 
-    def non_adaptive (self, M=1, target_T2star = 20e-6, max_nr_steps=50, 
-                do_plot = False, do_debug = False, do_save = False):
-
-        try:
-            t2star = self.T2starlist[-1]
-        except:
-            t2star = 0
-
-        self.k = self.find_optimal_k (T2_track = False, do_debug = do_debug)-1
-
-        i = 0
-        while ((t2star<target_T2star) and (i<max_nr_steps)):
-            m_list = self.single_estimation_step (k=self.k, M=M, T2_track=False, adptv_phase = False,
-                do_debug = do_debug, do_save = do_save, do_plot=do_plot)
-            t2star = self.T2starlist[-1]
-            self.k+=1
-            i+=1
-        
-
-        if do_plot:
-            self._plot_T2star_list()
- 
-    def adaptive_1step (self, M=1, target_T2star = 20e-6, max_nr_steps=50, 
+    def non_adaptive (self, max_nr_steps=50, 
             do_plot = False, do_debug = False, do_save = False):
 
         try:
@@ -575,10 +573,32 @@ class BathNarrowing (TimeSequenceQ):
             t2star = 0
 
         i = 0
+        k = self.find_optimal_k (do_debug = do_debug)
 
-        while ((t2star<self.K) and (i<max_nr_steps)):
-            k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
-            m_list = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True,
+        while ((k+1<self.K) and (i<max_nr_steps) and (t2star<100e-6)):
+            self.single_estimation_step (k=k+1, T2_track=False, adptv_phase = True,
+                            do_debug = do_debug, do_save = do_save, do_plot=do_plot)
+            t2star = self.T2starlist[-1]
+            i+=1
+            k+=1
+
+        if do_plot:
+            self._plot_T2star_list()
+ 
+    def adaptive_1step (self, max_nr_steps=50, 
+            do_plot = False, do_debug = False, do_save = False):
+
+        try:
+            t2star = self.T2starlist[-1]
+        except:
+            t2star = 0
+
+        i = 0
+        k = 0
+
+        while ((k+1<self.K) and (i<max_nr_steps)):
+            k = self.find_optimal_k (do_debug = do_debug)
+            self.single_estimation_step (k=k+1, T2_track=False, adptv_phase = True,
                             do_debug = do_debug, do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
             i+=1
@@ -586,7 +606,7 @@ class BathNarrowing (TimeSequenceQ):
         if do_plot:
             self._plot_T2star_list()
  
-    def adaptive_2steps (self, M=1, target_T2star = 20e-6, max_nr_steps=50, 
+    def adaptive_2steps (self, max_nr_steps=50, 
                 do_plot = False, do_debug = False, do_save = False):
 
         '''
@@ -601,16 +621,16 @@ class BathNarrowing (TimeSequenceQ):
 
         i = 0
 
-        while ((t2star<self.K) and (i<max_nr_steps)):
+        while ((k<self.K) and (i<max_nr_steps)):
 
             #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
             #self.k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
             #print ("CURRENT k: ", self.k)
-            k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
+            k = self.find_optimal_k (do_debug = do_debug)
 
-            m_list = self.single_estimation_step (k=k, M=M, T2_track=False, adptv_phase = True,
+            m_list = self.single_estimation_step (k=k+1, T2_track=False, adptv_phase = True,
                 do_debug = do_debug, do_save = do_save, do_plot=do_plot)
-            m_list = self.single_estimation_step (k=k, M=M, T2_track=False, adptv_phase = True,
+            m_list = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True,
                 do_debug = do_debug, do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
             i+=1

@@ -81,54 +81,44 @@ class ExpStatistics (DO.DataObjectHDF5):
 		return f, newpath
 
 
-	def simulate_same_bath (self, max_steps, string_id = '',
+	def simulate_same_bath (self, funct_name, max_steps, string_id = '', 
 				do_save = False, do_plot = False, do_debug = False):
 
 		self._called_modules.append('simulate')
-		self.results = []
+		R = int(self.G*self.N*self.F*self.N*(self.N-1)/2)
+		self.results = np.zeros((self.nr_reps, R))
 		newpath = self.folder
 
 		if do_save:
-			f, newpath = self.__generate_file (title = string_id)
+			f, newpath = self.__generate_file (title = '_'+funct_name+'_'+string_id)
 
-		#trialno = 0
-
-		#self.results = np.zeros((self.nr_reps, 2*self.M*max_steps+1))
-		i = 0
-
-		exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, 
-				folder=self.folder)
+		exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, folder=newpath)
+		exp._save_plots = self._save_plots
 		exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
 				 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)
-		exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=5, F=3, N=10)
+		exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=self.G, F=self.F, N=10)
+		exp.target_T2star = 2**(exp.K)*exp.tau0
 		exp.set_flip_prob (0)
-		exp.initialize(do_plot = do_plot)
+		exp.initialize()
 
+
+		i = 0
 		while (i < self.nr_reps):
 
 			print ("Repetition nr: ", i+1)
 
 			if not exp.skip:
+				
 				exp.reset_unpolarized_bath()
 				exp.initialize()
 				exp.nbath.print_nuclear_spins()
 				exp.curr_rep = i
-				#here we could do it general, with a general function
-				# passed as a string
-				exp.adaptive_2steps (M=self.M, target_T2star = 5000e-6, 
-						max_nr_steps=max_steps, do_plot = do_plot, do_debug = do_debug, do_save = do_save)
+				a = getattr(exp, funct_name) (max_nr_steps=max_steps, 
+						do_plot = do_plot, do_debug = do_debug)
 				l = len (exp.T2starlist)
-				if (self.results == []):
-					self.results = np.zeros((self.nr_reps, l))
-				self.results [i, :] = exp.T2starlist/exp.T2starlist[0]
+				self.results [i, :l] = exp.T2starlist/exp.T2starlist[0]
+				self.results [i, l:R] = (exp.T2starlist[-1]/exp.T2starlist[0])*np.ones(R-l)
 				i += 1
-			else:
-				exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, folder=newpath)
-				exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
-					 	concentration=self.conc, verbose=True, do_plot = False, eng_bath=False)
-				exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=5, F=3, N=10)
-				exp.set_flip_prob (0)
-				exp.initialize()
 
 				if do_save:
 					rep_nr = str(i).zfill(len(str(self.nr_reps)))
@@ -141,7 +131,16 @@ class ExpStatistics (DO.DataObjectHDF5):
 					self.save_object_params_list_to_file (obj = exp.nbath, f = grp_nbath, 
 							params_list= ['Ao', 'Ap', 'Azx', 'Azy', 'values_Az_kHz', 'r_ij', 'theta_ij'])
 
-
+			else:
+				
+				exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, folder=newpath)
+				exp._save_plots = self._save_plots
+				exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
+						 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)
+				exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=self.G, F=self.F, N=10)
+				exp.target_T2star = 2**(exp.K)*exp.tau0
+				exp.set_flip_prob (0)
+				exp.initialize()
 
 		if do_save:
 			f.close()

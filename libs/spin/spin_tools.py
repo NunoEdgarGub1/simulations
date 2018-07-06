@@ -14,7 +14,7 @@ def average_dipolar_coupling (density_cm3, verbose = True):
 	dipolar_coupling = mu0*(ge**2)*(muB**2)/(4*np.pi*hbar*r_avg**3) #in Hz
 
 	if verbose:
-		print "Mean inter-particle distance: ", r_avg*1e9, " nm"
-		print "Avergae dipolar coupling: ", dipolar_coupling*1e-3, " kHz"
+		print ("Mean inter-particle distance: ", r_avg*1e9, " nm")
+		print ("Avergae dipolar coupling: ", dipolar_coupling*1e-3, " kHz")
 
 	return r_avg, dipolar_coupling
