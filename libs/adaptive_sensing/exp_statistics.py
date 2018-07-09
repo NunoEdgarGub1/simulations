@@ -27,6 +27,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 		self.folder = folder
 		self.auto_set = False
 		self._called_modules = []
+		self._semiclassical = False
 
 	def set_sim_params (self, nr_reps, overhead=0):
 		self.nr_reps = nr_reps
@@ -80,6 +81,8 @@ class ExpStatistics (DO.DataObjectHDF5):
 
 		return f, newpath
 
+	def set_semiclassical (self, value=True):
+		self._semiclassical = True
 
 	def simulate_same_bath (self, funct_name, max_steps, string_id = '', 
 				do_save = False, do_plot = False, do_debug = False):
@@ -93,6 +96,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 			f, newpath = self.__generate_file (title = '_'+funct_name+'_'+string_id)
 
 		exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, folder=newpath)
+		exp.semiclassical = self._semiclassical
 		exp._save_plots = self._save_plots
 		exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
 				 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)
@@ -111,6 +115,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 				
 				exp.reset_unpolarized_bath()
 				exp.initialize()
+				exp.semiclassical = self._semiclassical
 				exp.nbath.print_nuclear_spins()
 				exp.curr_rep = i
 				a = getattr(exp, funct_name) (max_nr_steps=max_steps, 
@@ -134,6 +139,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 			else:
 				
 				exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, folder=newpath)
+				exp.semiclassical = self._semiclassical
 				exp._save_plots = self._save_plots
 				exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
 						 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)
@@ -150,7 +156,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 
 
 	def simulate_different_bath (self, funct_name, max_steps, string_id = '', 
-				do_save = False, do_plot = False, do_debug = False):
+				do_save = False, do_plot = False, do_debug = False, semiclassical = False):
 
 		self._called_modules.append('simulate')
 		R = int(self.G*self.N*self.F*self.N*(self.N-1)/2)
@@ -165,6 +171,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 			
 			#try:
 			exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, folder=newpath)
+			exp.semiclassical = semiclassical
 			exp._save_plots = self._save_plots
 			exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
 					 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)

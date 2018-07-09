@@ -63,6 +63,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.phase_list = []
         self.tau_list = []
 
+        self.semiclassical = True
 
         # The "called modules" is  a list that tracks which functions have been used
         # so that they are saved in the output hdf5 file.
@@ -169,20 +170,23 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         T2est = self.T2_est
         
         p, m = self.return_p_fB(T2_track = T2track, T2_est = T2est)
-        p_az, az = self.nbath.get_histogram_Az(nbins = 20)
-        az2, p_az2 = self.nbath.get_probability_density()
+        print ("SC: ", self.semiclassical)
+        if not(self.semiclassical):
+            p_az, az = self.nbath.get_histogram_Az(nbins = 20)
+            az2, p_az2 = self.nbath.get_probability_density()
         
-        self.norm, self.error = self.fitting(p = p, paz = p_az2, az = az2, T2track = T2track, T2est = T2est)
-        self.norm_lst.append(self.norm)
-        self.mse_lst.append(self.error)
-        if self.step==0:
-            self.qmax.append(0)
-        else:
-            self.qmax.append(az2[np.argmax(p_az2)])
+            self.norm, self.error = self.fitting(p = p, paz = p_az2, 
+                    az = az2, T2track = T2track, T2est = T2est)
+            self.norm_lst.append(self.norm)
+            self.mse_lst.append(self.error)
+            if self.step==0:
+                self.qmax.append(0)
+            else:
+                self.qmax.append(az2[np.argmax(p_az2)])
+            f = ((1/(self.tau0))*np.angle(self.p_k[self.points-1])*1e-6)
+
         self.cmax.append(self.beta[np.argmax(p)]*1e-3)
-        self.FWHM_lst.append(self.FWHM())
-		
-        f = ((1/(self.tau0))*np.angle(self.p_k[self.points-1])*1e-6)
+        self.FWHM_lst.append(self.FWHM())		
         
         fig = plt.figure(figsize = (12,6))
         p0 = 0.5-0.5*np.cos(2*np.pi*self.beta*tau+theta)
@@ -190,33 +194,20 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         plt.fill_between (self.beta*1e-3, 0, max(p*self.norm)*p0/max(p0), color='magenta', alpha = 0.1)
         plt.fill_between (self.beta*1e-3, 0, max(p*self.norm)*p1/max(p1), color='cyan', alpha = 0.1)
         tarr = np.linspace(min(self.beta)*1e-3,max(self.beta)*1e-3,1000)
-        T2star = 5*(self.nbath._op_sd(self.over_op[2]).real)**-1
+        if self.semiclassical:
+            std_H, q = self.return_std (verbose = True)
+            T2star = (1/(np.sqrt(2)*np.pi*std_H))
+        else:
+            T2star = 5*(self.nbath._op_sd(self.over_op[2]).real)**-1
         T2inv = T2star**-1 *1e-3
-        #plt.hlines(.5*max(p*self.norm),xmin=self.beta[np.argmax(p)]*1e-3-.5*T2inv,xmax=self.beta[np.argmax(p)]*1e-3+.5*T2inv,
-        #          lw=9, color='red')
-        # plt.hlines(.5*max(p),xmin=self.beta[np.argmax(p)]*1e-3-.5*self.Hvar,xmax=self.beta[np.argmax(p)]*1e-3+.5*self.Hvar,
-        #           lw=9, color='blue')
-        #plt.hlines(.5*max(p*self.norm),xmin=self.beta[np.argmax(p)]*1e-3-.5*self.FWHM(),xmax=self.beta[np.argmax(p)]*1e-3+.5*self.FWHM(),
-        #          lw=3)
-        #plt.plot (az, p_az/np.sum(p_az), 'o', color='royalblue', label = 'spin-bath')
-        #plt.plot (az, p_az/np.sum(p_az), '--', color='royalblue')
-        #plt.plot (az, p_az/max(p_az) * max(p), 'o', color='royalblue', label = 'spin-bath')
-        #plt.plot (az, p_az/max(p_az) * max(p), '--', color='royalblue')
-        #plt.plot (az2, p_az2/np.sum(p_az2), '^', color='k', label = 'spin-bath')
-        #plt.plot (az2, p_az2/np.sum(p_az2), ':', color='k')
-        plt.plot (az2, p_az2 , '^', color='k', label = 'spin-bath')
-        plt.plot (az2, p_az2 , ':', color='k')
-        #plt.plot (self.beta*1e-3, max(p)*p0/max(p0) * (p /max(p)), color='crimson', linewidth = 2, label = 'classical')
-        #plt.plot (self.beta*1e-3, max(p)*p1/max(p1) * (p /max(p)), color='blue', linewidth = 2, label = 'classical')
-        plt.plot (self.beta*1e-3, p*self.norm , color='green', linewidth = 2, label = 'classical')
-        # plt.fill_between(az2[0:int(len(az2)/2)], 
-        # (p_az2)[0:int(len(az2)/2)], 
-        # (p*self.norm)[self.MSE()[1][0:int(len(az2)/2)]], alpha=.5, color='crimson')
-        # plt.fill_between(az2[int(len(az2)/2):], 
-        # (p_az2)[int(len(az2)/2):], 
-        # (p*self.norm)[self.MSE()[1][int(len(az2)/2):]], alpha=.5, color='crimson')
-        #for pj in range(len(peaks)):
-        #    plt.axvline(self.beta[peaks[pj][0]]*1e-3)
+        if not (self.semiclassical):
+            print ("Quantum Simulation")
+            plt.plot (az2, p_az2 , '^', color='k', label = 'spin-bath')
+            plt.plot (az2, p_az2 , ':', color='k')
+        else:
+            print ("semiclassical simulation - not plotting the bath")
+
+        plt.plot (self.beta*1e-3, p , color='green', linewidth = 2, label = 'classical')
         plt.xlabel (' hyperfine (kHz)', fontsize=18)
         fwhm = self.FWHM()
         plt.xlim((max(-1000, m*1e-3-15*fwhm), min (1000, m*1e-3+15*fwhm)))
@@ -224,7 +215,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             plt.savefig(os.path.join(self.folder+'/', 'rep_%.04d_%.04d.png'%(self.curr_rep,self.step)))
         plt.show()
         plt.close("all")
-        self.p_az_old = p_az2/max(p_az2)
+        if not(self.semiclassical):
+            self.p_az_old = p_az2/max(p_az2)
         self.step+=1
         
     def plot_distr(self):
@@ -321,18 +313,30 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
     def reset_called_modules(self):
         self._called_modules = ['ramsey', 'bayesian_update', 'calc_acc_phase']
 
-    def ramsey_classical (self, t=0., theta=0.):
+    def ramsey_classical (self, t=0., theta=0., T2 = None):
 
         A = 0.5
         B = -0.5
 
-        #we should be updating the value of T2 in the classical Ramsey
-        # shouldn't we?
-        Bp = np.exp(-(t/self.T2)**2)*np.cos(self.curr_acc_phase+theta)
+        if (T2 == None):
+            T2 = self.T2starlist
+
+        # we should be updating the value of T2 in the classical Ramsey
+        # shouldn't we? Maybe not, since there's not really a "decay"
+        # for a single measurement. The decay is the result of adding up
+        # multiple measurements
+
+        # pick a random value for f_B based on the probbaility distibution p(f_B)
+        #Bp = np.exp(-(t/T2)**2)*np.cos(2*np.pi*fB*t+theta)
+        p_fB, m = self.return_p_fB()
+        fB = np.random.choice (a = self.beta, p = p_fB)
+        print ("[Classical Ramsey]: curr_fB = ", fB*1e-3, " kHz")
+        Bp = np.cos(2*np.pi*fB*t+theta)
         p0 = (1-A)-B*Bp
         p1 = A+B*Bp
         np.random.seed()
         result = np.random.choice (2, 1, p=[p0, p1])
+        print ("result: ", result[0])
         return result[0]
 
     def ramsey (self, t=0., theta=0., do_plot = False):
@@ -462,19 +466,28 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
                 ctrl_phase = 0.5*np.angle (self.p_k[int(ttt+self.points)])
             else:
                 ctrl_phase = np.pi*m/M
-            m_res = self.ramsey (theta=ctrl_phase, t = t_i*self.tau0, do_plot=False)#do_debug)
+            print ("SC-ses:", self.semiclassical)
+            if self.semiclassical:
+                m_res = self.ramsey_classical (theta=ctrl_phase, t = t_i*self.tau0)
+            else:
+                m_res = self.ramsey (theta=ctrl_phase, t = t_i*self.tau0, do_plot=False)
             m_list.append(m_res)
             if m==0:
                 self.bayesian_update (m_n = m_res, phase_n = ctrl_phase, t_n = t_i, T2_track = T2_track, T2_est = self.T2_est, do_plot=False)
             else:
                 self.bayesian_update (m_n = m_res, phase_n = ctrl_phase, t_n = t_i, T2_track = False, T2_est = self.T2_est, do_plot=False)
+            
             FWHM = self.FWHM()*1e3
             #Has to remain below 1 so that the FWHM is an upperbound to 1/T2*
             #self.widthratlist.append((1/FWHM)/T2star)
             self.outcomes_list.append(m_res)
             self.phase_list.append(ctrl_phase)
             self.tau_list.append (t_i*self.tau0)
-            self.T2starlist.append(.5*(self.nbath._op_sd(self.over_op[2]).real)**-1)
+            if self.semiclassical:
+                std_H, q = self.return_std (verbose = do_debug)
+                self.T2starlist.append(1/(np.sqrt(2)*np.pi*std_H))                
+            else:
+                self.T2starlist.append(.5*(self.nbath._op_sd(self.over_op[2]).real)**-1)
             self._curr_T2star = self.T2starlist[-1]
             self.timelist.append(self.timelist[-1] + t_i*self.tau0)
 
@@ -486,11 +499,10 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             if do_plot:
                 if m==0:
                     self.plot_hyperfine_distr(tau=t_i*self.tau0, theta = ctrl_phase, 
-                            T2track = T2_track, T2est = self.T2_est, do_save = do_save)
+                        T2track = T2_track, T2est = self.T2_est, do_save = do_save)
                 else:
                     self.plot_hyperfine_distr(tau=t_i*self.tau0, theta = ctrl_phase,
-                            T2track = False, T2est = self.T2_est, do_save = do_save)
-
+                        T2track = False, T2est = self.T2_est, do_save = do_save)
 
     def qTracking (self, M=1, nr_steps = 1, do_plot = False, do_debug=False, do_save = False):
 
@@ -585,7 +597,7 @@ class BathNarrowing (TimeSequenceQ):
         if do_plot:
             self._plot_T2star_list()
  
-    def adaptive_1step (self, max_nr_steps=50, 
+    def adaptive_1step (self, max_nr_steps=50,
             do_plot = False, do_debug = False, do_save = False):
 
         try:
@@ -605,7 +617,32 @@ class BathNarrowing (TimeSequenceQ):
 
         if do_plot:
             self._plot_T2star_list()
- 
+
+    def adaptive_multipeak (self, max_nr_steps=50, 
+                do_plot = False, do_debug = False, do_save = False):
+
+        # this is still to be tested!! -CB (based on DS work)
+        # one more thing to test is whether we can infer the multi-peak behaviour
+        # by looking at the history of the outcomes (is it why we need "genetic" approaches?)
+
+        k = self.find_optimal_k (do_debug = do_debug)
+
+
+        while ((k+1<self.K) and (i<max_nr_steps)):
+
+            mp = self.is_multipeak ()
+
+            if mp:
+                if k > 0:
+                    k = k-1
+            else:
+                if (2**k)*self.tau0 > 1e-3/self.FWHM():
+                    while ((2**k)*self.tau0 > 1e-3/self.FWHM() and (k>=0)):
+                        k = k-1
+                    print('Ramsey time exceeded 1/FWHM, reduced measurement time')
+                else:
+                    k = k+1
+
     def adaptive_2steps (self, max_nr_steps=50, 
                 do_plot = False, do_debug = False, do_save = False):
 
@@ -638,3 +675,10 @@ class BathNarrowing (TimeSequenceQ):
         if do_plot:
             self._plot_T2star_list()
  
+
+# TO-DO LIST
+#
+# 1) develop semi-classical algorithm and check that it works fine
+# 2) match between classical and quantum distribution is decent but not spectacular. Why?
+
+
