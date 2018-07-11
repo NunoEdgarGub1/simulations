@@ -25,6 +25,7 @@ import numpy.random as ran
 import time as time
 import random as rand
 import tabulate as tb
+import logging
 
 import matplotlib as mpl
 from matplotlib import pyplot as plt
@@ -50,7 +51,8 @@ class NSpinBath ():
 	    self.ZFS = 2.87*10**9
 
 	    self.prefactor = self.mu0*self.gam_el*self.gam_n/(4*np.pi)*self.hbar**2 /self.hbar/(2*np.pi) #Last /hbar/2pi is to convert from Joule to Hz
- 
+	    self.log = logging.getLogger ('nBath')
+	    logging.basicConfig (level = logging.INFO)
 
 	def generate_NSpin_distr (self, cluster, conc=0.02, N=25, do_sphere = True, eng_bath=False):
 
@@ -122,7 +124,7 @@ class NSpinBath ():
 	                    if r[o] != 0:
 	                        theta[o] = np.arccos(z[o]/r[o])
 	                    else:
-	                        print('Error: nuclear spin overlapping with NV centre')
+	                        self.log.error ('Error: nuclear spin overlapping with NV centre')
 	                            
 	                    #if x[o] != 0:
 	                    #    Azx[o] = Ao[o]*np.cos(phi[o])
@@ -155,7 +157,7 @@ class NSpinBath ():
 	                    if r[o] != 0:
 	                        theta[o] = np.arccos(z[o]/r[o])
 	                    else:
-	                        print('Error: nuclear spin overlapping with NV centre') 
+	                        self.log.error ('Error: nuclear spin overlapping with NV centre') 
 	                            
 	                    #if x[o] != 0:
 	                    #    Azx[o] = Ao[o]*np.cos(phi[o])
@@ -222,9 +224,9 @@ class NSpinBath ():
 	    T2_l = sum(Ap_NV[0][u]**2 + Ao_NV[0][u]**2 for u in range(len(Ap_NV[0])))**-0.5
 	
 	    self._nr_nucl_spins = len(Ap_NV[0])
-	    print ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
-	    print ("T2* -- high field: , ", T2_h*1e3, " ms")
-	    print ("T2* -- low field: ", T2_l*1e3, " ms")
+	    self.log.info ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
+	    self.log.info ("T2* -- high field: , ", T2_h*1e3, " ms")
+	    self.log.info ("T2* -- low field: ", T2_l*1e3, " ms")
 	    self.T2star_lowField = T2_l
 	    self.T2star_highField = T2_h
         
@@ -259,7 +261,7 @@ class NSpinBath ():
 	            if r_ij_C[j] != 0:
 	                theta_ij_C[j] = np.arccos(r_ij[2]/r_ij_C[j])
 	            else:
-	                print('Error: %d nuclear spin pair overlapping'%j)
+	                self.log.error ('Error: %d nuclear spin pair overlapping'%j)
                                                             
 	        if eng_bath:                
 	            new_nuc_list = [j for j in range(Nseed)]
@@ -297,7 +299,7 @@ class NSpinBath ():
                 #relabel pairs
 	            pair_lst = list(it.combinations(range(len(new_nuc_list)), 2))
 	            self._nr_nucl_spins = len(new_nuc_list)
-	            print("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
+	            self.log.info ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
 	            print(len(new_nuc_list),len(new_r_list))
 	            return Ap_NV[0][new_nuc_list], Ao_NV[0][new_nuc_list] , Azx_NV[0][new_nuc_list] , Azy_NV[0][new_nuc_list] , r_NV[0][new_nuc_list] , pair_lst , geom_lst , dC_lst, T2_h, T2_l
             
@@ -305,7 +307,7 @@ class NSpinBath ():
 	            geom_lst = [r_ij_C , theta_ij_C , phi_ij_C] #all parameters to calculate nuclear bath couplings
 	            dC_lst = [[Axx_NV[0],Axy_NV[0],Axz_NV[0]],[Ayx_NV[0],Ayy_NV[0],Ayz_NV[0]]] #additional hf values to calculate dC 
 
-	            print("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
+	            self.log.info ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
 	            return Ap_NV[0], Ao_NV[0] , Azx_NV[0] , Azy_NV[0] , r_NV[0] , pair_lst , geom_lst , dC_lst, T2_h, T2_l
 		
 
@@ -510,6 +512,12 @@ class CentralSpinExperiment ():
 		# "evolution dictionary": stores data for each step
 		self._evol_dict = {}
 
+		self.log = logging.getLogger ('nBath')
+		logging.basicConfig (level = logging.INFO)
+
+	def set_log_level (self, value):
+		self.log.setLevel (value)
+
 	def gaussian(self, x, mu, sig):
 		return 1./(sqrt(2.*pi)*sig)*np.exp(-np.power((x - mu)/sig, 2.)/2)
 
@@ -558,7 +566,7 @@ class CentralSpinExperiment ():
 				#self.Ap[j], self.Ao[j], self.Azx[j], self.Azy[j] = 0, 0, 0
 				close_cntr +=1
 		
-		print('%d spins with |A| > 1MHz.' %close_cntr)
+		self.log.warning ('%d spins with |A| > 1MHz.' %close_cntr)
 
 		#hyperfine vector
 		self.HFvec = np.array([[self.Azx[j], self.Azy[j], self.Ap[j]] for j in range(self._nr_nucl_spins)])
@@ -633,8 +641,7 @@ class CentralSpinExperiment ():
 
 	def reset_bath (self, do_plot = True):
 
-		print ("Reset bath...")
-
+		self.log.debug ("Reset bath...")
 		self._evol_dict = {}
 		self._curr_rho = np.eye(2**self._nr_nucl_spins)/np.trace(np.eye(2**self._nr_nucl_spins))
 
@@ -825,7 +832,7 @@ class CentralSpinExperiment ():
 		#print('grouped', self._grp_lst)
 		#print('nuc-nuc coupling strength', Cmer_arr)
 		#print()
-		print('1/coupling mean (s)', self.T2est)
+		self.log.debug ('1/coupling mean (s)', self.T2est)
 			
 
 
@@ -1076,6 +1083,8 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		# "evolution dictionary": stores data for each step
 		self._evol_dict = {}
 
+		self.log = logging.getLogger ('nBath')
+		logging.basicConfig (level = logging.INFO)
 
 	def Hahn_Echo (self, tauarr, phi, do_compare=True):
 		'''
@@ -1203,7 +1212,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		return U
 
 
-	def Ramsey (self, tau,  phi, flip_prob = 0, t_read = 0, verbose = False):
+	def Ramsey (self, tau,  phi, flip_prob = 0, t_read = 0):
 		'''
 		Performs a single Ramsey experiment:
 		(1) Calculates tr(U1* U0 rho_block) for each dum density matrix
@@ -1238,13 +1247,12 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		p0 = round(.5*(1-sig.real),5)
 		
 		ms = ran.choice([1,0],p=[p1,p0])
-		if verbose:
-			print('Ramsey outcome: ', ms)
+		self.log.debug ('Ramsey outcome: ', ms)
 		
 		if ms==1:
 			ms = ran.choice([1,0],p=[1-flip_prob, flip_prob])
 			if ms==0:
-				print('************************** FLIPPED SPIN ****************************',)
+				self.log.warning ('************************** FLIPPED SPIN ****************************',)
 				self.flipArr.append(len(self.msArr))
 				
 				#random flip time during readout

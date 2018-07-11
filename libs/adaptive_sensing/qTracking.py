@@ -63,7 +63,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.phase_list = []
         self.tau_list = []
 
-        self.semiclassical = True
+        self.log = logging.getLogger ('qTrack')
+        logging.basicConfig (level = logging.INFO)
+        self.semiclassical = False
 
         # The "called modules" is  a list that tracks which functions have been used
         # so that they are saved in the output hdf5 file.
@@ -71,6 +73,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         # to make sure you know how the data was generated (especially if you tried out diffeent things)
         self._called_modules = ['ramsey', 'bayesian_update', 'calc_acc_phase']
         self.folder = folder
+
+    def set_log_level (self, value):
+        self.log.setLevel(value)
 
     def set_spin_bath (self, cluster, nr_spins, concentration, verbose = False, do_plot = False, eng_bath=False):
         
@@ -113,7 +118,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         if (T2star == None):
             T2star = self.tau0
 
-        self._dfB0 = 1/(np.sqrt(2)*np.pi*T2star*4)
+        self._dfB0 = 1/(np.sqrt(2)*np.pi*T2star)
 
         p = np.exp(-0.5*(self.beta/self._dfB0)**2) #[1 for j in range(len(self.beta))]
 #        p2 = np.copy(p)
@@ -126,7 +131,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         az, p_az = self.nbath.get_probability_density()
         az2 = np.roll(az,-1)
         if max(az2[:-1]-az[:-1]) > 10:
-            print('Skipped sparse distribution:',max(az2[:-1]-az[:-1]),'kHz')
+            self.log.warning ('Skipped sparse distribution:',max(az2[:-1]-az[:-1]),'kHz')
             self.skip = True
         self.norm = 1
         self.p_k = np.fft.ifftshift(np.abs(np.fft.ifft(p, self.discr_steps))**2)
@@ -196,16 +201,13 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         tarr = np.linspace(min(self.beta)*1e-3,max(self.beta)*1e-3,1000)
         if self.semiclassical:
             std_H, q = self.return_std (verbose = True)
-            T2star = (1/(np.sqrt(2)*np.pi*std_H))
+            T2star = (1/(np.pi*(2**0.5)*std_H))
         else:
             T2star = 5*(self.nbath._op_sd(self.over_op[2]).real)**-1
         T2inv = T2star**-1 *1e-3
         if not (self.semiclassical):
-            print ("Quantum Simulation")
             plt.plot (az2, p_az2 , '^', color='k', label = 'spin-bath')
             plt.plot (az2, p_az2 , ':', color='k')
-        else:
-            print ("semiclassical simulation - not plotting the bath")
 
         plt.plot (self.beta*1e-3, p , color='green', linewidth = 2, label = 'classical')
         plt.xlabel (' hyperfine (kHz)', fontsize=18)
@@ -284,11 +286,11 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		
         if abs(av_p - max_p) > tol:
             self.multi_peak = True
-            print('Multiple peaks detected, Opt k = ',self.k)
+            self.log.warning ('Multiple peaks detected, Opt k = ',self.k)
         else:
             self.multi_peak = False
 				
-    def return_std (self, verbose=False):
+    def return_std_old (self):
 
         '''
         Returns:
@@ -297,18 +299,25 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         '''
 
         self.renorm_p_k()
-        #print ("|p_(-1)| = ", np.abs(self.p_k[self.points-1]))
         self.Hvar = (2*np.pi*np.abs(self.p_k[self.points-1]))**(-2)-1
         self.Hvarlist.append(self.Hvar)
-#        plt.scatter(range(len(self.Hvarlist)),self.Hvarlist)
-#        plt.plot(self.Hvarlist)
-#        plt.show()
-        #print('Hvar',self.Hvar)
         std_H = ((abs(cmath.sqrt(self.Hvar)))/(2*np.pi*self.tau0))
-        #fom = self.figure_of_merit()
-        if verbose:
-            print ("Std (Holevo): ", std_H*1e-3 , ' kHz')
+        self.log.debug ("Std (Holevo): ", std_H*1e-3 , ' kHz')
         return  std_H, 0
+
+    def return_std (self):
+
+        '''
+        Returns:
+        std_H       standard deviation for the frequency f_B (calculated from p_{-1}).
+        fom         figure of merit 
+        '''
+
+        p, m = self.return_p_fB()
+        v = np.sum (p*self.beta**2)-m**2
+        std = v**0.5
+        self.log.debug ("Std: ", std*1e-3 , ' kHz')
+        return  std, 0
 
     def reset_called_modules(self):
         self._called_modules = ['ramsey', 'bayesian_update', 'calc_acc_phase']
@@ -330,13 +339,12 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         #Bp = np.exp(-(t/T2)**2)*np.cos(2*np.pi*fB*t+theta)
         p_fB, m = self.return_p_fB()
         fB = np.random.choice (a = self.beta, p = p_fB)
-        print ("[Classical Ramsey]: curr_fB = ", fB*1e-3, " kHz")
         Bp = np.cos(2*np.pi*fB*t+theta)
         p0 = (1-A)-B*Bp
         p1 = A+B*Bp
         np.random.seed()
         result = np.random.choice (2, 1, p=[p0, p1])
-        print ("result: ", result[0])
+        self.log.info ("[Classical Ramsey]: curr_fB = ", fB*1e-3, " kHz -- result: ", result[0])
         return result[0]
 
     def ramsey (self, t=0., theta=0., do_plot = False):
@@ -360,14 +368,6 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         if do_plot:
             self.plot_hyperfine_distr(tau=t, theta = theta)
-            #title = 'Ramsey: tau = '+str(int(t*1e9))+' ns -- phase: '+str(int(theta*180/3.14))+' deg'
-            #plt.figure (figsize = (8,4))
-            #plt.plot (az0, pd0, linewidth=2, color = 'RoyalBlue')
-            #plt.plot (az, pd, linewidth=2, color = 'crimson')
-            #plt.xlabel ('frequency hyperfine (kHz)', fontsize=18)
-            #plt.ylabel ('probability', fontsize=18)
-            #plt.title (title, fontsize=18)
-            #plt.show()
 
         return m
             
@@ -433,25 +433,29 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         return self.k
     '''
 
-    def find_optimal_k (self, strategy='fwhm', do_debug=True):
+    def find_optimal_k (self, strategy='fwhm'):
         
-        width, fom = self.return_std (verbose=do_debug)
-        k = np.int(np.log(1/(width*self.tau0))/np.log(2)) +1
+        width, fom = self.return_std ()
+
+        # was there a sqrt(2)*pi missing, here???
+        #k = np.int(np.log(1/(width*self.tau0))/np.log(2)) +1
+        #k = np.int(np.log(1/((2**0.5)*np.pi*width*self.tau0))/np.log(2)) + 1
+        k = np.int(np.log(self.t2star/self.tau0)/np.log(2))+1
+
         if k<0:
-            print('K IS NEGATIVE',k)
+            self.log.info ('K IS NEGATIVE',k)
             self.k = 0
-        if do_debug:
-            print ("Optimal k = ", k)
+            self.log.debug ("Optimal k = ", k)
 
         if (strategy == 't2star_limit'):
             if (2**k)*self.tau0 > 1e-3/self.FWHM():
                 while (2**k)*self.tau0 > 1e-3/self.FWHM() and k>=0:
                     k = k-1
-                print('Ramsey time exceeded 1/FWHM, reduced measurement time')
+                self.log.warning('Ramsey time exceeded 1/FWHM, reduced measurement time')
         return k
 
     def single_estimation_step (self, k, T2_track=False, adptv_phase = True, 
-                do_debug=False, do_save = False, do_plot=False):
+                do_save = False, do_plot=False):
 
         t_i = int(2**k)
         ttt = -2**(self.K-k)
@@ -466,12 +470,13 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
                 ctrl_phase = 0.5*np.angle (self.p_k[int(ttt+self.points)])
             else:
                 ctrl_phase = np.pi*m/M
-            print ("SC-ses:", self.semiclassical)
+
             if self.semiclassical:
                 m_res = self.ramsey_classical (theta=ctrl_phase, t = t_i*self.tau0)
             else:
                 m_res = self.ramsey (theta=ctrl_phase, t = t_i*self.tau0, do_plot=False)
             m_list.append(m_res)
+
             if m==0:
                 self.bayesian_update (m_n = m_res, phase_n = ctrl_phase, t_n = t_i, T2_track = T2_track, T2_est = self.T2_est, do_plot=False)
             else:
@@ -485,16 +490,15 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             self.tau_list.append (t_i*self.tau0)
             if self.semiclassical:
                 std_H, q = self.return_std (verbose = do_debug)
-                self.T2starlist.append(1/(np.sqrt(2)*np.pi*std_H))                
+                self.T2starlist.append(1/(np.pi*(2**0.5)*std_H))                
             else:
                 self.T2starlist.append(.5*(self.nbath._op_sd(self.over_op[2]).real)**-1)
             self._curr_T2star = self.T2starlist[-1]
             self.timelist.append(self.timelist[-1] + t_i*self.tau0)
 
-            if do_debug:
-                print ("Ramsey estim: ", m,"/", M)
-                print ("Params: tau =", t_i*self.tau0*1e6, "us --- phase: ", int (ctrl_phase*180/3.14), "   -- res:", m_res)
-                print ("Current T2* = ", int(self.T2starlist[-1]*1e8)/100., ' us')
+            self.log.debug ("Ramsey estim: ", m,"/", M)
+            self.log.debug ("Params: tau =", t_i*self.tau0*1e6, "us --- phase: ", int (ctrl_phase*180/3.14), "   -- res:", m_res)
+            self.log.debug ("Current T2* = ", int(self.T2starlist[-1]*1e8)/100., ' us')
 
             if do_plot:
                 if m==0:
@@ -577,7 +581,7 @@ class BathNarrowing (TimeSequenceQ):
         plt.show()
 
     def non_adaptive (self, max_nr_steps=50, 
-            do_plot = False, do_debug = False, do_save = False):
+            do_plot = False, do_save = False):
 
         try:
             t2star = self.T2starlist[-1]
@@ -585,11 +589,12 @@ class BathNarrowing (TimeSequenceQ):
             t2star = 0
 
         i = 0
-        k = self.find_optimal_k (do_debug = do_debug)
+        k = self.find_optimal_k ()
+        #k=k-3
 
-        while ((k+1<self.K) and (i<max_nr_steps) and (t2star<100e-6)):
-            self.single_estimation_step (k=k+1, T2_track=False, adptv_phase = True,
-                            do_debug = do_debug, do_save = do_save, do_plot=do_plot)
+        while ((k<self.K-2) and (i<max_nr_steps) and (t2star<100e-6)):
+            self.single_estimation_step (k=k, T2_track=False, adptv_phase = False,
+                            do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
             i+=1
             k+=1
@@ -598,34 +603,34 @@ class BathNarrowing (TimeSequenceQ):
             self._plot_T2star_list()
  
     def adaptive_1step (self, max_nr_steps=50,
-            do_plot = False, do_debug = False, do_save = False):
+            do_plot = False, do_save = False):
 
         try:
-            t2star = self.T2starlist[-1]
+            self.t2star = self.T2starlist[-1]
         except:
-            t2star = 0
+            self.t2star = self.tau0
 
         i = 0
         k = 0
 
-        while ((k+1<self.K) and (i<max_nr_steps)):
-            k = self.find_optimal_k (do_debug = do_debug)
+        while ((k+1<self.K-2) and (i<max_nr_steps)):
+            k = self.find_optimal_k ()-1
             self.single_estimation_step (k=k+1, T2_track=False, adptv_phase = True,
-                            do_debug = do_debug, do_save = do_save, do_plot=do_plot)
-            t2star = self.T2starlist[-1]
+                            do_save = do_save, do_plot=do_plot)
+            self.t2star = self.T2starlist[-1]
             i+=1
 
         if do_plot:
             self._plot_T2star_list()
 
     def adaptive_multipeak (self, max_nr_steps=50, 
-                do_plot = False, do_debug = False, do_save = False):
+                do_plot = False, do_save = False):
 
         # this is still to be tested!! -CB (based on DS work)
         # one more thing to test is whether we can infer the multi-peak behaviour
         # by looking at the history of the outcomes (is it why we need "genetic" approaches?)
 
-        k = self.find_optimal_k (do_debug = do_debug)
+        k = self.find_optimal_k ()
 
 
         while ((k+1<self.K) and (i<max_nr_steps)):
@@ -644,7 +649,7 @@ class BathNarrowing (TimeSequenceQ):
                     k = k+1
 
     def adaptive_2steps (self, max_nr_steps=50, 
-                do_plot = False, do_debug = False, do_save = False):
+                do_plot = False, do_save = False):
 
         '''
         In this implementation of the narrowing algorithm, I try to always to steps (k) and (k-1) together
@@ -663,12 +668,12 @@ class BathNarrowing (TimeSequenceQ):
             #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
             #self.k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
             #print ("CURRENT k: ", self.k)
-            k = self.find_optimal_k (do_debug = do_debug)
+            k = self.find_optimal_k ()
 
             m_list = self.single_estimation_step (k=k+1, T2_track=False, adptv_phase = True,
-                do_debug = do_debug, do_save = do_save, do_plot=do_plot)
+                do_save = do_save, do_plot=do_plot)
             m_list = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True,
-                do_debug = do_debug, do_save = do_save, do_plot=do_plot)
+                do_save = do_save, do_plot=do_plot)
             t2star = self.T2starlist[-1]
             i+=1
 
