@@ -11,8 +11,8 @@ reload (qtrack)
 reload (expStat)
 
 exp = expStat.ExpStatistics (folder = 'C:/Users/cristian/Research/Work-Data/')
-exp.set_log_level (logging.INFO)
-exp.set_sim_params (nr_reps=1)
+exp.set_log_level (logging.ERROR)
+exp.set_sim_params (nr_reps=10)
 exp.set_msmnt_params (N=9, G=5, F=1, tau0=1e-6, fid0=1., fid1=0.)
 exp.set_bath_params (nr_spins = 7, concentration = 0.01)
 exp.set_plot_saving (True)
@@ -20,6 +20,6 @@ exp.set_plot_saving (True)
 # available functions: 'fully_non_adaptive', 'non_adaptive_tau', 
 #    'adaptive_1step', 'adaptive_2steps'
 exp.set_semiclassical (False)
-exp.simulate_same_bath (funct_name = 'adaptive_1step', string_id = '', max_steps = 5, 
-        do_plot=True, do_save=False)
+exp.simulate_same_bath (funct_name = 'adaptive_1step', string_id = '', max_steps = 7, 
+        do_plot=True, do_save=True)
 exp.analysis (nr_bins=25)

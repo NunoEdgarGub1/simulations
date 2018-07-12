@@ -90,6 +90,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.T2starlist.append(self.T2star)
         self.T2_est = self.nbath.T2est
         self.timelist.append(0)
+        self._latest_outcome = None
 
         #if verbose:
             #self.nbath.print_nuclear_spins()
@@ -136,6 +137,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.norm = 1
         self.p_k = np.fft.ifftshift(np.abs(np.fft.ifft(p, self.discr_steps))**2)
         self.renorm_p_k()
+        self._initial_fwhm = self.FWHM()
 
         if do_plot:
             self.plot_hyperfine_distr(tau=1e-3, theta=0)
@@ -200,7 +202,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         tarr = np.linspace(min(self.beta)*1e-3,max(self.beta)*1e-3,1000)
         if self.semiclassical:
             std_H, q = self.return_std (verbose = True)
-            T2star = (1/(np.pi*(2**0.5)*std_H))
+            T2star = (1/(4*np.pi*(2**0.5)*std_H))
         else:
             T2star = 5*(self.nbath._op_sd(self.over_op[2]).real)**-1
         T2inv = T2star**-1 *1e-3
@@ -208,7 +210,11 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             plt.plot (az2, p_az2 , '^', color='k', label = 'spin-bath')
             plt.plot (az2, p_az2 , ':', color='k')
 
+        outcome = self.outcomes_list[-1]
+        curr_t2star = int(self.T2starlist[-1]*1e6)
+        curr_tau = tau*1e6
         plt.plot (self.beta*1e-3, p*self.norm , color='green', linewidth = 2, label = 'classical')
+        plt.title ("tau = " +str(curr_tau)+ " us --> outcome: "+str(outcome)+" -- T2* = "+str(curr_t2star)+ " us", fontsize = 18)
         plt.xlabel (' hyperfine (kHz)', fontsize=18)
         fwhm = self.FWHM()
         plt.xlim((max(-1000, m*1e-3-15*fwhm), min (1000, m*1e-3+15*fwhm)))
@@ -474,6 +480,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
                 m_res = self.ramsey_classical (theta=ctrl_phase, t = t_i*self.tau0)
             else:
                 m_res = self.ramsey (theta=ctrl_phase, t = t_i*self.tau0, do_plot=False)
+            self._latest_outcome = m_res
             m_list.append(m_res)
 
             if m==0:
@@ -612,7 +619,13 @@ class BathNarrowing (TimeSequenceQ):
         i = 0
         k = 0
 
-        while ((k+1<self.K-2) and (i<max_nr_steps)):
+        fwhm = self.FWHM()
+
+        while ((k+1<self.K-2) and (i<max_nr_steps) and (fwhm>self._initial_fwhm/64.)):
+
+            fwhm = self.FWHM()
+            print ("Current FWHM: ", fwhm*1e-3, " kHz   -- FWHM reduction: ", self._initial_fwhm/fwhm)
+
             k = self.find_optimal_k ()-1
             self.single_estimation_step (k=k+1, T2_track=False, adptv_phase = True,
                             do_save = do_save, do_plot=do_plot)
