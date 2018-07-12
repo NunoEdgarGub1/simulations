@@ -225,8 +225,8 @@ class NSpinBath ():
 	
 	    self._nr_nucl_spins = len(Ap_NV[0])
 	    self.log.info ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
-	    self.log.info ("T2* -- high field: , ", T2_h*1e3, " ms")
-	    self.log.info ("T2* -- low field: ", T2_l*1e3, " ms")
+	    self.log.info ("T2* -- high field: {0} ms".format(T2_h*1e3))
+	    self.log.info ("T2* -- low field: {0} ms".format (T2_l*1e3))
 	    self.T2star_lowField = T2_l
 	    self.T2star_highField = T2_h
         
@@ -832,7 +832,7 @@ class CentralSpinExperiment ():
 		#print('grouped', self._grp_lst)
 		#print('nuc-nuc coupling strength', Cmer_arr)
 		#print()
-		self.log.debug ('1/coupling mean (s)', self.T2est)
+		self.log.debug ('1/coupling mean (s) {0}'.format(self.T2est))
 			
 
 
@@ -1247,7 +1247,7 @@ class SpinExp_cluster1 (CentralSpinExperiment):
 		p0 = round(.5*(1-sig.real),5)
 		
 		ms = ran.choice([1,0],p=[p1,p0])
-		self.log.debug ('Ramsey outcome: ', ms)
+		self.log.debug ('Ramsey outcome: {0}'.format(ms))
 		
 		if ms==1:
 			ms = ran.choice([1,0],p=[1-flip_prob, flip_prob])

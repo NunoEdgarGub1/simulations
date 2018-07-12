@@ -118,7 +118,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         if (T2star == None):
             T2star = self.tau0
 
-        self._dfB0 = 1/(np.sqrt(2)*np.pi*T2star)
+        self._dfB0 = 1/(4*np.sqrt(2)*np.pi*T2star)
 
         p = np.exp(-0.5*(self.beta/self._dfB0)**2) #[1 for j in range(len(self.beta))]
 #        p2 = np.copy(p)
@@ -131,7 +131,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         az, p_az = self.nbath.get_probability_density()
         az2 = np.roll(az,-1)
         if max(az2[:-1]-az[:-1]) > 10:
-            self.log.warning ('Skipped sparse distribution:',max(az2[:-1]-az[:-1]),'kHz')
+            self.log.warning ('Skipped sparse distribution:{0} kHz'.format(max(az2[:-1]-az[:-1])))
             self.skip = True
         self.norm = 1
         self.p_k = np.fft.ifftshift(np.abs(np.fft.ifft(p, self.discr_steps))**2)
@@ -175,7 +175,6 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         T2est = self.T2_est
         
         p, m = self.return_p_fB(T2_track = T2track, T2_est = T2est)
-        print ("SC: ", self.semiclassical)
         if not(self.semiclassical):
             p_az, az = self.nbath.get_histogram_Az(nbins = 20)
             az2, p_az2 = self.nbath.get_probability_density()
@@ -209,7 +208,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             plt.plot (az2, p_az2 , '^', color='k', label = 'spin-bath')
             plt.plot (az2, p_az2 , ':', color='k')
 
-        plt.plot (self.beta*1e-3, p , color='green', linewidth = 2, label = 'classical')
+        plt.plot (self.beta*1e-3, p*self.norm , color='green', linewidth = 2, label = 'classical')
         plt.xlabel (' hyperfine (kHz)', fontsize=18)
         fwhm = self.FWHM()
         plt.xlim((max(-1000, m*1e-3-15*fwhm), min (1000, m*1e-3+15*fwhm)))
@@ -286,7 +285,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 		
         if abs(av_p - max_p) > tol:
             self.multi_peak = True
-            self.log.warning ('Multiple peaks detected, Opt k = ',self.k)
+            self.log.warning ('Multiple peaks detected, Opt k = {0}'.format(self.k))
         else:
             self.multi_peak = False
 				
@@ -302,7 +301,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.Hvar = (2*np.pi*np.abs(self.p_k[self.points-1]))**(-2)-1
         self.Hvarlist.append(self.Hvar)
         std_H = ((abs(cmath.sqrt(self.Hvar)))/(2*np.pi*self.tau0))
-        self.log.debug ("Std (Holevo): ", std_H*1e-3 , ' kHz')
+        self.log.debug ('Std (Holevo): {0} kHz'.format(std_H*1e-3))
         return  std_H, 0
 
     def return_std (self):
@@ -316,7 +315,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         p, m = self.return_p_fB()
         v = np.sum (p*self.beta**2)-m**2
         std = v**0.5
-        self.log.debug ("Std: ", std*1e-3 , ' kHz')
+        self.log.debug ("Std: {0} kHz".format(std*1e-3))
         return  std, 0
 
     def reset_called_modules(self):
@@ -344,7 +343,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         p1 = A+B*Bp
         np.random.seed()
         result = np.random.choice (2, 1, p=[p0, p1])
-        self.log.info ("[Classical Ramsey]: curr_fB = ", fB*1e-3, " kHz -- result: ", result[0])
+        self.log.info ("[Classical Ramsey]: curr_fB = {0} kHz -- result: {1}".format(fB*1e-3, result[0]))
         return result[0]
 
     def ramsey (self, t=0., theta=0., do_plot = False):
@@ -443,9 +442,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         k = np.int(np.log(self.t2star/self.tau0)/np.log(2))+1
 
         if k<0:
-            self.log.info ('K IS NEGATIVE',k)
+            self.log.info ('K IS NEGATIVE {0}'.format(k))
             self.k = 0
-            self.log.debug ("Optimal k = ", k)
+            self.log.debug ("Optimal k = {0}".format(k))
 
         if (strategy == 't2star_limit'):
             if (2**k)*self.tau0 > 1e-3/self.FWHM():
@@ -496,9 +495,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             self._curr_T2star = self.T2starlist[-1]
             self.timelist.append(self.timelist[-1] + t_i*self.tau0)
 
-            self.log.debug ("Ramsey estim: ", m,"/", M)
-            self.log.debug ("Params: tau =", t_i*self.tau0*1e6, "us --- phase: ", int (ctrl_phase*180/3.14), "   -- res:", m_res)
-            self.log.debug ("Current T2* = ", int(self.T2starlist[-1]*1e8)/100., ' us')
+            self.log.debug ("Ramsey estim: {0} / {1}".format (m, M))
+            self.log.debug ("Params: tau = {0} us --- phase: {1} -- res: {2}".format(t_i*self.tau0*1e6, int (ctrl_phase*180/3.14), m_res))
+            self.log.debug ("Current T2* = {0} us".format(int(self.T2starlist[-1]*1e8)/100.))
 
             if do_plot:
                 if m==0:
