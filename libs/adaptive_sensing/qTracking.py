@@ -481,7 +481,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         for m in range(M):
             #self.peak_cnt(tol = 10)
             if adptv_phase:
-                ctrl_phase = np.mod(0.5*np.angle (self.p_k[int(ttt+self.points)])
+                ctrl_phase = np.mod(0*0.5*np.angle (self.p_k[int(ttt+self.points)])
                         +self.add_phase, np.pi)
             else:
                 ctrl_phase = np.pi*m/M
@@ -646,7 +646,7 @@ class BathNarrowing (TimeSequenceQ):
 
         fwhm = self.FWHM()
 
-        while ((k+1<self.K-2) and (i<max_nr_steps) and (fwhm>self._initial_fwhm/64.)):
+        while ((k+1<self.K-1) and (i<max_nr_steps) and (fwhm>self._initial_fwhm/64.)):
 
             fwhm = self.FWHM()
             print ("Current FWHM: ", fwhm*1e-3, " kHz   -- FWHM reduction: ", self._initial_fwhm/fwhm)
