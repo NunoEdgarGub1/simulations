@@ -6,6 +6,7 @@ import os, sys
 import h5py
 import cmath
 import logging, time, timeit
+import imageio
 from importlib import reload
 from scipy.signal import find_peaks_cwt
 from scipy.interpolate import interp1d
@@ -63,6 +64,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.phase_list = []
         self.tau_list = []
 
+        self._curr_res = 1
+        self.add_phase = 0
+
         self.log = logging.getLogger ('qTrack')
         logging.basicConfig (level = logging.INFO)
         self.semiclassical = False
@@ -104,6 +108,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.timelist.append(0)
 
         self.k=0
+        self._curr_res = 1
+        self.add_phase = 0
 
         self.outcomes_list = []
         self.phase_list = []
@@ -138,6 +144,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.p_k = np.fft.ifftshift(np.abs(np.fft.ifft(p, self.discr_steps))**2)
         self.renorm_p_k()
         self._initial_fwhm = self.FWHM()
+        self._curr_res = 1
+        self.add_phase = 0
 
         if do_plot:
             self.plot_hyperfine_distr(tau=1e-3, theta=0)
@@ -213,8 +221,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         outcome = self.outcomes_list[-1]
         curr_t2star = int(self.T2starlist[-1]*1e6)
         curr_tau = tau*1e6
+        curr_phase = int(theta*180/3.14)
         plt.plot (self.beta*1e-3, p*self.norm , color='green', linewidth = 2, label = 'classical')
-        plt.title ("tau = " +str(curr_tau)+ " us --> outcome: "+str(outcome)+" -- T2* = "+str(curr_t2star)+ " us", fontsize = 18)
+        plt.title ("tau = " +str(curr_tau)+ " us, phase = "+str(curr_phase)+" deg --> outcome: "+str(outcome)+" -- T2* = "+str(curr_t2star)+ " us", fontsize = 18)
         plt.xlabel (' hyperfine (kHz)', fontsize=18)
         fwhm = self.FWHM()
         plt.xlim((max(-1000, m*1e-3-15*fwhm), min (1000, m*1e-3+15*fwhm)))
@@ -472,7 +481,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         for m in range(M):
             #self.peak_cnt(tol = 10)
             if adptv_phase:
-                ctrl_phase = 0.5*np.angle (self.p_k[int(ttt+self.points)])
+                ctrl_phase = np.mod(0.5*np.angle (self.p_k[int(ttt+self.points)])
+                        +self.add_phase, np.pi)
             else:
                 ctrl_phase = np.pi*m/M
 
@@ -482,6 +492,11 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
                 m_res = self.ramsey (theta=ctrl_phase, t = t_i*self.tau0, do_plot=False)
             self._latest_outcome = m_res
             m_list.append(m_res)
+            print ("Compare: ", m_res, self._curr_res)
+            if (m_res != self._curr_res):
+                self.add_phase = np.mod(self.add_phase + np.pi/2., 2*np.pi)
+                print ("Added phase! ", int(self.add_phase*180/3.14), " deg")
+            self._curr_res = m_res
 
             if m==0:
                 self.bayesian_update (m_n = m_res, phase_n = ctrl_phase, t_n = t_i, T2_track = T2_track, T2_est = self.T2_est, do_plot=False)
@@ -570,7 +585,17 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             plt.ylabel('$|\delta F|$/FWHM', fontsize = 20)
             plt.grid(True)
             plt.show()
-            
+
+    '''
+    def make_gif (self, delete_plots = False):
+
+        for i in arange(self.nr_steps):
+
+        with imageio.get_writer('/path/to/movie.gif', mode='I') as writer:
+            for filename in filenames:
+                image = imageio.imread(filename)
+                writer.append_data(image)
+    '''     
 
 class BathNarrowing (TimeSequenceQ):
 
