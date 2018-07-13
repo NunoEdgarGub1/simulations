@@ -26,7 +26,6 @@ class ExpStatistics (DO.DataObjectHDF5):
 		self.folder = folder
 		self.auto_set = False
 		self._called_modules = []
-		self._semiclassical = False
 
 		self._A_thr = None
 		self._sparse_thr = 10
@@ -95,9 +94,6 @@ class ExpStatistics (DO.DataObjectHDF5):
 
 		return f, newpath
 
-	def set_semiclassical (self, value=True):
-		self._semiclassical = value
-
 	def set_bath_validity_conditions (self, A=None, sparse=None):
 		self._A_thr = A
 		self._sparse_thr = sparse
@@ -113,7 +109,6 @@ class ExpStatistics (DO.DataObjectHDF5):
 
 		exp = qtrack.BathNarrowing (time_interval=0, overhead = 0, folder=folder)
 		exp.set_log_level (self._log_level)
-		exp.semiclassical = self._semiclassical
 		exp.set_bath_validity_conditions (A=self._A_thr, sparse=self._sparse_thr)
 		exp._save_plots = self._save_plots
 		if (nBath == None):
@@ -152,7 +147,6 @@ class ExpStatistics (DO.DataObjectHDF5):
 				
 			exp.reset()
 			exp.initialize()
-			exp.semiclassical = self._semiclassical
 			exp.curr_rep = i
 			a = getattr(exp, funct_name) (max_nr_steps=max_steps)
 			l = len (exp.T2starlist)
@@ -174,64 +168,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 
 		if do_save:
 			f.close()
-
-		self.total_steps = max_steps
-		self.newpath = newpath
-
-	def simulate_different_bath (self, funct_name, max_steps, string_id = '', 
-				do_save = False, do_plot = False, do_debug = False, semiclassical = False):
-
-		self._called_modules.append('simulate')
-		R = int(self.G*self.N*self.F*self.N*(self.N-1)/2)
-		self.results = np.zeros((self.nr_reps, R))
-		newpath = self.folder
-
-		if do_save:
-			f, newpath = self.__generate_file (title = '_'+funct_name+'_'+string_id)
-
-		i = 0
-		while (i < self.nr_reps):
-			
-			#try:
-			exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, folder=newpath)
-			exp.set_log_level (self._log_level)
-			exp.semiclassical = semiclassical
-			exp._save_plots = self._save_plots
-			exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
-					 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)
-			exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=self.G, F=self.F, N=10)
-			exp.target_T2star = 2**(exp.K)*exp.tau0
-			exp.set_flip_prob (0)
-			exp.initialize()
-
-			print ("Repetition nr: ", i+1)
-			exp.curr_rep = i
-
-			if not exp.skip:
-				exp.nbath.print_nuclear_spins()
-				a = getattr(exp, funct_name) (max_nr_steps=max_steps, 
-						do_plot = do_plot, do_debug = do_debug)
-				l = len (exp.T2starlist)
-				self.results [i, :l] = exp.T2starlist/exp.T2starlist[0]
-				self.results [i, l:R] = (exp.T2starlist[-1]/exp.T2starlist[0])*np.ones(R-l)
-				i += 1
-
-				if do_save:
-					rep_nr = str(i).zfill(len(str(self.nr_reps)))
-					grp = f.create_group('rep_'+rep_nr)
-					self.save_object_all_vars_to_file (obj = exp, f = grp)
-					self.save_object_params_list_to_file (obj = exp, f = grp, 
-							params_list= ['T2starlist', 'outcomes_list', 'tau_list', 'phase_list'])
-					grp_nbath = grp.create_group ('nbath')
-					self.save_object_all_vars_to_file (obj = exp.nbath, f = grp_nbath)
-					self.save_object_params_list_to_file (obj = exp.nbath, f = grp_nbath, 
-							params_list= ['Ao', 'Ap', 'Azx', 'Azy', 'values_Az_kHz', 'r_ij', 'theta_ij'])
-
-			#except Exception as e: 
-			#	print(e)
-
-		if do_save:
-			f.close()
+		print ("Simulation completed.")
 
 		self.total_steps = max_steps
 		self.newpath = newpath

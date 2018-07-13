@@ -673,10 +673,6 @@ class CentralSpinExperiment ():
 			for j in range(len(self._grp_lst)):
 				self._block_rho.append(np.multiply(np.eye(2**len(self._grp_lst[j])),(2**-len(self._grp_lst[j]))))
 		
-		
-		if do_plot:
-			self.exp.plot_spin_bath_info()
-		
 		pd = np.real(self.get_probability_density())
 		self.values_Az_kHz = pd[0]
 		stat = self.get_overhauser_stat()

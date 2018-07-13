@@ -69,7 +69,6 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         self.log = logging.getLogger ('qTrack')
         logging.basicConfig (level = logging.INFO)
-        self.semiclassical = False
 
         # The "called modules" is  a list that tracks which functions have been used
         # so that they are saved in the output hdf5 file.
@@ -201,19 +200,18 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         T2est = self.T2_est
         
         p, m = self.return_p_fB(T2_track = T2track, T2_est = T2est)
-        if not(self.semiclassical):
-            p_az, az = self.nbath.get_histogram_Az(nbins = 20)
-            az2, p_az2 = self.nbath.get_probability_density()
-        
-            self.norm, self.error = self.fitting(p = p, paz = p_az2, 
-                    az = az2, T2track = T2track, T2est = T2est)
-            self.norm_lst.append(self.norm)
-            self.mse_lst.append(self.error)
-            if self.step==0:
-                self.qmax.append(0)
-            else:
-                self.qmax.append(az2[np.argmax(p_az2)])
-            f = ((1/(self.tau0))*np.angle(self.p_k[self.points-1])*1e-6)
+        p_az, az = self.nbath.get_histogram_Az(nbins = 20)
+        az2, p_az2 = self.nbath.get_probability_density()
+    
+        self.norm, self.error = self.fitting(p = p, paz = p_az2, 
+                az = az2, T2track = T2track, T2est = T2est)
+        self.norm_lst.append(self.norm)
+        self.mse_lst.append(self.error)
+        if self.step==0:
+            self.qmax.append(0)
+        else:
+            self.qmax.append(az2[np.argmax(p_az2)])
+        f = ((1/(self.tau0))*np.angle(self.p_k[self.points-1])*1e-6)
 
         self.cmax.append(self.beta[np.argmax(p)]*1e-3)
         self.FWHM_lst.append(self.FWHM())		
@@ -224,15 +222,10 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         plt.fill_between (self.beta*1e-3, 0, max(p*self.norm)*p0/max(p0), color='magenta', alpha = 0.1)
         plt.fill_between (self.beta*1e-3, 0, max(p*self.norm)*p1/max(p1), color='cyan', alpha = 0.1)
         tarr = np.linspace(min(self.beta)*1e-3,max(self.beta)*1e-3,1000)
-        if self.semiclassical:
-            std_H, q = self.return_std (verbose = True)
-            T2star = (1/(4*np.pi*(2**0.5)*std_H))
-        else:
-            T2star = 5*(self.nbath._op_sd(self.over_op[2]).real)**-1
+        T2star = 5*(self.nbath._op_sd(self.over_op[2]).real)**-1
         T2inv = T2star**-1 *1e-3
-        if not (self.semiclassical):
-            plt.plot (az2, p_az2 , '^', color='k', label = 'spin-bath')
-            plt.plot (az2, p_az2 , ':', color='k')
+        plt.plot (az2, p_az2 , '^', color='k', label = 'spin-bath')
+        plt.plot (az2, p_az2 , ':', color='k')
 
         outcome = self.outcomes_list[-1]
         curr_t2star = int(self.T2starlist[-1]*1e6)
@@ -249,8 +242,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         if self._show_plots:
             plt.show()
         plt.close("all")
-        if not(self.semiclassical):
-            self.p_az_old = p_az2/max(p_az2)
+        self.p_az_old = p_az2/max(p_az2)
         self.step+=1
         
     def plot_distr(self):
@@ -435,10 +427,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             else:
                 ctrl_phase = np.pi*m/M
 
-            if self.semiclassical:
-                m_res = self.ramsey_classical (theta=ctrl_phase, t = t_i*self.tau0)
-            else:
-                m_res = self.ramsey (theta=ctrl_phase, t = t_i*self.tau0, do_plot=False)
+            m_res = self.ramsey (theta=ctrl_phase, t = t_i*self.tau0, do_plot=False)
             self._latest_outcome = m_res
             m_list.append(m_res)
             if (m_res != self._curr_res):
@@ -455,11 +444,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             self.outcomes_list.append(m_res)
             self.phase_list.append(ctrl_phase)
             self.tau_list.append (t_i*self.tau0)
-            if self.semiclassical:
-                std_H, q = self.return_std (verbose = do_debug)
-                self.T2starlist.append(1/(np.pi*(2**0.5)*std_H))                
-            else:
-                self.T2starlist.append(.5*(self.nbath._op_sd(self.over_op[2]).real)**-1)
+            self.T2starlist.append(.5*(self.nbath._op_sd(self.over_op[2]).real)**-1)
             self._curr_T2star = self.T2starlist[-1]
             self.timelist.append(self.timelist[-1] + t_i*self.tau0)
 
@@ -505,8 +490,7 @@ class BathNarrowing (TimeSequenceQ):
                 plt.show()
             plt.close ('all')
 
-    def non_adaptive (self, max_nr_steps=50, 
-            do_plot = False, do_save = False):
+    def non_adaptive (self, max_nr_steps=50):
 
         try:
             t2star = self.T2starlist[-1]
@@ -516,19 +500,15 @@ class BathNarrowing (TimeSequenceQ):
         i = 0
         k = self.find_optimal_k ()
 
-        while ((k<self.K-2) and (i<max_nr_steps) and (t2star<100e-6)):
-            self.single_estimation_step (k=k, T2_track=False, adptv_phase = False,
-                            do_save = do_save, do_plot=do_plot)
+        while ((k<self.K) and (i<max_nr_steps)):
+            self.single_estimation_step (k=k, T2_track=False, adptv_phase = False)
             t2star = self.T2starlist[-1]
             i+=1
             k+=1
 
-        if do_plot:
-            self._plot_T2star_list()
+        self._plot_T2star_list()
  
     def adaptive_1step (self, max_nr_steps=50):
-
-        print ("Adaptive: max nr steps: ", max_nr_steps)
 
         try:
             self.t2star = self.T2starlist[-1]
@@ -538,12 +518,7 @@ class BathNarrowing (TimeSequenceQ):
         i = 0
         k = 0
 
-        fwhm = self.FWHM()
-
         while ((k<=self.K) and (i<max_nr_steps)):
-            print ("k/K: ", k, self.K)
-
-            fwhm = self.FWHM()
 
             k = self.find_optimal_k ()
             self.single_estimation_step (k=k, T2_track=False, adptv_phase = True)
@@ -551,36 +526,3 @@ class BathNarrowing (TimeSequenceQ):
             i+=1
 
         self._plot_T2star_list()
-
-    def adaptive_2steps (self, max_nr_steps=50, 
-                do_plot = False, do_save = False):
-
-        '''
-        In this implementation of the narrowing algorithm, I try to always to steps (k) and (k-1) together
-        so that we avoid multi-peaked distributions
-        '''
-
-        try:
-            t2star = self.T2starlist[-1]
-        except:
-            t2star = 0 
-
-        i = 0
-
-        while ((k<self.K) and (i<max_nr_steps)):
-
-            k = self.find_optimal_k ()
-
-            m_list = self.single_estimation_step (k=k+1, T2_track=False, adptv_phase = True,
-                do_save = do_save, do_plot=do_plot)
-            m_list = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True,
-                do_save = do_save, do_plot=do_plot)
-            t2star = self.T2starlist[-1]
-            i+=1
-
-        if do_plot:
-            self._plot_T2star_list()
- 
-
-
-
