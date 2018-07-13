@@ -97,8 +97,13 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self._latest_outcome = None
 
     def load_bath (self, nBath):
-        self.nbath = nBath
+        if isinstance (nBath, NSpin.FullBathDynamics):
+            self.nbath = nBath
+        else:
+            self.log.error ("Object is not a nuclear spin bath.")
 
+    def return_bath (self):
+        return self.nbath
 
     def reset_unpolarized_bath (self):
         self.nbath.reset_bath()

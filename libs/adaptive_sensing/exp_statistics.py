@@ -59,8 +59,9 @@ class ExpStatistics (DO.DataObjectHDF5):
 			if ((type (self.__dict__[k]) is float) or (type (self.__dict__[k]) is int) or (type (self.__dict__[k]) is str)):
 				print (' - - ', k, ': ', self.__dict__[k])
 
-	def set_plot_saving (self, value):
-		self._save_plots = value
+	def set_plot_settings (self, do_show = False, do_save = False):
+		self._save_plots = do_save
+		self._show_plots = do_show
 
 	def __save_values(self, obj, file_handle):
 		for k in obj.__dict__.keys():
@@ -90,6 +91,22 @@ class ExpStatistics (DO.DataObjectHDF5):
 	def set_semiclassical (self, value=True):
 		self._semiclassical = value
 
+	def _generate_new_experiment (self, folder):
+
+		exp = qtrack.BathNarrowing (time_interval=0, overhead = 0, folder=folder)
+		exp.set_log_level (self._log_level)
+		exp.semiclassical = self._semiclassical
+		exp._save_plots = self._save_plots
+		exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
+				 concentration=self.conc, do_plot = False, eng_bath=False)
+		exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, 
+				G=self.G, F=self.F, N=self.N)
+		exp.target_T2star = 2**(exp.K)*exp.tau0
+		exp.set_flip_prob (0)
+		exp.initialize()
+		return exp
+
+
 	def simulate_same_bath (self, funct_name, max_steps, string_id = '', 
 				do_save = False, do_plot = False, do_debug = False,
 				nBath = None):
@@ -101,17 +118,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 		if do_save:
 			f, newpath = self.__generate_file (title = '_'+funct_name+'_'+string_id)
 
-		exp = qtrack.BathNarrowing (folder=newpath)
-		exp.set_log_level (self._log_level)
-		exp.semiclassical = self._semiclassical
-		exp._save_plots = self._save_plots
-		exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
-				 concentration=self.conc, verbose=do_debug, do_plot = do_plot, eng_bath=False)
-		exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=self.G, F=self.F, N=10)
-		exp.target_T2star = 2**(exp.K)*exp.tau0
-		exp.set_flip_prob (0)
-		exp.initialize()
-
+		exp = self._generate_new_experiment (folder = newpath)
 
 		i = 0
 		while (i < self.nr_reps):
@@ -130,7 +137,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 				l = len (exp.T2starlist)
 				if (l>=max_steps):
 					l -= 1
-				self.results [i, :l] = exp.T2starlist/exp.T2starlist[0]
+				self.results [i, :l] = exp.T2starlist[:l]/exp.T2starlist[0]
 				self.results [i, l:max_steps] = (exp.T2starlist[-1]/exp.T2starlist[0])*np.ones(max_steps-l)
 				i += 1
 
@@ -161,7 +168,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 		if do_save:
 			f.close()
 
-		self.total_steps = l
+		self.total_steps = max_steps
 		self.newpath = newpath
 
 
