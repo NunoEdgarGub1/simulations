@@ -504,7 +504,10 @@ class CentralSpinExperiment ():
 		self.sz = np.array([[1,0],[0,-1]])
 		self.In = .5*np.array([self.sx,self.sy,self.sz])
 		self.msArr = []
-		
+		self._A_thr = None
+		self._sparse_thr = 10
+		self.close_cntr = 0
+		self.sparse_distribution = False
 
 		# current density matrix for nuclear spin bath
 		self._curr_rho = []
@@ -514,6 +517,10 @@ class CentralSpinExperiment ():
 
 		self.log = logging.getLogger ('nBath')
 		logging.basicConfig (level = logging.INFO)
+
+	def set_thresholds (self, A, sparse):
+		self._A_thr = A
+		self._sparse_thr = sparse
 
 	def set_log_level (self, value):
 		self.log.setLevel (value)
@@ -561,12 +568,14 @@ class CentralSpinExperiment ():
 		self._nr_nucl_spins = int(self.exp._nr_nucl_spins)
 		
 		close_cntr = 0
-		for j in range(self._nr_nucl_spins):
-			if np.abs(self.Ap[j]) > 1e6:
-				#self.Ap[j], self.Ao[j], self.Azx[j], self.Azy[j] = 0, 0, 0
-				close_cntr +=1
-		
-		self.log.warning ('%d spins with |A| > 1MHz.' %close_cntr)
+
+		if not(self._A_thr == None):
+			for j in range(self._nr_nucl_spins):
+				if np.abs(self.Ap[j]) > self._A_thr:
+					close_cntr +=1
+			
+			self.log.warning ('{0} spins with |A| > {1}MHz.'.format(close_cntr, self._A_thr*1e-6))
+		self.close_cntr = close_cntr
 
 		#hyperfine vector
 		self.HFvec = np.array([[self.Azx[j], self.Azy[j], self.Ap[j]] for j in range(self._nr_nucl_spins)])
@@ -627,6 +636,14 @@ class CentralSpinExperiment ():
 			self.exp.plot_spin_bath_info()
 		
 		pd = np.real(self.get_probability_density())
+
+		if not(self._sparse_thr == None):
+			az, p_az = self.get_probability_density()
+	        az2 = np.roll(az,-1)
+	        if max(az2[:-1]-az[:-1]) > self._sparse_thr:
+	            self.log.warning ('Skipped sparse distribution:{0} kHz'.format(max(az2[:-1]-az[:-1])))
+	            self.sparse_distribution = True
+
 		self.values_Az_kHz = pd[0]
 		stat = self.get_overhauser_stat()
 		self._evol_dict ['0'] = {
@@ -639,7 +656,7 @@ class CentralSpinExperiment ():
 		}
 
 
-	def reset_bath (self, do_plot = True):
+	def reset_bath_unpolarized (self, do_plot = True):
 
 		self.log.debug ("Reset bath...")
 		self._evol_dict = {}
