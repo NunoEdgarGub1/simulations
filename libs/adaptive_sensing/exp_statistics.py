@@ -91,17 +91,17 @@ class ExpStatistics (DO.DataObjectHDF5):
 		self._semiclassical = value
 
 	def simulate_same_bath (self, funct_name, max_steps, string_id = '', 
-				do_save = False, do_plot = False, do_debug = False):
+				do_save = False, do_plot = False, do_debug = False,
+				nBath = None):
 
 		self._called_modules.append('simulate')
-		R = int(self.G*self.N*self.F*self.N*(self.N-1)/2)
-		self.results = np.zeros((self.nr_reps, R))
+		self.results = np.zeros((self.nr_reps, max_steps))
 		newpath = self.folder
 
 		if do_save:
 			f, newpath = self.__generate_file (title = '_'+funct_name+'_'+string_id)
 
-		exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, folder=newpath)
+		exp = qtrack.BathNarrowing (folder=newpath)
 		exp.set_log_level (self._log_level)
 		exp.semiclassical = self._semiclassical
 		exp._save_plots = self._save_plots
@@ -128,8 +128,10 @@ class ExpStatistics (DO.DataObjectHDF5):
 				a = getattr(exp, funct_name) (max_nr_steps=max_steps, 
 						do_plot = do_plot)
 				l = len (exp.T2starlist)
+				if (l>=max_steps):
+					l -= 1
 				self.results [i, :l] = exp.T2starlist/exp.T2starlist[0]
-				self.results [i, l:R] = (exp.T2starlist[-1]/exp.T2starlist[0])*np.ones(R-l)
+				self.results [i, l:max_steps] = (exp.T2starlist[-1]/exp.T2starlist[0])*np.ones(max_steps-l)
 				i += 1
 
 				if do_save:
@@ -218,7 +220,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 		if do_save:
 			f.close()
 
-		self.total_steps = l
+		self.total_steps = max_steps
 		self.newpath = newpath
 
 	def analysis (self, nr_bins=100):

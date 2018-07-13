@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 from scipy import signal
 from simulations.libs.math import statistics as stat
 from simulations.libs.adaptive_sensing import adaptive_tracking as adptvTrack
-from simulations.libs.spin import diluted_NSpin_bath_py3_dale as NSpin
+from simulations.libs.spin import nuclear_spin_bath as NSpin
 from simulations.libs.math import peakdetect as pd
 
 reload (NSpin)
@@ -42,7 +42,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.est_fB = []
         self.curr_fB = 0
         self.plot_idx = 0
-        self.step=0
+        self.step = 0
         self.phase_cappellaro = 0
         self.k = 0
         self.m_res = 0
@@ -84,7 +84,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
     def set_spin_bath (self, cluster, nr_spins, concentration, verbose = False, do_plot = False, eng_bath=False):
         
         # Spin bath initialization
-        self.nbath = NSpin.SpinExp_cluster1()
+        self.nbath = NSpin.FullBathDynamics()
         self.nbath.set_experiment(cluster = cluster, nr_spins=nr_spins, concentration = concentration,
                 do_plot = False, eng_bath=eng_bath)
         self.T2star = self.nbath.T2h
@@ -96,8 +96,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.timelist.append(0)
         self._latest_outcome = None
 
-        #if verbose:
-            #self.nbath.print_nuclear_spins()
+    def load_bath (self, nBath):
+        self.nbath = nBath
+
 
     def reset_unpolarized_bath (self):
         self.nbath.reset_bath()
@@ -110,6 +111,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.k=0
         self._curr_res = 1
         self.add_phase = 0
+        self.step = 0
 
         self.outcomes_list = []
         self.phase_list = []
@@ -127,13 +129,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         self._dfB0 = 1/(4*np.sqrt(2)*np.pi*T2star)
 
-        p = np.exp(-0.5*(self.beta/self._dfB0)**2) #[1 for j in range(len(self.beta))]
-#        p2 = np.copy(p)
-#        for freq in range(len(p2)):
-#            if abs(self.beta[freq]*1e-3) < abs(1/self.T2star)*1e-3:
-#                p[freq] = p[freq]
-#            else:
-#                p[freq] = 0
+        p = np.exp(-0.5*(self.beta/self._dfB0)**2) 
         p = p/(np.sum(p))
         az, p_az = self.nbath.get_probability_density()
         az2 = np.roll(az,-1)
@@ -228,7 +224,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         fwhm = self.FWHM()
         plt.xlim((max(-1000, m*1e-3-15*fwhm), min (1000, m*1e-3+15*fwhm)))
         if self._save_plots:
-            plt.savefig(os.path.join(self.folder+'/', 'rep_%.04d_%.04d.png'%(self.curr_rep,self.step)))
+            plt.savefig(os.path.join(self.folder+'/', 'rep_%.04d_%.04d.png'%(self.curr_rep, self.step)))
         plt.show()
         plt.close("all")
         if not(self.semiclassical):
@@ -249,12 +245,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         plt.xlabel (' hyperfine (kHz)', fontsize=18)
         T2gauss = np.exp(-(self.beta*1e-3 * self.T2_est)**2)
         p_broad = np.convolve(p,T2gauss,'same')
-        #plt.plot(self.beta*1e-3,p/max(p))
-        #plt.plot(self.beta*1e-3,p_broad/max(p_broad))
         plt.xlim(min(az2), max(az2))
         plt.legend()
         plt.ticklabel_format(useOffset=False)
-        #plt.savefig('trial2_%.04d'%(self.trial))
         plt.show()
         
 
@@ -278,31 +271,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         FWHM = (self.beta[betaint_right + betamax] - self.beta[betaint_left])*1e-3
         
-        return FWHM
-    
-    def peak_cnt(self,tol=1e-3):
-        '''
-        Count peaks of classical distribution within some threshold. 
-        Used to reduce measurement time if multiple peaks are detected.
-        
-        Input:
-        tol   [float]  : min. height for peak to be considered. Change to be a fraction of max(p)
-        
-        Output:
-        peaks [list]   : a list of maxima for the classical distribution
-        
-        '''
-        
-        p, m = self.return_p_fB()
-		
-        av_p = np.average(self.beta*1e-3, weights=p)
-        max_p = self.beta[list(p).index(max(p))]*1e-3
-		
-        if abs(av_p - max_p) > tol:
-            self.multi_peak = True
-            self.log.warning ('Multiple peaks detected, Opt k = {0}'.format(self.k))
-        else:
-            self.multi_peak = False
+        return FWHM    
 				
     def return_std_old (self):
 
@@ -411,49 +380,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         self.nbath.Hahn_Echo (tauarr = tauarr, phi = 0, do_compare=False)
 
-    '''
-    def find_optimal_k (self, T2_track, do_debug=True):
-        
-        width, fom = self.return_std (verbose=do_debug)
-        
-        if T2_track:
-            #print('Optimal k. width = ', width/1000, 'kHz  --- optk+1 = ',np.log(1/(width*self.tau0))/np.log(2), ' -- frq = ', 0.001/(self.tau0*2**self.k), 'kHz')
-            
-            self.k = np.int(np.log(1/(width*self.tau0))/np.log(2)) +1
-        
-            #TEMPORARY fix for when opt_k is negative. In case flag is raised, best to reset simulation for now
-            if self.k<0:
-                print('K IS NEGATIVE',self.k)
-                self.k = 0
-            if do_debug:
-                print ("Optimal k = ", self.k)
-
-        else:
-            if self.multi_peak:
-                print(self.multi_peak)
-                if self.k > 0:
-                    self.k = self.k-1
-                else:
-                    self.k = self.k
-			
-            else:
-                if (2**self.k)*self.tau0 > 1e-3/self.FWHM():
-                    while (2**self.k)*self.tau0 > 1e-3/self.FWHM() and self.k>=0:
-                        self.k = self.k-1
-                    print('Ramsey time exceeded 1/FWHM, reduced measurement time')
-                else:
-                    self.k = self.k+1
-
-        return self.k
-    '''
-
     def find_optimal_k (self, strategy='fwhm'):
         
         width, fom = self.return_std ()
-
-        # was there a sqrt(2)*pi missing, here???
-        #k = np.int(np.log(1/(width*self.tau0))/np.log(2)) +1
-        #k = np.int(np.log(1/((2**0.5)*np.pi*width*self.tau0))/np.log(2)) + 1
         k = np.int(np.log(self.t2star/self.tau0)/np.log(2))+1
 
         if k<0:
@@ -479,7 +408,6 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         M = self.G + self.F*k
 
         for m in range(M):
-            #self.peak_cnt(tol = 10)
             if adptv_phase:
                 ctrl_phase = np.mod(0*0.5*np.angle (self.p_k[int(ttt+self.points)])
                         +self.add_phase, np.pi)
@@ -492,10 +420,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
                 m_res = self.ramsey (theta=ctrl_phase, t = t_i*self.tau0, do_plot=False)
             self._latest_outcome = m_res
             m_list.append(m_res)
-            print ("Compare: ", m_res, self._curr_res)
             if (m_res != self._curr_res):
                 self.add_phase = np.mod(self.add_phase + np.pi/2., 2*np.pi)
-                print ("Added phase! ", int(self.add_phase*180/3.14), " deg")
             self._curr_res = m_res
 
             if m==0:
@@ -504,8 +430,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
                 self.bayesian_update (m_n = m_res, phase_n = ctrl_phase, t_n = t_i, T2_track = False, T2_est = self.T2_est, do_plot=False)
             
             FWHM = self.FWHM()*1e3
-            #Has to remain below 1 so that the FWHM is an upperbound to 1/T2*
-            #self.widthratlist.append((1/FWHM)/T2star)
+
             self.outcomes_list.append(m_res)
             self.phase_list.append(ctrl_phase)
             self.tau_list.append (t_i*self.tau0)
@@ -529,62 +454,6 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
                     self.plot_hyperfine_distr(tau=t_i*self.tau0, theta = ctrl_phase,
                         T2track = False, T2est = self.T2_est, do_save = do_save)
 
-    def qTracking (self, M=1, nr_steps = 1, do_plot = False, do_debug=False, do_save = False):
-
-        '''
-        Simulates adaptive tracking protocol.
-        1) Spin bath narrowing
-        2) Free evolution time (spin bath diffusion rate ~1/T2)
-        3) Spin bath tracking
-
-        Input: do_plot [bool], do_debug [bool]
-        '''
-
-        self._called_modules.append('qTracking')
-
-        # need some way to quantify which narrowing protocol is better
-        self.bath_narrowing_v2 (M=M, target_T2star = 20e-6, max_nr_steps=50, do_plot = True, do_debug = True)
-        for j in range(1):
-            self.freeevo (ms_curr=self.m_res, t=10e-3)
-        
-        for i in range(nr_steps):
-            if i==0:
-                track=True
-            else:
-                track=False
-            self.k = self.find_optimal_k (T2_track = track, do_debug = do_debug)
-            # print ("CURRENT k: ", self.k+1)
-            # m_list = self.adptv_tracking_single_step (k = self.k+1, M=M, do_debug = do_debug)
-            #print ("CURRENT k: ", self.k)
-            m_list = self.adptv_tracking_single_step (k = self.k, M=M, T2_track=track,  do_debug = do_debug, do_save = do_save)
-            p = self.return_p_fB()[0]
-            maxp = list(p).index(max(p))
-            # if self.beta[maxp]!=0:
-            # 	self.tau0 = 1/(2*np.pi*abs(self.beta[maxp]))
-            # 	print(self.tau0)
-            #print(self.phaselist)
-            
-        if do_debug:
-            fig = plt.figure(figsize = (12,6))
-            plt.plot(self.qmax, 'o', c='r', label = 'quantum')
-            plt.plot(self.cmax, 'o', c='b', label = 'classical')
-            plt.plot(self.qmax, c='r', lw=2, ls=':')
-            plt.plot(self.cmax, c='b', lw=2, ls=':')
-            plt.axvspan(nr_steps*M,nr_steps*M+1, color = 'k', alpha=0.1, label = 'free evo')
-            plt.xlabel('Experiment number', fontsize = 20)
-            plt.ylabel('Frequency (kHz)', fontsize = 20)
-            plt.legend()
-            plt.grid(True)
-            plt.show()
-            
-            fig = plt.figure(figsize = (12,6))
-            plt.plot([abs(self.cmax[j] - self.qmax[j])/self.FWHM_lst[j] for j in range(len(self.cmax))], 'o', c='g')
-            plt.plot([abs(self.cmax[j] - self.qmax[j])/self.FWHM_lst[j] for j in range(len(self.cmax))], c='g', lw=2, ls=':')
-            plt.axvspan(nr_steps*M,nr_steps*M+1, color = 'k', alpha=0.1)
-            plt.xlabel('Experiment number', fontsize = 20)
-            plt.ylabel('$|\delta F|$/FWHM', fontsize = 20)
-            plt.grid(True)
-            plt.show()
 
     '''
     def make_gif (self, delete_plots = False):
@@ -621,7 +490,6 @@ class BathNarrowing (TimeSequenceQ):
 
         i = 0
         k = self.find_optimal_k ()
-        #k=k-3
 
         while ((k<self.K-2) and (i<max_nr_steps) and (t2star<100e-6)):
             self.single_estimation_step (k=k, T2_track=False, adptv_phase = False,
@@ -660,31 +528,6 @@ class BathNarrowing (TimeSequenceQ):
         if do_plot:
             self._plot_T2star_list()
 
-    def adaptive_multipeak (self, max_nr_steps=50, 
-                do_plot = False, do_save = False):
-
-        # this is still to be tested!! -CB (based on DS work)
-        # one more thing to test is whether we can infer the multi-peak behaviour
-        # by looking at the history of the outcomes (is it why we need "genetic" approaches?)
-
-        k = self.find_optimal_k ()
-
-
-        while ((k+1<self.K) and (i<max_nr_steps)):
-
-            mp = self.is_multipeak ()
-
-            if mp:
-                if k > 0:
-                    k = k-1
-            else:
-                if (2**k)*self.tau0 > 1e-3/self.FWHM():
-                    while ((2**k)*self.tau0 > 1e-3/self.FWHM() and (k>=0)):
-                        k = k-1
-                    print('Ramsey time exceeded 1/FWHM, reduced measurement time')
-                else:
-                    k = k+1
-
     def adaptive_2steps (self, max_nr_steps=50, 
                 do_plot = False, do_save = False):
 
@@ -702,9 +545,6 @@ class BathNarrowing (TimeSequenceQ):
 
         while ((k<self.K) and (i<max_nr_steps)):
 
-            #print ("t2star: ", t2star, "< ", target_T2star, "? ", (t2star<target_T2star))
-            #self.k = self.find_optimal_k (T2_track = False, do_debug = do_debug)
-            #print ("CURRENT k: ", self.k)
             k = self.find_optimal_k ()
 
             m_list = self.single_estimation_step (k=k+1, T2_track=False, adptv_phase = True,
@@ -718,9 +558,5 @@ class BathNarrowing (TimeSequenceQ):
             self._plot_T2star_list()
  
 
-# TO-DO LIST
-#
-# 1) develop semi-classical algorithm and check that it works fine
-# 2) match between classical and quantum distribution is decent but not spectacular. Why?
 
 
