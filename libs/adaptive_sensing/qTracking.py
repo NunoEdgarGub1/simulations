@@ -74,44 +74,59 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         # The "called modules" is  a list that tracks which functions have been used
         # so that they are saved in the output hdf5 file.
         # When you look back into old data, it's nice to have some code recorded
-        # to make sure you know how the data was generated (especially if you tried out diffeent things)
+        # to make sure you know how the data was generated 
+        # (especially if you tried out diffeent things)
         self._called_modules = ['ramsey', 'bayesian_update', 'calc_acc_phase']
         self.folder = folder
 
     def set_log_level (self, value):
         self.log.setLevel(value)
 
-    def set_spin_bath (self, cluster, nr_spins, concentration, verbose = False, do_plot = False, eng_bath=False):
+    def set_bath_validity_conditions (self, A=None, sparse=None):
+        self._A_thr = A
+        self._sparse_thr = sparse
+
+    def _check_bath_validity (self):
+        self.log.debug ("large A ctr: "+str(self.nbath.close_cntr)
+                +"  sparse? "+str(self._sparse_thr))
+        condition = ((self.nbath.close_cntr < 1) and (not(self._sparse_thr)))
+        self.log.debug ("Valid bath? "+str(condition))
+        return condition
+
+    def generate_spin_bath (self, cluster, nr_spins, concentration):
         
-        # Spin bath initialization
+        valid_bath = False
         self.nbath = NSpin.FullBathDynamics()
-        self.nbath.set_experiment(cluster = cluster, nr_spins=nr_spins, concentration = concentration,
-                do_plot = False, eng_bath=eng_bath)
-        self.T2star = self.nbath.T2h
+        self.nbath.set_thresholds (A=self._A_thr, sparse=self._sparse_thr)
+        
+        while not(valid_bath):
 
-        self.over_op = self.nbath._overhauser_op()
-
-        self.T2starlist.append(self.T2star)
-        self.T2_est = self.nbath.T2est
-        self.timelist.append(0)
-        self._latest_outcome = None
+            self.nbath.generate (cluster = cluster, nr_spins=nr_spins, 
+                concentration = concentration, do_plot = False, eng_bath=False)
+            valid_bath = self._check_bath_validity()
 
     def load_bath (self, nBath):
         if isinstance (nBath, NSpin.FullBathDynamics):
             self.nbath = nBath
+            return True
         else:
             self.log.error ("Object is not a nuclear spin bath.")
+            return False
 
     def return_bath (self):
         return self.nbath
 
-    def reset_unpolarized_bath (self):
-        self.nbath.reset_bath()
+    def reset (self):
+        self.nbath.reset_bath_unpolarized()
+        self.T2star = self.nbath.T2h
+        self.over_op = self.nbath._overhauser_op()
+
         self.T2starlist = []
         self.timelist = []
         self.T2starlist.append(self.T2star)
         self.T2_est = self.nbath.T2est
         self.timelist.append(0)
+        self._latest_outcome = None
 
         self.k=0
         self._curr_res = 1
@@ -136,11 +151,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         p = np.exp(-0.5*(self.beta/self._dfB0)**2) 
         p = p/(np.sum(p))
-        az, p_az = self.nbath.get_probability_density()
-        az2 = np.roll(az,-1)
-        if max(az2[:-1]-az[:-1]) > 10:
-            self.log.warning ('Skipped sparse distribution:{0} kHz'.format(max(az2[:-1]-az[:-1])))
-            self.skip = True
+
         self.norm = 1
         self.p_k = np.fft.ifftshift(np.abs(np.fft.ifft(p, self.discr_steps))**2)
         self.renorm_p_k()

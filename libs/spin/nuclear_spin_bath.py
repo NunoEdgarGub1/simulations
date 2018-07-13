@@ -528,7 +528,6 @@ class CentralSpinExperiment ():
 	def gaussian(self, x, mu, sig):
 		return 1./(sqrt(2.*pi)*sig)*np.exp(-np.power((x - mu)/sig, 2.)/2)
 
-	
 	def print_nuclear_spins (self):
 
 		T = [['', 'Ap (kHz)', 'Ao (kHz)', 'r (A)'], ['------', '------', '------', '------']]
@@ -538,7 +537,8 @@ class CentralSpinExperiment ():
 
 		print(tb.tabulate(T, stralign='center'))
 	
-	def set_experiment(self, cluster, nr_spins, concentration = .1, hf_approx = False, clus = True, do_plot = False, eng_bath=False):
+	def generate (self, cluster, nr_spins, concentration = .1, 
+				hf_approx = False, clus = True, do_plot = False, eng_bath=False):
 		'''
 		Sets up spin bath and external field
 
@@ -570,6 +570,7 @@ class CentralSpinExperiment ():
 		close_cntr = 0
 
 		if not(self._A_thr == None):
+			self.log.debug("Checking hyperfine threshold...")
 			for j in range(self._nr_nucl_spins):
 				if np.abs(self.Ap[j]) > self._A_thr:
 					close_cntr +=1
@@ -624,7 +625,6 @@ class CentralSpinExperiment ():
 		self._curr_rho = np.eye(2**self._nr_nucl_spins)/np.trace(np.eye(2**self._nr_nucl_spins))
 
 
-
 		#Create sub matrices based on result of group algo
 		if self._clus:
 			self._block_rho = []
@@ -639,10 +639,10 @@ class CentralSpinExperiment ():
 
 		if not(self._sparse_thr == None):
 			az, p_az = self.get_probability_density()
-	        az2 = np.roll(az,-1)
-	        if max(az2[:-1]-az[:-1]) > self._sparse_thr:
-	            self.log.warning ('Skipped sparse distribution:{0} kHz'.format(max(az2[:-1]-az[:-1])))
-	            self.sparse_distribution = True
+			az2 = np.roll(az,-1)
+			if max(az2[:-1]-az[:-1]) > self._sparse_thr:
+				self.log.warning ('Sparse distribution:{0} kHz'.format(max(az2[:-1]-az[:-1])))
+				self.sparse_distribution = True
 
 		self.values_Az_kHz = pd[0]
 		stat = self.get_overhauser_stat()

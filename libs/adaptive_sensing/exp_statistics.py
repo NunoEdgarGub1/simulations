@@ -27,6 +27,10 @@ class ExpStatistics (DO.DataObjectHDF5):
 		self.auto_set = False
 		self._called_modules = []
 		self._semiclassical = False
+
+		self._A_thr = None
+		self._sparse_thr = 10
+
 		self.log = logging.getLogger ('qTrack_stats')
 		self._log_level = logging.INFO 
 		logging.basicConfig (level = self._log_level)
@@ -91,14 +95,26 @@ class ExpStatistics (DO.DataObjectHDF5):
 	def set_semiclassical (self, value=True):
 		self._semiclassical = value
 
-	def _generate_new_experiment (self, folder):
+	def set_bath_validity_conditions (self, A=None, sparse=None):
+		self._A_thr = A
+		self._sparse_thr = sparse
+
+	def _generate_new_experiment (self, folder, nBath = None):
 
 		exp = qtrack.BathNarrowing (time_interval=0, overhead = 0, folder=folder)
 		exp.set_log_level (self._log_level)
 		exp.semiclassical = self._semiclassical
+		exp.set_bath_validity_conditions (A=self._A_thr, sparse=self._sparse_thr)
 		exp._save_plots = self._save_plots
-		exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
-				 concentration=self.conc, do_plot = False, eng_bath=False)
+		if (nBath == None):
+			exp.generate_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
+				 	concentration=self.conc)
+		else:
+			a = exp.load_bath (nBath)
+			if not(a):
+				self.log.warning ("Generate a new bath")
+				exp.generate_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
+					 	concentration=self.conc)
 		exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, 
 				G=self.G, F=self.F, N=self.N)
 		exp.target_T2star = 2**(exp.K)*exp.tau0
@@ -119,6 +135,8 @@ class ExpStatistics (DO.DataObjectHDF5):
 			f, newpath = self.__generate_file (title = '_'+funct_name+'_'+string_id)
 
 		exp = self._generate_new_experiment (folder = newpath)
+
+		'''
 
 		i = 0
 		while (i < self.nr_reps):
@@ -170,7 +188,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 
 		self.total_steps = max_steps
 		self.newpath = newpath
-
+		'''
 
 	def simulate_different_bath (self, funct_name, max_steps, string_id = '', 
 				do_save = False, do_plot = False, do_debug = False, semiclassical = False):
