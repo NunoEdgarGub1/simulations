@@ -528,6 +528,8 @@ class BathNarrowing (TimeSequenceQ):
  
     def adaptive_1step (self, max_nr_steps=50):
 
+        print ("Adaptive: max nr steps: ", max_nr_steps)
+
         try:
             self.t2star = self.T2starlist[-1]
         except:
@@ -538,12 +540,13 @@ class BathNarrowing (TimeSequenceQ):
 
         fwhm = self.FWHM()
 
-        while ((k+1<self.K-1) and (i<max_nr_steps)):
+        while ((k<=self.K) and (i<max_nr_steps)):
+            print ("k/K: ", k, self.K)
 
             fwhm = self.FWHM()
 
-            k = self.find_optimal_k ()-1
-            self.single_estimation_step (k=k+1, T2_track=False, adptv_phase = True)
+            k = self.find_optimal_k ()
+            self.single_estimation_step (k=k, T2_track=False, adptv_phase = True)
             self.t2star = self.T2starlist[-1]
             i+=1
 
