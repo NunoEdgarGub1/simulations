@@ -31,6 +31,9 @@ class ExpStatistics (DO.DataObjectHDF5):
 		self._A_thr = None
 		self._sparse_thr = 10
 
+		self._save_plots = False
+		self._show_plots = False
+
 		self.log = logging.getLogger ('qTrack_stats')
 		self._log_level = logging.INFO 
 		logging.basicConfig (level = self._log_level)
@@ -99,6 +102,13 @@ class ExpStatistics (DO.DataObjectHDF5):
 		self._A_thr = A
 		self._sparse_thr = sparse
 
+	def generate_bath (self):
+		exp = qtrack.BathNarrowing (time_interval=0, overhead = 0, folder=folder)
+		exp.set_bath_validity_conditions (A=self._A_thr, sparse=self._sparse_thr)
+		exp.generate_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
+				 	concentration=self.conc)
+		return exp.nbath
+
 	def _generate_new_experiment (self, folder, nBath = None):
 
 		exp = qtrack.BathNarrowing (time_interval=0, overhead = 0, folder=folder)
@@ -113,19 +123,19 @@ class ExpStatistics (DO.DataObjectHDF5):
 			a = exp.load_bath (nBath)
 			if not(a):
 				self.log.warning ("Generate a new bath")
-				exp.generate_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
-					 	concentration=self.conc)
+				exp.generate_spin_bath (cluster=np.zeros(self.nr_spins), 
+						nr_spins=self.nr_spins, concentration=self.conc)
+		exp.reset()
 		exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, 
 				G=self.G, F=self.F, N=self.N)
 		exp.target_T2star = 2**(exp.K)*exp.tau0
 		exp.set_flip_prob (0)
 		exp.initialize()
+		exp.set_plot_settings (do_show = self._show_plots, do_save = self._save_plots)
 		return exp
 
-
-	def simulate_same_bath (self, funct_name, max_steps, string_id = '', 
-				do_save = False, do_plot = False, do_debug = False,
-				nBath = None):
+	def simulate (self, funct_name, max_steps, string_id = '', 
+				do_save = False, nBath = None):
 
 		self._called_modules.append('simulate')
 		self.results = np.zeros((self.nr_reps, max_steps))
@@ -134,61 +144,39 @@ class ExpStatistics (DO.DataObjectHDF5):
 		if do_save:
 			f, newpath = self.__generate_file (title = '_'+funct_name+'_'+string_id)
 
-		exp = self._generate_new_experiment (folder = newpath)
+		exp = self._generate_new_experiment (folder = newpath, nBath = nBath)
 
-		'''
-
-		i = 0
-		while (i < self.nr_reps):
+		for i in range(self.nr_reps):
 
 			print ("Repetition nr: ", i+1)
-
-			if not exp.skip:
 				
-				exp.reset_unpolarized_bath()
-				exp.initialize()
-				exp.semiclassical = self._semiclassical
-				exp.nbath.print_nuclear_spins()
-				exp.curr_rep = i
-				a = getattr(exp, funct_name) (max_nr_steps=max_steps, 
-						do_plot = do_plot)
-				l = len (exp.T2starlist)
-				if (l>=max_steps):
-					l -= 1
-				self.results [i, :l] = exp.T2starlist[:l]/exp.T2starlist[0]
-				self.results [i, l:max_steps] = (exp.T2starlist[-1]/exp.T2starlist[0])*np.ones(max_steps-l)
-				i += 1
+			exp.reset()
+			exp.initialize()
+			exp.semiclassical = self._semiclassical
+			exp.curr_rep = i
+			a = getattr(exp, funct_name) (max_nr_steps=max_steps)
+			l = len (exp.T2starlist)
+			if (l>=max_steps):
+				l -= 1
+			self.results [i, :l] = exp.T2starlist[:l]/exp.T2starlist[0]
+			self.results [i, l:max_steps] = (exp.T2starlist[-1]/exp.T2starlist[0])*np.ones(max_steps-l)
 
-				if do_save:
-					rep_nr = str(i).zfill(len(str(self.nr_reps)))
-					grp = f.create_group('rep_'+rep_nr)
-					self.save_object_all_vars_to_file (obj = exp, f = grp)
-					self.save_object_params_list_to_file (obj = exp, f = grp, 
-							params_list= ['T2starlist', 'outcomes_list', 'tau_list', 'phase_list'])
-					grp_nbath = grp.create_group ('nbath')
-					self.save_object_all_vars_to_file (obj = exp.nbath, f = grp_nbath)
-					self.save_object_params_list_to_file (obj = exp.nbath, f = grp_nbath, 
-							params_list= ['Ao', 'Ap', 'Azx', 'Azy', 'values_Az_kHz', 'r_ij', 'theta_ij'])
-
-			else:
-				
-				exp = qtrack.BathNarrowing (time_interval=100e-6, overhead=0, folder=newpath)
-				exp.set_log_level (self._log_level)
-				exp.semiclassical = self._semiclassical
-				exp._save_plots = self._save_plots
-				exp.set_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
-						 concentration=self.conc, do_plot = do_plot, eng_bath=False)
-				exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, G=self.G, F=self.F, N=10)
-				exp.target_T2star = 2**(exp.K)*exp.tau0
-				exp.set_flip_prob (0)
-				exp.initialize()
+			if do_save:
+				rep_nr = str(i).zfill(len(str(self.nr_reps)))
+				grp = f.create_group('rep_'+rep_nr)
+				self.save_object_all_vars_to_file (obj = exp, f = grp)
+				self.save_object_params_list_to_file (obj = exp, f = grp, 
+						params_list= ['T2starlist', 'outcomes_list', 'tau_list', 'phase_list'])
+				grp_nbath = grp.create_group ('nbath')
+				self.save_object_all_vars_to_file (obj = exp.nbath, f = grp_nbath)
+				self.save_object_params_list_to_file (obj = exp.nbath, f = grp_nbath, 
+						params_list= ['Ao', 'Ap', 'Azx', 'Azy', 'values_Az_kHz', 'r_ij', 'theta_ij'])
 
 		if do_save:
 			f.close()
 
 		self.total_steps = max_steps
 		self.newpath = newpath
-		'''
 
 	def simulate_different_bath (self, funct_name, max_steps, string_id = '', 
 				do_save = False, do_plot = False, do_debug = False, semiclassical = False):

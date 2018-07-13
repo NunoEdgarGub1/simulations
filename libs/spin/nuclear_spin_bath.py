@@ -224,9 +224,9 @@ class NSpinBath ():
 	    T2_l = sum(Ap_NV[0][u]**2 + Ao_NV[0][u]**2 for u in range(len(Ap_NV[0])))**-0.5
 	
 	    self._nr_nucl_spins = len(Ap_NV[0])
-	    self.log.info ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
-	    self.log.info ("T2* -- high field: {0} ms".format(T2_h*1e3))
-	    self.log.info ("T2* -- low field: {0} ms".format (T2_l*1e3))
+	    self.log.debug ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
+	    self.log.debug ("T2* -- high field: {0} ms".format(T2_h*1e3))
+	    self.log.debug ("T2* -- low field: {0} ms".format (T2_l*1e3))
 	    self.T2star_lowField = T2_l
 	    self.T2star_highField = T2_h
         
@@ -641,8 +641,10 @@ class CentralSpinExperiment ():
 			az, p_az = self.get_probability_density()
 			az2 = np.roll(az,-1)
 			if max(az2[:-1]-az[:-1]) > self._sparse_thr:
-				self.log.warning ('Sparse distribution:{0} kHz'.format(max(az2[:-1]-az[:-1])))
+				self.log.debug ('Sparse distribution:{0} kHz'.format(max(az2[:-1]-az[:-1])))
 				self.sparse_distribution = True
+			else:
+				self.sparse_distribution = False
 
 		self.values_Az_kHz = pd[0]
 		stat = self.get_overhauser_stat()
@@ -1076,6 +1078,8 @@ class FullBathDynamics (CentralSpinExperiment):
 
 	def __init__ (self):
 	
+		super()
+
 		self.gam_el = 1.760859 *10**11 #Gyromagnetic ratio rad s-1 T-1
 		self.gam_n = 67.262 *10**6 #rad s-1 T-1
 		self.hbar = 1.05457173*10**(-34)

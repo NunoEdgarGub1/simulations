@@ -79,6 +79,10 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self._called_modules = ['ramsey', 'bayesian_update', 'calc_acc_phase']
         self.folder = folder
 
+    def set_plot_settings (self, do_show = False, do_save = False):
+        self._save_plots = do_save
+        self._show_plots = do_show
+
     def set_log_level (self, value):
         self.log.setLevel(value)
 
@@ -88,8 +92,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
     def _check_bath_validity (self):
         self.log.debug ("large A ctr: "+str(self.nbath.close_cntr)
-                +"  sparse? "+str(self._sparse_thr))
-        condition = ((self.nbath.close_cntr < 1) and (not(self._sparse_thr)))
+                +"  sparse? "+str(self.nbath.sparse_distribution))
+        condition = ((self.nbath.close_cntr < 1) and (not(self.nbath.sparse_distribution)))
         self.log.debug ("Valid bath? "+str(condition))
         return condition
 
@@ -159,8 +163,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self._curr_res = 1
         self.add_phase = 0
 
-        if do_plot:
-            self.plot_hyperfine_distr(tau=1e-3, theta=0)
+        #if do_plot:
+        #    self.plot_hyperfine_distr(tau=1e-3, theta=0)
         
     def fitting(self, p, paz, az, T2track, T2est):
         '''
@@ -192,7 +196,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         return norm, error
         
 
-    def plot_hyperfine_distr(self, tau, theta, T2track = False, T2est = 1e-3, do_save = True):
+    def plot_hyperfine_distr(self, tau, theta, T2track = False, T2est = 1e-3):
         
         T2est = self.T2_est
         
@@ -234,6 +238,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         curr_t2star = int(self.T2starlist[-1]*1e6)
         curr_tau = tau*1e6
         curr_phase = int(theta*180/3.14)
+
         plt.plot (self.beta*1e-3, p*self.norm , color='green', linewidth = 2, label = 'classical')
         plt.title ("tau = " +str(curr_tau)+ " us, phase = "+str(curr_phase)+" deg --> outcome: "+str(outcome)+" -- T2* = "+str(curr_t2star)+ " us", fontsize = 18)
         plt.xlabel (' hyperfine (kHz)', fontsize=18)
@@ -241,7 +246,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         plt.xlim((max(-1000, m*1e-3-15*fwhm), min (1000, m*1e-3+15*fwhm)))
         if self._save_plots:
             plt.savefig(os.path.join(self.folder+'/', 'rep_%.04d_%.04d.png'%(self.curr_rep, self.step)))
-        plt.show()
+        if self._show_plots:
+            plt.show()
         plt.close("all")
         if not(self.semiclassical):
             self.p_az_old = p_az2/max(p_az2)
@@ -413,8 +419,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
                 self.log.warning('Ramsey time exceeded 1/FWHM, reduced measurement time')
         return k
 
-    def single_estimation_step (self, k, T2_track=False, adptv_phase = True, 
-                do_save = False, do_plot=False):
+    def single_estimation_step (self, k, T2_track=False, adptv_phase = True):
 
         t_i = int(2**k)
         ttt = -2**(self.K-k)
@@ -462,13 +467,13 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             self.log.debug ("Params: tau = {0} us --- phase: {1} -- res: {2}".format(t_i*self.tau0*1e6, int (ctrl_phase*180/3.14), m_res))
             self.log.debug ("Current T2* = {0} us".format(int(self.T2starlist[-1]*1e8)/100.))
 
-            if do_plot:
+            if ((self._show_plots) or (self._save_plots)):
                 if m==0:
                     self.plot_hyperfine_distr(tau=t_i*self.tau0, theta = ctrl_phase, 
-                        T2track = T2_track, T2est = self.T2_est, do_save = do_save)
+                        T2track = T2_track, T2est = self.T2_est)
                 else:
                     self.plot_hyperfine_distr(tau=t_i*self.tau0, theta = ctrl_phase,
-                        T2track = False, T2est = self.T2_est, do_save = do_save)
+                        T2track = False, T2est = self.T2_est)
 
 
     '''
@@ -485,16 +490,20 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 class BathNarrowing (TimeSequenceQ):
 
     def _plot_T2star_list (self):
-        plt.figure(figsize = (8, 5))
-        plt.plot (np.array(self.T2starlist)*1e6, linewidth=2, color='royalblue')
-        plt.plot (np.array(self.T2starlist)*1e6, 'o', color='royalblue')
-        plt.xlabel ('step nr', fontsize=18)
-        plt.ylabel ('T2* (us)')
+        
+        if ((self._show_plots) or (self._save_plots)):
+            plt.figure(figsize = (8, 5))
+            plt.plot (np.array(self.T2starlist)*1e6, linewidth=2, color='royalblue')
+            plt.plot (np.array(self.T2starlist)*1e6, 'o', color='royalblue')
+            plt.xlabel ('step nr', fontsize=18)
+            plt.ylabel ('T2* (us)')
 
-        if self._save_plots:
-            plt.savefig(os.path.join(self.folder+'/', 
-                    'rep_%.04d_%.04d.png'%(self.curr_rep,self.step+1)))
-        plt.show()
+            if self._save_plots:
+                plt.savefig(os.path.join(self.folder+'/', 
+                        'rep_%.04d_%.04d.png'%(self.curr_rep,self.step+1)))
+            if self._show_plots:
+                plt.show()
+            plt.close ('all')
 
     def non_adaptive (self, max_nr_steps=50, 
             do_plot = False, do_save = False):
@@ -517,8 +526,7 @@ class BathNarrowing (TimeSequenceQ):
         if do_plot:
             self._plot_T2star_list()
  
-    def adaptive_1step (self, max_nr_steps=50,
-            do_plot = False, do_save = False):
+    def adaptive_1step (self, max_nr_steps=50):
 
         try:
             self.t2star = self.T2starlist[-1]
@@ -530,19 +538,16 @@ class BathNarrowing (TimeSequenceQ):
 
         fwhm = self.FWHM()
 
-        while ((k+1<self.K-1) and (i<max_nr_steps) and (fwhm>self._initial_fwhm/64.)):
+        while ((k+1<self.K-1) and (i<max_nr_steps)):
 
             fwhm = self.FWHM()
-            print ("Current FWHM: ", fwhm*1e-3, " kHz   -- FWHM reduction: ", self._initial_fwhm/fwhm)
 
             k = self.find_optimal_k ()-1
-            self.single_estimation_step (k=k+1, T2_track=False, adptv_phase = True,
-                            do_save = do_save, do_plot=do_plot)
+            self.single_estimation_step (k=k+1, T2_track=False, adptv_phase = True)
             self.t2star = self.T2starlist[-1]
             i+=1
 
-        if do_plot:
-            self._plot_T2star_list()
+        self._plot_T2star_list()
 
     def adaptive_2steps (self, max_nr_steps=50, 
                 do_plot = False, do_save = False):
