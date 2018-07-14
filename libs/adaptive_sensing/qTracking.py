@@ -505,6 +505,24 @@ class BathNarrowing (TimeSequenceQ):
         k = self.find_optimal_k ()
 
         while ((k<=self.K) and (i<max_nr_steps)):
+            M = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True)
+            self.t2star = self.T2starlist[-1]
+            i+=M
+            k+=1
+
+        self._plot_T2star_list()
+
+    def fully_non_adaptive (self, max_nr_steps=50):
+
+        try:
+            self.t2star = self.T2starlist[-1]
+        except:
+            self.t2star = 0
+
+        i = 0
+        k = self.find_optimal_k ()
+
+        while ((k<=self.K) and (i<max_nr_steps)):
             M = self.single_estimation_step (k=k, T2_track=False, adptv_phase = False)
             self.t2star = self.T2starlist[-1]
             i+=M

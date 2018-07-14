@@ -82,8 +82,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 
 	def __generate_file (self, title = ''):
 
-		fName = time.strftime ('%Y%m%d_%H%M%S')+ '_qTrack_G'+str(self.G)+
-					'F'+str(self.F)+'_'+title
+		fName = time.strftime ('%Y%m%d_%H%M%S')+ '_qTrack_G'+str(self.G)+'F'+str(self.F)+'_'+title
 		newpath = os.path.join (self.folder, fName) 
 		if not os.path.exists(newpath):
 			os.makedirs(newpath)
@@ -158,10 +157,11 @@ class ExpStatistics (DO.DataObjectHDF5):
 			exp.curr_rep = i
 			a = getattr(exp, funct_name) (max_nr_steps=max_steps)
 			l = len (exp.T2starlist)
-			if (l>=max_steps):
-				l -= 1
-			self.results [i, :l] = exp.T2starlist[:l]/exp.T2starlist[0]
-			self.results [i, l:max_steps] = (exp.T2starlist[-1]/exp.T2starlist[0])*np.ones(max_steps-l)
+			if (l<max_steps):				
+				self.results [i, :l] = exp.T2starlist[:l]/exp.T2starlist[0]
+				self.results [i, l:max_steps] = (exp.T2starlist[-1]/exp.T2starlist[0])*np.ones(max_steps-l)
+			else:
+				self.results [i, :max_steps] = exp.T2starlist[:l]/exp.T2starlist[0]
 
 			if do_save:
 				rep_nr = str(i).zfill(len(str(self.nr_reps)))
