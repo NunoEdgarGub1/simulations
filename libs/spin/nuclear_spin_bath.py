@@ -514,6 +514,7 @@ class CentralSpinExperiment ():
 
 		# "evolution dictionary": stores data for each step
 		self._evol_dict = {}
+		self._store_evol_dict = True
 
 		self.log = logging.getLogger ('nBath')
 		logging.basicConfig (level = logging.INFO)
@@ -524,6 +525,9 @@ class CentralSpinExperiment ():
 
 	def set_log_level (self, value):
 		self.log.setLevel (value)
+
+	def deactivate_evol_dict (self):
+		self._store_evol_dict = False
 
 	def gaussian(self, x, mu, sig):
 		return 1./(sqrt(2.*pi)*sig)*np.exp(-np.power((x - mu)/sig, 2.)/2)
@@ -648,14 +652,15 @@ class CentralSpinExperiment ():
 
 		self.values_Az_kHz = pd[0]
 		stat = self.get_overhauser_stat()
-		self._evol_dict ['0'] = {
-			#'rho': self._curr_rho,
-			'mean_OH': np.real(stat[0]),
-			'std_OH': np.real(stat[1]),
-			'prob_Az': pd[1],
-			#'prob_Az_test': pd[2],
-			'outcome': None,
-		}
+		if self._store_evol_dict:
+			self._evol_dict ['0'] = {
+				#'rho': self._curr_rho,
+				'mean_OH': np.real(stat[0]),
+				'std_OH': np.real(stat[1]),
+				'prob_Az': pd[1],
+				#'prob_Az_test': pd[2],
+				'outcome': None,
+			}
 
 
 	def reset_bath_unpolarized (self, do_plot = True):
@@ -676,12 +681,14 @@ class CentralSpinExperiment ():
 		pd = np.real(self.get_probability_density())
 		self.values_Az_kHz = pd[0]
 		stat = self.get_overhauser_stat()
-		self._evol_dict ['0'] = {
-			'mean_OH': np.real(stat[0]),
-			'std_OH': np.real(stat[1]),
-			'prob_Az': pd[1],
-			'outcome': None,
-		}
+		self._evol_dict = {}
+		if self._store_evol_dict:
+			self._evol_dict ['0'] = {
+				'mean_OH': np.real(stat[0]),
+				'std_OH': np.real(stat[1]),
+				'prob_Az': pd[1],
+				'outcome': None,
+			}
 
 
 
@@ -1049,32 +1056,38 @@ class CentralSpinExperiment ():
 
 	def plot_bath_evolution (self):
 
-		y = self.values_Az_kHz
-		x = np.arange(self._curr_step+1)
-		
-		[X, Y] = np.meshgrid (x,y)
+		if self._store_evol_dict:
 
-		# make 2D matrix with prob(Az) as function of time
-		M = np.zeros ([len(y), self._curr_step+1])
+			y = self.values_Az_kHz
+			x = np.arange(self._curr_step+1)
+			
+			[X, Y] = np.meshgrid (x,y)
 
-		for j in range(self._curr_step+1):
-			M [:, j] = np.ndarray.transpose(self._evol_dict[str(j)]['prob_Az'])
+			# make 2D matrix with prob(Az) as function of time
+			M = np.zeros ([len(y), self._curr_step+1])
 
-		plt.figure (figsize = (15, 8));
-		plt.pcolor (X, Y, M)
-		plt.xlabel ('step number', fontsize=22)
-		plt.ylabel ('Az (kHz)', fontsize=22)
-		for j in y:
-			plt.axhline(j,c='r',alpha=0.1,ls=':')
-		plt.colorbar(orientation='vertical')
-		plt.show()
+			for j in range(self._curr_step+1):
+				M [:, j] = np.ndarray.transpose(self._evol_dict[str(j)]['prob_Az'])
 
+			plt.figure (figsize = (15, 8));
+			plt.pcolor (X, Y, M)
+			plt.xlabel ('step number', fontsize=22)
+			plt.ylabel ('Az (kHz)', fontsize=22)
+			for j in y:
+				plt.axhline(j,c='r',alpha=0.1,ls=':')
+			plt.colorbar(orientation='vertical')
+			plt.show()
+
+		else:
+
+			self.log.warning ("Evolution dictionary is not updated.")
 
 class FullBathDynamics (CentralSpinExperiment):
 
 	def __init__ (self):
 	
 		super()
+		self._store_evol_dict = False
 
 		self.gam_el = 1.760859 *10**11 #Gyromagnetic ratio rad s-1 T-1
 		self.gam_n = 67.262 *10**6 #rad s-1 T-1
@@ -1344,15 +1357,17 @@ class FullBathDynamics (CentralSpinExperiment):
 		
 		# update evolution dictionary
 		self._curr_step += 1
-		pd = np.real(self.get_probability_density())
-		stat = self.get_overhauser_stat()
-		self._evol_dict [str(self._curr_step)] = {
-			#'rho': self._curr_rho,
-			'mean_OH': stat[0],
-			'std_OH': stat[1],
-			'prob_Az': pd[1],
-			'outcome': ms,
-		}
+
+		if self._store_evol_dict:
+			pd = np.real(self.get_probability_density())
+			stat = self.get_overhauser_stat()
+			self._evol_dict [str(self._curr_step)] = {
+				#'rho': self._curr_rho,
+				'mean_OH': stat[0],
+				'std_OH': stat[1],
+				'prob_Az': pd[1],
+				'outcome': ms,
+			}
 		
 		return ms
 
@@ -1379,13 +1394,15 @@ class FullBathDynamics (CentralSpinExperiment):
 		
 		# update evolution dictionary
 		self._curr_step += 1
-		pd = np.real(self.get_probability_density())
-		stat = self.get_overhauser_stat()
-		self._evol_dict [str(self._curr_step)] = {
-			#'rho': self._curr_rho,
-			'mean_OH': stat[0],
-			'std_OH': stat[1],
-			'prob_Az': pd[1],
-			'outcome': ms,
-		}
+
+		if self._store_evol_dict:
+			pd = np.real(self.get_probability_density())
+			stat = self.get_overhauser_stat()
+			self._evol_dict [str(self._curr_step)] = {
+				#'rho': self._curr_rho,
+				'mean_OH': stat[0],
+				'std_OH': stat[1],
+				'prob_Az': pd[1],
+				'outcome': ms,
+			}
 

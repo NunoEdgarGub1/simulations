@@ -32,6 +32,8 @@ class ExpStatistics (DO.DataObjectHDF5):
 
 		self._save_plots = False
 		self._show_plots = False
+		self._save_analysis = False
+		self._save_bath_evol = False
 
 		self.log = logging.getLogger ('qTrack_stats')
 		self._log_level = logging.INFO 
@@ -59,15 +61,19 @@ class ExpStatistics (DO.DataObjectHDF5):
 		self.nr_spins = nr_spins
 		self.conc = concentration
 
+	def save_bath_evolution (self, value):
+		self._save_bath_evol = value
+
 	def print_parameters(self):
 		print ("##### Parameters:")
 		for k in self.__dict__.keys():
 			if ((type (self.__dict__[k]) is float) or (type (self.__dict__[k]) is int) or (type (self.__dict__[k]) is str)):
 				print (' - - ', k, ': ', self.__dict__[k])
 
-	def set_plot_settings (self, do_show = False, do_save = False):
+	def set_plot_settings (self, do_show = False, do_save = False, save_analysis = False):
 		self._save_plots = do_save
 		self._show_plots = do_show
+		self._save_analysis = save_analysis
 
 	def __save_values(self, obj, file_handle):
 		for k in obj.__dict__.keys():
@@ -76,7 +82,8 @@ class ExpStatistics (DO.DataObjectHDF5):
 
 	def __generate_file (self, title = ''):
 
-		fName = time.strftime ('%Y%m%d_%H%M%S')+ '_qTrack'+title
+		fName = time.strftime ('%Y%m%d_%H%M%S')+ '_qTrack_G'+str(self.G)+
+					'F'+str(self.F)+'_'+title
 		newpath = os.path.join (self.folder, fName) 
 		if not os.path.exists(newpath):
 			os.makedirs(newpath)
@@ -99,10 +106,10 @@ class ExpStatistics (DO.DataObjectHDF5):
 		self._sparse_thr = sparse
 
 	def generate_bath (self):
-		exp = qtrack.BathNarrowing (time_interval=0, overhead = 0, folder=folder)
+		exp = qtrack.BathNarrowing (time_interval=0, overhead = 0, folder=self.folder)
 		exp.set_bath_validity_conditions (A=self._A_thr, sparse=self._sparse_thr)
 		exp.generate_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
-				 	concentration=self.conc)
+				 	concentration=self.conc, store_evol_dict = self._save_bath_evol)
 		return exp.nbath
 
 	def _generate_new_experiment (self, folder, nBath = None):
@@ -113,20 +120,21 @@ class ExpStatistics (DO.DataObjectHDF5):
 		exp._save_plots = self._save_plots
 		if (nBath == None):
 			exp.generate_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
-				 	concentration=self.conc)
+				 	concentration=self.conc, store_evol_dict = self._save_bath_evol)
 		else:
 			a = exp.load_bath (nBath)
 			if not(a):
 				self.log.warning ("Generate a new bath")
-				exp.generate_spin_bath (cluster=np.zeros(self.nr_spins), 
-						nr_spins=self.nr_spins, concentration=self.conc)
+				exp.generate_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
+					concentration=self.conc, store_evol_dict = self._save_bath_evol)
 		exp.reset()
 		exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, 
 				G=self.G, F=self.F, N=self.N)
 		exp.target_T2star = 2**(exp.K)*exp.tau0
 		exp.set_flip_prob (0)
 		exp.initialize()
-		exp.set_plot_settings (do_show = self._show_plots, do_save = self._save_plots)
+		exp.set_plot_settings (do_show = self._show_plots, 
+				do_save = self._save_plots, do_save_analysis = self._save_analysis)
 		return exp
 
 	def simulate (self, funct_name, max_steps, string_id = '', 
@@ -191,7 +199,7 @@ class ExpStatistics (DO.DataObjectHDF5):
 		plt.pcolor (X, Y, res_hist)
 		plt.xlabel ('nr of narrowing steps', fontsize = 18)
 		plt.ylabel ('T2*/T2*_init', fontsize = 18)
-		if self._save_plots:
+		if self._save_analysis:
 			plt.savefig(os.path.join(self.newpath+'/analysis.png'))
 		plt.show()
 
