@@ -464,6 +464,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
                     self.plot_hyperfine_distr(tau=t_i*self.tau0, theta = ctrl_phase,
                         T2track = False, T2est = self.T2_est)
 
+        return M
+
 
     '''
     def make_gif (self, delete_plots = False):
