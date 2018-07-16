@@ -24,10 +24,10 @@ for i in range(10):
     print ("BATH nr ", i+1)
     nbath = exp.generate_bath()
 
-    for G in [1,2,3,4,5]:
+    for F in [1,2,3,4,5]:
 
         print ("FULLY ADAPTIVE")
-        exp.set_msmnt_params (N=7, G=G, F=0, tau0=1e-6, fid0=1., fid1=0.)
+        exp.set_msmnt_params (N=7, G=3, F=F, tau0=1e-6, fid0=1., fid1=0.)
         nbath.reset_bath_unpolarized()
         exp.simulate (funct_name = 'adaptive_1step', max_steps = 100, nBath = nbath,
                     string_id = 'onlyAdd90_bath'+str(i), do_save = True)
@@ -37,7 +37,7 @@ for i in range(10):
 
         print ("NON ADAPTIVE K, adaptive phase")
         nbath.reset_bath_unpolarized()
-        exp.set_msmnt_params (N=7, G=G, F=0, tau0=1e-6, fid0=1., fid1=0.)
+        exp.set_msmnt_params (N=7, G=3, F=F, tau0=1e-6, fid0=1., fid1=0.)
         exp.simulate (funct_name = 'non_adaptive_k', max_steps = 100, nBath = nbath,
                     string_id = 'onlyAdd90_bath'+str(i), do_save = True)
         exp.analysis (nr_bins=25)
@@ -45,7 +45,7 @@ for i in range(10):
         time.sleep (60)
 
         print ("FULLY NON ADAPTIVE")
-        exp.set_msmnt_params (N=7, G=G, F=0, tau0=1e-6, fid0=1., fid1=0.)
+        exp.set_msmnt_params (N=7, G=3, F=F, tau0=1e-6, fid0=1., fid1=0.)
         nbath.reset_bath_unpolarized()
         exp.simulate (funct_name = 'fully_non_adaptive', max_steps = 100, nBath = nbath,
                     string_id = 'onlyAdd90_bath'+str(i), do_save = True)

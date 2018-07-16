@@ -524,15 +524,12 @@ class CentralSpinExperiment ():
 	def set_log_level (self, value):
 		self.log.setLevel (value)
 
-<<<<<<< HEAD
-=======
 	def deactivate_evol_dict (self):
 		self._store_evol_dict = False
 
 	def gaussian(self, x, mu, sig):
 		return 1./(sqrt(2.*pi)*sig)*np.exp(-np.power((x - mu)/sig, 2.)/2)
 
->>>>>>> 21e4fca8f885e8da40e209b671f9cc9196194a8c
 	def print_nuclear_spins (self):
 
 		T = [['', 'Ap (kHz)', 'Ao (kHz)', 'r (A)'], ['------', '------', '------', '------']]
