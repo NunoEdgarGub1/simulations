@@ -78,10 +78,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self._called_modules = ['ramsey', 'bayesian_update', 'calc_acc_phase']
         self.folder = folder
 
-    def set_plot_settings (self, do_show = False, do_save = False, do_save_analysis = False):
+    def set_plot_settings (self, do_show = False, do_save = False):
         self._save_plots = do_save
         self._show_plots = do_show
-        self._save_analysis = do_save_analysis
 
     def set_log_level (self, value):
         self.log.setLevel(value)
@@ -97,7 +96,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.log.debug ("Valid bath? "+str(condition))
         return condition
 
-    def generate_spin_bath (self, cluster, nr_spins, concentration, store_evol_dict = False):
+    def generate_spin_bath (self, cluster, nr_spins, concentration):
         
         valid_bath = False
         self.nbath = NSpin.FullBathDynamics()
@@ -108,9 +107,6 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             self.nbath.generate (cluster = cluster, nr_spins=nr_spins, 
                 concentration = concentration, do_plot = False, eng_bath=False)
             valid_bath = self._check_bath_validity()
-
-        if not(store_evol_dict):
-            self.nbath.deactivate_evol_dict()
 
     def load_bath (self, nBath):
         if isinstance (nBath, NSpin.FullBathDynamics):
@@ -464,7 +460,6 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
                     self.plot_hyperfine_distr(tau=t_i*self.tau0, theta = ctrl_phase,
                         T2track = False, T2est = self.T2_est)
 
-        return M
 
     '''
     def make_gif (self, delete_plots = False):
@@ -481,51 +476,34 @@ class BathNarrowing (TimeSequenceQ):
 
     def _plot_T2star_list (self):
         
-        if self._save_analysis:
+        if ((self._show_plots) or (self._save_plots)):
             plt.figure(figsize = (8, 5))
             plt.plot (np.array(self.T2starlist)*1e6, linewidth=2, color='royalblue')
             plt.plot (np.array(self.T2starlist)*1e6, 'o', color='royalblue')
             plt.xlabel ('step nr', fontsize=18)
             plt.ylabel ('T2* (us)')
-            
-            plt.savefig(os.path.join(self.folder+'/', 
+
+            if self._save_plots:
+                plt.savefig(os.path.join(self.folder+'/', 
                         'rep_%.04d_%.04d.png'%(self.curr_rep,self.step+1)))
             if self._show_plots:
                 plt.show()
             plt.close ('all')
 
-    def non_adaptive_k (self, max_nr_steps=50):
+    def non_adaptive (self, max_nr_steps=50):
 
         try:
-            self.t2star = self.T2starlist[-1]
+            t2star = self.T2starlist[-1]
         except:
-            self.t2star = 0
+            t2star = 0
 
         i = 0
         k = self.find_optimal_k ()
 
-        while ((k<=self.K) and (i<max_nr_steps)):
-            M = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True)
-            self.t2star = self.T2starlist[-1]
-            i+=M
-            k+=1
-
-        self._plot_T2star_list()
-
-    def fully_non_adaptive (self, max_nr_steps=50):
-
-        try:
-            self.t2star = self.T2starlist[-1]
-        except:
-            self.t2star = 0
-
-        i = 0
-        k = self.find_optimal_k ()
-
-        while ((k<=self.K) and (i<max_nr_steps)):
-            M = self.single_estimation_step (k=k, T2_track=False, adptv_phase = False)
-            self.t2star = self.T2starlist[-1]
-            i+=M
+        while ((k<self.K) and (i<max_nr_steps)):
+            self.single_estimation_step (k=k, T2_track=False, adptv_phase = False)
+            t2star = self.T2starlist[-1]
+            i+=1
             k+=1
 
         self._plot_T2star_list()
@@ -543,8 +521,8 @@ class BathNarrowing (TimeSequenceQ):
         while ((k<=self.K) and (i<max_nr_steps)):
 
             k = self.find_optimal_k ()
-            M = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True)
+            self.single_estimation_step (k=k, T2_track=False, adptv_phase = True)
             self.t2star = self.T2starlist[-1]
-            i+=M
+            i+=1
 
         self._plot_T2star_list()
