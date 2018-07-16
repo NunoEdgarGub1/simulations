@@ -165,10 +165,10 @@ class ExpStatistics (DO.DataObjectHDF5):
             a = getattr(exp, funct_name) (max_nr_steps=max_steps)
             l = len (exp.T2starlist)
             if (l<=max_steps):              
-                self.results [i, :l] = exp.T2starlist[:l]
-                self.results [i, l:max_steps] = (exp.T2starlist[-1])*np.ones(max_steps-l)
+                self.results [i, :l] = exp.T2starlist[:l]*1e6
+                self.results [i, l:max_steps] = 1e6*(exp.T2starlist[-1])*np.ones(max_steps-l)
             else:
-                self.results [i, :max_steps] = exp.T2starlist[:max_steps]
+                self.results [i, :max_steps] = 1e6*exp.T2starlist[:max_steps]
 
             if do_save:
                 rep_nr = str(i).zfill(len(str(self.nr_reps)))
@@ -201,7 +201,7 @@ class ExpStatistics (DO.DataObjectHDF5):
         plt.figure ()
         plt.pcolor (X, Y, res_hist)
         plt.xlabel ('nr of narrowing steps', fontsize = 18)
-        plt.ylabel ('T2*/T2*_init', fontsize = 18)
+        plt.ylabel ('T2* (us)', fontsize = 18)
         if self._save_analysis:
             plt.savefig(os.path.join(self.newpath+'/analysis.png'))
         plt.show()

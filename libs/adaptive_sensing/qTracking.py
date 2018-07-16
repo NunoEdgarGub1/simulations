@@ -415,18 +415,20 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
                 self.log.warning('Ramsey time exceeded 1/FWHM, reduced measurement time')
         return k
 
-    def single_estimation_step (self, k, T2_track=False, adptv_phase = True):
+    def single_estimation_step (self, k, T2_track=False, adptv_phase = False, pi2_phase = False):
 
         t_i = int(2**k)
         ttt = -2**(self.K-k)
         m_list = []
         t2_list = []
 
+        activate_cappellaro_phase = 0
+
         M = self.G + self.F*k
 
         for m in range(M):
             if adptv_phase:
-                ctrl_phase = np.mod(0*0.5*np.angle (self.p_k[int(ttt+self.points)])
+                ctrl_phase = np.mod(activate_cappellaro_phase*0.5*np.angle (self.p_k[int(ttt+self.points)])
                         +self.add_phase, np.pi)
             else:
                 ctrl_phase = np.pi*m/M
@@ -531,7 +533,7 @@ class BathNarrowing (TimeSequenceQ):
 
         self._plot_T2star_list()
  
-    def adaptive_1step (self, max_nr_steps=50):
+    def adaptive_pi2 (self, max_nr_steps=50):
 
         try:
             self.t2star = self.T2starlist[-1]
