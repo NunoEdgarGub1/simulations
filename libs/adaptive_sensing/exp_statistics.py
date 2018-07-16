@@ -157,11 +157,11 @@ class ExpStatistics (DO.DataObjectHDF5):
 			exp.curr_rep = i
 			a = getattr(exp, funct_name) (max_nr_steps=max_steps)
 			l = len (exp.T2starlist)
-			if (l<max_steps):				
+			if (l<=max_steps):				
 				self.results [i, :l] = exp.T2starlist[:l]/exp.T2starlist[0]
 				self.results [i, l:max_steps] = (exp.T2starlist[-1]/exp.T2starlist[0])*np.ones(max_steps-l)
 			else:
-				self.results [i, :max_steps] = exp.T2starlist[:l]/exp.T2starlist[0]
+				self.results [i, :max_steps] = exp.T2starlist[:max_steps]/exp.T2starlist[0]
 
 			if do_save:
 				rep_nr = str(i).zfill(len(str(self.nr_reps)))
