@@ -424,7 +424,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         activate_cappellaro_phase = 0
 
-        M = self.G + self.F*k
+        M = int(self.G + self.F*k)
 
         for m in range(M):
             if adptv_phase:
@@ -533,7 +533,7 @@ class BathNarrowing (TimeSequenceQ):
 
         self._plot_T2star_list()
  
-    def adaptive_pi2 (self, max_nr_steps=50):
+    def adaptive_1step (self, max_nr_steps=50):
 
         try:
             self.t2star = self.T2starlist[-1]
@@ -549,5 +549,6 @@ class BathNarrowing (TimeSequenceQ):
             M = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True)
             self.t2star = self.T2starlist[-1]
             i+=M
+            print (i)
 
         self._plot_T2star_list()
