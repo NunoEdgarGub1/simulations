@@ -75,7 +75,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         # When you look back into old data, it's nice to have some code recorded
         # to make sure you know how the data was generated 
         # (especially if you tried out diffeent things)
-        self._called_modules = ['ramsey', 'bayesian_update', 'calc_acc_phase']
+        self._called_modules = ['ramsey', 'bayesian_update', 'single_estimation_step']
         self.folder = folder
 
     def set_plot_settings (self, do_show = False, do_save = False, do_save_analysis = False):
@@ -422,7 +422,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         m_list = []
         t2_list = []
 
-        activate_cappellaro_phase = 0
+        activate_cappellaro_phase = 1
 
         M = int(self.G + self.F*k)
 
@@ -499,6 +499,8 @@ class BathNarrowing (TimeSequenceQ):
 
     def non_adaptive_k (self, max_nr_steps=50):
 
+        self._called_modules.append('non_adaptive_k')
+
         try:
             self.t2star = self.T2starlist[-1]
         except:
@@ -516,6 +518,8 @@ class BathNarrowing (TimeSequenceQ):
         self._plot_T2star_list()
 
     def fully_non_adaptive (self, max_nr_steps=50):
+
+        self._called_modules.append('fully_non_adaptive')
 
         try:
             self.t2star = self.T2starlist[-1]
@@ -535,6 +539,8 @@ class BathNarrowing (TimeSequenceQ):
  
     def adaptive_1step (self, max_nr_steps=50):
 
+        self._called_modules.append('adaptive_1step')
+
         try:
             self.t2star = self.T2starlist[-1]
         except:
@@ -549,6 +555,5 @@ class BathNarrowing (TimeSequenceQ):
             M = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True)
             self.t2star = self.T2starlist[-1]
             i+=M
-            print (i)
 
         self._plot_T2star_list()
