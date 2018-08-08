@@ -161,6 +161,13 @@ class ExpStatistics (DO.DataObjectHDF5):
                 
             exp.reset()
             exp.initialize()
+
+            try:
+                exp.alpha = self.alpha
+                exp.strategy = self.strategy
+            except:
+                pass
+                
             exp.curr_rep = i
             a = getattr(exp, funct_name) (max_nr_steps=max_steps)
             l = len (exp.T2starlist)

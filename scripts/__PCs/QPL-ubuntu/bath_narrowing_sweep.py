@@ -23,7 +23,7 @@ exp.save_bath_evolution (False)
 max_steps = 100
 
 
-for i in range(100):
+for i in range(10):
     print ("BATH nr ", i+1)
     nbath = exp.generate_bath()
 
@@ -33,86 +33,24 @@ for i in range(100):
         exp.set_plot_settings (do_save=False, do_show=False, save_analysis = True)
 
 
-    for F in [0, 1,2,3]:
-
-        print ("FULLY ADAPTIVE")
-        exp.set_msmnt_params (N=7, G=1, F=F, tau0=1e-6, fid0=1., fid1=0.)
+    for alpha in [0.5, 0.75, 1., 1.25, 1.5]:
+        exp.set_msmnt_params (N=7, G=3, F=2, tau0=1e-6, fid0=1., fid1=0.)
+        exp.alpha = alpha
+        exp.strategy = 'int'
         nbath.reset_bath_unpolarized()
         exp.simulate (funct_name = 'adaptive_1step', max_steps = max_steps, nBath = nbath,
-                    string_id = 'onlyPi2_bath'+str(i), do_save = True)
+                    string_id = '_alpha='+str(exp.alpha)+'_str='+exp.strategy+'_bath'+str(i), do_save = True)
         exp.analysis (nr_bins=25)
 
         time.sleep (20)
 
 
-        print ("FULLY ADAPTIVE")
-        exp.set_msmnt_params (N=7, G=2, F=F, tau0=1e-6, fid0=1., fid1=0.)
+        exp.set_msmnt_params (N=7, G=3, F=2, tau0=1e-6, fid0=1., fid1=0.)
+        exp.alpha = alpha
+        exp.startegy='round'
         nbath.reset_bath_unpolarized()
         exp.simulate (funct_name = 'adaptive_1step', max_steps = max_steps, nBath = nbath,
-                    string_id = 'onlyPi2_bath'+str(i), do_save = True)
-        exp.analysis (nr_bins=25)
-
-        time.sleep (20)
-
-        print ("FULLY ADAPTIVE")
-        exp.set_msmnt_params (N=7, G=3, F=F, tau0=1e-6, fid0=1., fid1=0.)
-        nbath.reset_bath_unpolarized()
-        exp.simulate (funct_name = 'adaptive_1step', max_steps = max_steps, nBath = nbath,
-                    string_id = 'onlyPi2_bath'+str(i), do_save = True)
-        exp.analysis (nr_bins=25)
-
-        time.sleep (20)
-
-        print ("NON ADAPTIVE K, adaptive phase")
-        nbath.reset_bath_unpolarized()
-        exp.set_msmnt_params (N=7, G=1, F=F, tau0=1e-6, fid0=1., fid1=0.)
-        exp.simulate (funct_name = 'non_adaptive_k', max_steps = max_steps, nBath = nbath,
-                    string_id = 'onlyAdd90_bath'+str(i), do_save = True)
-        exp.analysis (nr_bins=25)
-
-        time.sleep (20)
-
-        print ("NON ADAPTIVE K, adaptive phase")
-        nbath.reset_bath_unpolarized()
-        exp.set_msmnt_params (N=7, G=2, F=F, tau0=1e-6, fid0=1., fid1=0.)
-        exp.simulate (funct_name = 'non_adaptive_k', max_steps = max_steps, nBath = nbath,
-                    string_id = 'onlyAdd90_bath'+str(i), do_save = True)
-        exp.analysis (nr_bins=25)
-
-        time.sleep (20)
-
-        print ("NON ADAPTIVE K, adaptive phase")
-        nbath.reset_bath_unpolarized()
-        exp.set_msmnt_params (N=7, G=3, F=F, tau0=1e-6, fid0=1., fid1=0.)
-        exp.simulate (funct_name = 'non_adaptive_k', max_steps = max_steps, nBath = nbath,
-                    string_id = 'onlyAdd90_bath'+str(i), do_save = True)
-        exp.analysis (nr_bins=25)
-
-        time.sleep (20)
-
-        print ("FULLY NON ADAPTIVE")
-        exp.set_msmnt_params (N=7, G=1, F=F, tau0=1e-6, fid0=1., fid1=0.)
-        nbath.reset_bath_unpolarized()
-        exp.simulate (funct_name = 'fully_non_adaptive', max_steps = max_steps, nBath = nbath,
-                    string_id = 'onlyAdd90_bath'+str(i), do_save = True)
-        exp.analysis (nr_bins=25)
-
-        time.sleep (20)
-
-        print ("FULLY NON ADAPTIVE")
-        exp.set_msmnt_params (N=7, G=2, F=F, tau0=1e-6, fid0=1., fid1=0.)
-        nbath.reset_bath_unpolarized()
-        exp.simulate (funct_name = 'fully_non_adaptive', max_steps = max_steps, nBath = nbath,
-                    string_id = 'onlyAdd90_bath'+str(i), do_save = True)
-        exp.analysis (nr_bins=25)
-
-        time.sleep (20)
-
-        print ("FULLY NON ADAPTIVE")
-        exp.set_msmnt_params (N=7, G=3, F=F, tau0=1e-6, fid0=1., fid1=0.)
-        nbath.reset_bath_unpolarized()
-        exp.simulate (funct_name = 'fully_non_adaptive', max_steps = max_steps, nBath = nbath,
-                    string_id = 'onlyAdd90_bath'+str(i), do_save = True)
+                    string_id = '_alpha='+str(exp.alpha)+'_str='+exp.strategy+'_bath'+str(i), do_save = True)
         exp.analysis (nr_bins=25)
 
         time.sleep (20)
