@@ -98,6 +98,15 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         return condition
 
     def generate_spin_bath (self, cluster, nr_spins, concentration, store_evol_dict = False):
+        '''
+        Generates a nuclear spin bath
+
+        cluster     [bool]:     use the clustering approach
+        nr_spins    [int]:      number of nuclear spins in the bath
+        concentration [float]: concentration of spins in the lattice
+        store_evol_dict [bool]: store all steps of bath evolution in a dictionary?
+        
+        '''
         
         valid_bath = False
         self.nbath = NSpin.FullBathDynamics()
@@ -398,21 +407,27 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         self.nbath.Hahn_Echo (tauarr = tauarr, phi = 0, do_compare=False)
 
-    def find_optimal_k (self, strategy='fwhm'):
+    def find_optimal_k (self, alpha = 1., strategy='int'):
         
+        self.alpha = alpha
         width, fom = self.return_std ()
-        k = np.int(np.log(self.t2star/self.tau0)/np.log(2))+1
+
+        if (strategy == 'int'):
+            k = np.int(np.log(alpha*self.t2star/self.tau0)/np.log(2))+1
+        elif (strategy == 'round'):
+            k = np.round(np.log(alpha*self.t2star/self.tau0)/np.log(2))+1
 
         if k<0:
             self.log.info ('K IS NEGATIVE {0}'.format(k))
             self.k = 0
             self.log.debug ("Optimal k = {0}".format(k))
 
-        if (strategy == 't2star_limit'):
-            if (2**k)*self.tau0 > 1e-3/self.FWHM():
-                while (2**k)*self.tau0 > 1e-3/self.FWHM() and k>=0:
-                    k = k-1
-                self.log.warning('Ramsey time exceeded 1/FWHM, reduced measurement time')
+        #if (strategy == 't2star_limit'):
+        #    if (2**k)*self.tau0 > 1e-3/self.FWHM():
+        #        while (2**k)*self.tau0 > 1e-3/self.FWHM() and k>=0:
+        #            k = k-1
+        #        self.log.warning('Ramsey time exceeded 1/FWHM, reduced measurement time')
+        
         return k
 
     def single_estimation_step (self, k, T2_track=False, adptv_phase = False, pi2_phase = False):
@@ -509,7 +524,7 @@ class BathNarrowing (TimeSequenceQ):
         i = 0
         k = self.find_optimal_k ()
 
-        while ((k<=self.K) and (i<max_nr_steps)):
+        while ((k<=self.K+1) and (i<max_nr_steps)):
             M = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True)
             self.t2star = self.T2starlist[-1]
             i+=M
@@ -529,7 +544,7 @@ class BathNarrowing (TimeSequenceQ):
         i = 0
         k = self.find_optimal_k ()
 
-        while ((k<=self.K) and (i<max_nr_steps)):
+        while ((k<=self.K+1) and (i<max_nr_steps)):
             M = self.single_estimation_step (k=k, T2_track=False, adptv_phase = False)
             self.t2star = self.T2starlist[-1]
             i+=M
@@ -537,7 +552,7 @@ class BathNarrowing (TimeSequenceQ):
 
         self._plot_T2star_list()
  
-    def adaptive_1step (self, max_nr_steps=50):
+    def adaptive_1step (self, max_nr_steps=50, strategy = 'int', alpha = 1.):
 
         self._called_modules.append('adaptive_1step')
 
@@ -549,9 +564,9 @@ class BathNarrowing (TimeSequenceQ):
         i = 0
         k = 0
 
-        while ((k<=self.K) and (i<max_nr_steps)):
+        while ((k<=self.K+1) and (i<max_nr_steps)):
 
-            k = self.find_optimal_k ()
+            k = self.find_optimal_k (strategy = strategy, alpha = alpha)
             M = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True)
             self.t2star = self.T2starlist[-1]
             i+=M
