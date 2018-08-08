@@ -422,7 +422,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         m_list = []
         t2_list = []
 
-        activate_cappellaro_phase = 1
+        activate_cappellaro_phase = 0
 
         M = int(self.G + self.F*k)
 
