@@ -413,9 +413,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         width, fom = self.return_std ()
 
         if (strategy == 'int'):
-            k = np.int(np.log(alpha*self.t2star/self.tau0)/np.log(2))+1
+            k = np.int(np.log(alpha*self.t2star/self.tau0)/np.log(2))
         elif (strategy == 'round'):
-            k = np.round(np.log(alpha*self.t2star/self.tau0)/np.log(2))+1
+            k = np.round(np.log(alpha*self.t2star/self.tau0)/np.log(2))
 
         if k<0:
             self.log.info ('K IS NEGATIVE {0}'.format(k))
@@ -555,6 +555,9 @@ class BathNarrowing (TimeSequenceQ):
     def adaptive_1step (self, max_nr_steps=50):
 
         self._called_modules.append('adaptive_1step')
+        p_az = self.nbath.get_probability_density()[1]
+        sparsity = 0
+        print('sparsity',sparsity,max(p_az))
 
         try:
             self.t2star = self.T2starlist[-1]
@@ -564,11 +567,18 @@ class BathNarrowing (TimeSequenceQ):
         i = 0
         k = 0
 
-        while ((k<=self.K+1) and (i<max_nr_steps)):
+        while ((k<=self.K+1) and (i<max_nr_steps) and (sparsity < .5*max(p_az))):
 
             k = self.find_optimal_k (strategy = self.strategy, alpha = self.alpha)
             M = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True)
             self.t2star = self.T2starlist[-1]
             i+=M
+			
+            p_az = self.nbath.get_probability_density()[1]
+		
+            sparsity = max(abs(np.diff(p_az)))
+            print('sparsity',sparsity,max(p_az))
+            if sparsity >= .5*max(p_az):
+                print('sparsity condition reached')
 
         self._plot_T2star_list()

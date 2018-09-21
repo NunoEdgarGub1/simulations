@@ -211,6 +211,8 @@ class ExpStatistics (DO.DataObjectHDF5):
         plt.ylabel ('T2* (us)', fontsize = 18)
         if self._save_analysis:
             plt.savefig(os.path.join(self.newpath+'/analysis.png'))
-        plt.show()
+            
+        if self._show_plots:
+            plt.show()
 
 
