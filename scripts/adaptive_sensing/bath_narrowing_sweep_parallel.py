@@ -19,15 +19,15 @@ reload (expStat)
 exp = expStat.ExpStatistics (folder = 'Results/giulio_pc/7spins/tracking')
 exp.set_log_level (logging.INFO)
 logging.basicConfig (level=logging.INFO)
-exp.set_sim_params (nr_reps=2)
+exp.set_sim_params (nr_reps=100)
 exp.set_msmnt_params (N=7, G=3, F=1, tau0=1e-6, fid0=1., fid1=0.)
 exp.set_bath_params (nr_spins = 7, concentration = 0.01)
 exp.set_plot_settings (do_save=True, do_show=False, save_analysis = False)
 exp.set_bath_validity_conditions (A = 1e6, sparse = 10)
 exp.save_bath_evolution (False)
 
-max_steps = 3
-n_bath = 2
+max_steps = 100
+n_bath = 1
 num_cores = 1
 
 
@@ -37,16 +37,16 @@ for j in range(n_bath):
 		
     def bath_par (scheme):
         print ('RUN:',scheme)
-        exp.set_msmnt_params (N=7, G=3, F=1, tau0=1e-6, fid0=1., fid1=0.)
+        exp.set_msmnt_params (N=10, G=3, F=1, tau0=1e-6, fid0=1., fid1=0.)
         exp.alpha = 1
         exp.strategy = 'int'
         nbath.reset_bath_unpolarized()
-        exp.simulate (funct_name = scheme, max_steps = max_steps, nBath = nbath,
+        exp.simulate (funct_name = scheme, max_steps = max_steps,
         string_id = 'plusPi2_bath'+str(j), do_save = True)
         #exp.analysis (nr_bins=25)
 
         return None
 
 
-    Parallel(n_jobs=num_cores)(delayed(bath_par)(scheme) for scheme in ['adaptive_1step', 'adaptive_1step_paola'])
+    Parallel(n_jobs=num_cores)(delayed(bath_par)(scheme) for scheme in ['adaptive_1step_paola'])
 
