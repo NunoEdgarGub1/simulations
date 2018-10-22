@@ -182,7 +182,7 @@ class ExpStatistics (DO.DataObjectHDF5):
                 grp = f.create_group('rep_'+rep_nr)
                 self.save_object_all_vars_to_file (obj = exp, f = grp)
                 self.save_object_params_list_to_file (obj = exp, f = grp, 
-                        params_list= ['T2starlist', 'outcomes_list', 'tau_list', 'phase_list'])
+                        params_list= ['BayesianMean','QuantumMean','BayesianMax','QuantumMax','T2starlist', 'outcomes_list', 'tau_list', 'phase_list'])
 
         if do_save:
             f.close()

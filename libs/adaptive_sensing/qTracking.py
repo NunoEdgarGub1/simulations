@@ -63,6 +63,12 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.outcomes_list = []
         self.phase_list = []
         self.tau_list = []
+		
+        self.BayesianMean = [0]
+        self.BayesianMax = [0]
+        self.QuantumMean = [0]
+        self.QuantumMax = [0]
+        self.k_list = [0]
 
         self._curr_res = 1
         self.add_phase = 0
@@ -142,6 +148,11 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.T2starlist.append(self.T2star)
         self.T2_est = self.nbath.T2est
         self.timelist.append(0)
+        self.BayesianMean = [0]
+        self.BayesianMax = [0]
+        self.QuantumMean = [0]
+        self.QuantumMax = [0]
+        self.k_list = [0]
         self._latest_outcome = None
 
         self.k=0
@@ -375,6 +386,18 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         m = self.nbath.Ramsey (tau=t, phi = theta, flip_prob = self._flip_prob)
         az, pd = np.real(self.nbath.get_probability_density())
         self.fliplist = self.nbath.flipArr
+		
+        p = self.return_p_fB()[0]
+
+        self.BayesianMax.append(self.beta[(p.tolist()).index(max(p))]*1e-3)
+        self.QuantumMax.append(az[(pd.tolist()).index(max(pd))])
+
+        BayMean = min(p, key=lambda x:abs(x-np.mean(p)))
+        QuantMean = min(pd, key=lambda x:abs(x-np.mean(pd)))
+
+        self.BayesianMean.append(self.beta[(p.tolist()).index(BayMean)]*1e-3)
+        self.QuantumMean.append(az[(pd.tolist()).index(QuantMean)])
+
 
         if do_plot:
             self.plot_hyperfine_distr(tau=t, theta = theta)
@@ -430,10 +453,15 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         
         return k
 
-    def single_estimation_step (self, k, T2_track=False, adptv_phase = False, pi2_phase = False):
+    def single_estimation_step (self, k, k_old=0, T2_track=False, adptv_phase = False, pi2_phase = False, cap_method = False):
 
-        t_i = int(2**k)
-        ttt = -2**(self.K-k)
+        if cap_method:
+            t_i = int(2**k)
+            ttt = 2**(k_old)
+        else:
+            t_i = int(2**k)
+            ttt = -2**(self.K-k)
+			
         m_list = []
         t2_list = []
 
@@ -468,7 +496,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             self.T2starlist.append(.5*(self.nbath._op_sd(self.over_op[2]).real)**-1)
             self._curr_T2star = self.T2starlist[-1]
             self.timelist.append(self.timelist[-1] + t_i*self.tau0)
-
+			
             self.log.debug ("Ramsey estim: {0} / {1}".format (m, M))
             self.log.debug ("Params: tau = {0} us --- phase: {1} -- res: {2}".format(t_i*self.tau0*1e6, int (ctrl_phase*180/3.14), m_res))
             self.log.debug ("Current T2* = {0} us".format(int(self.T2starlist[-1]*1e8)/100.))
@@ -569,8 +597,8 @@ class BathNarrowing (TimeSequenceQ):
 
         while ((k<=self.K+1) and (i<max_nr_steps) and (sparsity < .5*max(p_az))):
 
-            k = self.find_optimal_k (strategy = self.strategy, alpha = self.alpha)
-            M = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True)
+            k = self.find_optimal_k (strategy = "int", alpha = 1)
+            M = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True, cap_method = False)
             self.t2star = self.T2starlist[-1]
             i+=M
 			
@@ -582,3 +610,37 @@ class BathNarrowing (TimeSequenceQ):
                 print('sparsity condition reached')
 
         self._plot_T2star_list()
+
+    def adaptive_1step_paola (self, max_nr_steps=50):
+
+        self._called_modules.append('adaptive_1step_capp')
+        p_az = self.nbath.get_probability_density()[1]
+        sparsity = 0
+        print('sparsity',sparsity,max(p_az))
+
+        try:
+            self.t2star = self.T2starlist[-1]
+        except:
+            self.t2star = self.tau0
+
+        i = 0
+        k = 0
+
+        while ((k<=self.K+1) and (i<max_nr_steps) and (sparsity <.5*max(p_az))):
+
+            k = self.find_optimal_k (strategy = 'int', alpha =1)
+            print('k=',k,', k_old =',self.k_list[-1])
+            M = self.single_estimation_step (k=k, k_old = self.k_list[-1], T2_track=False, adptv_phase = True, pi2_phase = True, cap_method = True)
+            self.t2star = self.T2starlist[-1]
+            i+=M
+
+            p_az = self.nbath.get_probability_density()[1]
+
+            self.k_list.append(k)
+
+            sparsity = max(abs(np.diff(p_az)))
+            print('sparsity',sparsity,max(p_az))
+            if sparsity >= .5*max(p_az):
+                print('sparsity condition reached')
+
+
