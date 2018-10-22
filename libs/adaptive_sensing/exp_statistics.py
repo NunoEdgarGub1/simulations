@@ -137,7 +137,7 @@ class ExpStatistics (DO.DataObjectHDF5):
         return exp
 
     def simulate (self, funct_name, max_steps, string_id = '', 
-                do_save = False, nBath = None):
+                do_save = False):
 
         self._called_modules.append('simulate')
         self.results = np.zeros((self.nr_reps, max_steps))
@@ -146,21 +146,28 @@ class ExpStatistics (DO.DataObjectHDF5):
         if do_save:
             f, newpath = self.__generate_file (title = '_'+funct_name+'_'+string_id)
 
-        exp = self._generate_new_experiment (folder = newpath, nBath = nBath)
+#        exp = self._generate_new_experiment (folder = newpath, nBath = nBath)
 
-        if do_save:
-            grp_nbath = f.create_group ('nbath')
-            self.save_object_all_vars_to_file (obj = exp.nbath, f = grp_nbath)
-            self.save_object_params_list_to_file (obj = exp.nbath, f = grp_nbath, 
-                    params_list= ['Ao', 'Ap', 'Azx', 'Azy', 'values_Az_kHz', 'r_ij', 'theta_ij'])
+#        if do_save:
+#            grp_nbath = f.create_group ('nbath')
+#            self.save_object_all_vars_to_file (obj = exp.nbath, f = grp_nbath)
+#            self.save_object_params_list_to_file (obj = exp.nbath, f = grp_nbath, 
+#                    params_list= ['Ao', 'Ap', 'Azx', 'Azy', 'values_Az_kHz', 'r_ij', 'theta_ij'])
 
 
         for i in range(self.nr_reps):
 
             print ("Repetition nr: ", i+1)
-                
+            
+            exp = self._generate_new_experiment (folder = newpath, nBath = self.generate_bath())
             exp.reset()
             exp.initialize()
+
+            if do_save:
+                grp_nbath = f.create_group ('nbath_%d'%(i+1))
+                self.save_object_all_vars_to_file (obj = exp.nbath, f = grp_nbath)
+                self.save_object_params_list_to_file (obj = exp.nbath, f = grp_nbath,
+                 params_list= ['Ao', 'Ap', 'Azx', 'Azy', 'values_Az_kHz', 'r_ij', 'theta_ij'])
 
             try:
                 exp.alpha = self.alpha

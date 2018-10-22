@@ -6,8 +6,7 @@ from matplotlib import rc, cm
 from matplotlib import pyplot as plt
 from joblib import Parallel, delayed
 
-#folder = '/home/ds32/Magnetometry'
-folder = '/Users/dalescerri/Documents/GitHub'
+folder = '/home/dalescerri/Documents/Git/GitTest'
 sys.path.append (folder)
 
 from simulations.libs.adaptive_sensing import qTracking as qtrack

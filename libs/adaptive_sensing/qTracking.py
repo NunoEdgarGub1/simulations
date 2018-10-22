@@ -44,7 +44,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.plot_idx = 0
         self.step = 0
         self.phase_cappellaro = 0
-        self.k = 0
+        self.k_list = [0]
         self.m_res = 0
         self.multi_peak = False
         self.T2starlist = []
@@ -140,6 +140,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
     def reset (self):
         self.nbath.reset_bath_unpolarized()
+        self.k_list = [0]
         self.T2star = self.nbath.T2h
         self.over_op = self.nbath._overhauser_op()
 
@@ -479,8 +480,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             m_res = self.ramsey (theta=ctrl_phase, t = t_i*self.tau0, do_plot=False)
             self._latest_outcome = m_res
             m_list.append(m_res)
-            if (m_res != self._curr_res):
-                self.add_phase = np.mod(self.add_phase + np.pi/2., 2*np.pi)
+            if pi2_phase:
+                if (m_res != self._curr_res):
+                    self.add_phase = np.mod(self.add_phase + np.pi/2., 2*np.pi)
             self._curr_res = m_res
 
             if m==0:
@@ -580,9 +582,9 @@ class BathNarrowing (TimeSequenceQ):
 
         self._plot_T2star_list()
  
-    def adaptive_1step (self, max_nr_steps=50):
+    def adaptive_1step_bon (self, max_nr_steps=50):
 
-        self._called_modules.append('adaptive_1step')
+        self._called_modules.append('adaptive_1step_bon')
         p_az = self.nbath.get_probability_density()[1]
         sparsity = 0
         print('sparsity',sparsity,max(p_az))
@@ -598,7 +600,7 @@ class BathNarrowing (TimeSequenceQ):
         while ((k<=self.K+1) and (i<max_nr_steps) and (sparsity < .5*max(p_az))):
 
             k = self.find_optimal_k (strategy = "int", alpha = 1)
-            M = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True, cap_method = False)
+            M = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True, pi2_phase = True, cap_method = False)
             self.t2star = self.T2starlist[-1]
             i+=M
 			
@@ -608,8 +610,7 @@ class BathNarrowing (TimeSequenceQ):
             print('sparsity',sparsity,max(p_az))
             if sparsity >= .5*max(p_az):
                 print('sparsity condition reached')
-
-        self._plot_T2star_list()
+                
 
     def adaptive_1step_paola (self, max_nr_steps=50):
 
