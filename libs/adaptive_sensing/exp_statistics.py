@@ -97,8 +97,10 @@ class ExpStatistics (DO.DataObjectHDF5):
         for k in self.__dict__.keys():
             if ((type (self.__dict__[k]) is float) or (type (self.__dict__[k]) is int) or (type (self.__dict__[k]) is str)):
                 f.attrs[k] = self.__dict__[k]
+				
+        name = os.path.join(newpath, fName+'.hdf5')
 
-        return f, newpath
+        return f, newpath, name
 
     def set_bath_validity_conditions (self, A=None, sparse=None):
         self._A_thr = A
@@ -136,15 +138,16 @@ class ExpStatistics (DO.DataObjectHDF5):
                 do_save = self._save_plots, do_save_analysis = self._save_analysis)
         return exp
 
-    def simulate (self, funct_name, max_steps, string_id = '', 
+    def simulate (self, funct_name, max_steps, batch_length = 5, string_id = '',
                 do_save = False):
 
         self._called_modules.append('simulate')
         self.results = np.zeros((self.nr_reps, max_steps))
         newpath = self.folder
-
+		
         if do_save:
-            f, newpath = self.__generate_file (title = '_'+funct_name+'_'+string_id)
+            batch_no=0
+            f, newpath, name = self.__generate_file (title = '_'+funct_name+'_'+string_id+'_'+'batch_%d'%batch_no)
 
 #        exp = self._generate_new_experiment (folder = newpath, nBath = nBath)
 
@@ -158,7 +161,13 @@ class ExpStatistics (DO.DataObjectHDF5):
         for i in range(self.nr_reps):
 
             print ("Repetition nr: ", i+1)
-            
+
+            if i%batch_length == 0 and i>0:
+                if do_save:
+                    batch_no+=1
+                    f.close()
+                    f, newpath, name = self.__generate_file (title = '_'+funct_name+'_'+string_id+'_'+'batch_%d'%batch_no)
+
             exp = self._generate_new_experiment (folder = newpath, nBath = self.generate_bath())
             exp.reset()
             exp.initialize()
@@ -191,8 +200,6 @@ class ExpStatistics (DO.DataObjectHDF5):
                 self.save_object_params_list_to_file (obj = exp, f = grp, 
                         params_list= ['BayesianMean','QuantumMean','BayesianMax','QuantumMax','T2starlist', 'outcomes_list', 'tau_list', 'phase_list'])
 
-        if do_save:
-            f.close()
         print ("Simulation completed.")
 
         self.total_steps = max_steps

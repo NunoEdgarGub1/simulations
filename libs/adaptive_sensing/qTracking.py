@@ -425,9 +425,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         self.plot_distr()
         
-    def hahn (self):
-    
-        tauarr = np.linspace(0,1000e-6,200)
+    def hahn (self, tauarr):
 
         self.nbath.Hahn_Echo (tauarr = tauarr, phi = 0, do_compare=False)
 
@@ -626,6 +624,10 @@ class BathNarrowing (TimeSequenceQ):
 
         i = 0
         k = 0
+		
+#        self.hahn(tauarr = np.linspace(0,200e-3,50))
+#        self.hahn(tauarr = np.linspace(0,200e-3,100))
+        #self.hahn(tauarr = np.linspace(0,200000e-3,200))
 
         while ((k<=self.K+1) and (i<max_nr_steps) and (sparsity <.5*max(p_az))):
 
