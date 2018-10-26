@@ -427,7 +427,8 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         
     def hahn (self, tauarr):
 
-        self.nbath.Hahn_Echo (tauarr = tauarr, phi = 0, do_compare=False)
+        self.nbath.Hahn_Echo_clus (tauarr = tauarr, phi = 0, do_compare=False)
+        #self.nbath.Hahn_eco (tauarr)
 
     def find_optimal_k (self, alpha = 1., strategy='int'):
         
@@ -625,9 +626,12 @@ class BathNarrowing (TimeSequenceQ):
         i = 0
         k = 0
 		
-#        self.hahn(tauarr = np.linspace(0,200e-3,50))
-#        self.hahn(tauarr = np.linspace(0,200e-3,100))
-        #self.hahn(tauarr = np.linspace(0,200000e-3,200))
+        #self.hahn(tauarr = np.linspace(0,200e-3,50))
+        #self.hahn(tauarr = np.linspace(0,200e-3,100))
+        #maxT = .01#3*2*np.pi*9.341359619368419e-08
+        #self.hahn(tauarr = np.linspace(0, maxT,int(maxT / (2*np.pi*9.341359619368419e-08))+1))
+        #self.hahn(tauarr = np.linspace(0, maxT,int(maxT / (20*2*np.pi*9.341359619368419e-08))+1))
+		#self.hahn(tauarr = np.linspace(0, maxT,10*(int(maxT / (2*np.pi*9.341359619368419e-08))+1)))
 
         while ((k<=self.K+1) and (i<max_nr_steps) and (sparsity <.5*max(p_az))):
 
