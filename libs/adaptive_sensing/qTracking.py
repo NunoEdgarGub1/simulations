@@ -72,6 +72,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         self._curr_res = 1
         self.add_phase = 0
+        self.fv=False
 
         self.log = logging.getLogger ('qTrack')
         logging.basicConfig (level = logging.INFO)
@@ -85,7 +86,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.folder = folder
 
     def set_plot_settings (self, do_show = False, do_save = False, do_save_analysis = False):
-        self._save_plots = do_save
+        self._save_plots = do_show
         self._show_plots = do_show
         self._save_analysis = do_save_analysis
 
@@ -103,11 +104,11 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.log.debug ("Valid bath? "+str(condition))
         return condition
 
-    def generate_spin_bath (self, cluster, nr_spins, concentration, store_evol_dict = False):
+    def generate_spin_bath (self, eng_bath_cluster, nr_spins, concentration, store_evol_dict = False):
         '''
         Generates a nuclear spin bath
 
-        cluster     [bool]:     use the clustering approach
+        eng_bath_cluster     [array]:    for unstructured bath, set to np.zeros(nr_spins)
         nr_spins    [int]:      number of nuclear spins in the bath
         concentration [float]: concentration of spins in the lattice
         store_evol_dict [bool]: store all steps of bath evolution in a dictionary?
@@ -120,7 +121,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         
         while not(valid_bath):
 
-            self.nbath.generate (cluster = cluster, nr_spins=nr_spins, 
+            self.nbath.generate (eng_bath_cluster = eng_bath_cluster, nr_spins=nr_spins, 
                 concentration = concentration, do_plot = False, eng_bath=False)
             valid_bath = self._check_bath_validity()
 
@@ -222,16 +223,17 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
     def plot_hyperfine_distr(self, tau, theta, T2track = False, T2est = 1e-3):
         
-        T2est = self.T2_est
+        #T2echo = self.nbath.T2echo
+        T2est = 1e-3#self.nbath.T2echo
         
         p, m = self.return_p_fB(T2_track = T2track, T2_est = T2est)
         p_az, az = self.nbath.get_histogram_Az(nbins = 20)
         az2, p_az2 = self.nbath.get_probability_density()
     
-        self.norm, self.error = self.fitting(p = p, paz = p_az2, 
-                az = az2, T2track = T2track, T2est = T2est)
-        self.norm_lst.append(self.norm)
-        self.mse_lst.append(self.error)
+        #self.norm, self.error = self.fitting(p = p, paz = p_az2,
+		#       az = az2, T2track = T2track, T2est = T2est)
+        #self.norm_lst.append(self.norm)
+        #self.mse_lst.append(self.error)
         if self.step==0:
             self.qmax.append(0)
         else:
@@ -244,24 +246,32 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         fig = plt.figure(figsize = (12,6))
         p0 = 0.5-0.5*np.cos(2*np.pi*self.beta*tau+theta)
         p1 = 0.5+0.5*np.cos(2*np.pi*self.beta*tau+theta)
-        plt.fill_between (self.beta*1e-3, 0, max(p*self.norm)*p0/max(p0), color='magenta', alpha = 0.1)
-        plt.fill_between (self.beta*1e-3, 0, max(p*self.norm)*p1/max(p1), color='cyan', alpha = 0.1)
+        #plt.fill_between (self.beta*1e-3, 0, max(p*self.norm)*p0/max(p0), color='magenta', alpha = 0.1)
+        #plt.fill_between (self.beta*1e-3, 0, max(p*self.norm)*p1/max(p1), color='cyan', alpha = 0.1)
+        plt.fill_between (self.beta*1e-3, 0, p0/max(p0), color='magenta', alpha = 0.1)
+        plt.fill_between (self.beta*1e-3, 0, p1/max(p1), color='cyan', alpha = 0.1)
         tarr = np.linspace(min(self.beta)*1e-3,max(self.beta)*1e-3,1000)
         T2star = 5*(self.nbath._op_sd(self.over_op[2]).real)**-1
         T2inv = T2star**-1 *1e-3
-        plt.plot (az2, p_az2 , '^', color='k', label = 'spin-bath')
-        plt.plot (az2, p_az2 , ':', color='k')
+        plt.plot (az2, p_az2/max(p_az2) , '^', color='k', label = 'spin-bath')
+        plt.plot (az2, p_az2/max(p_az2) , ':', color='k')
 
         outcome = self.outcomes_list[-1]
         curr_t2star = int(self.T2starlist[-1]*1e6)
         curr_tau = tau*1e6
         curr_phase = int(theta*180/3.14)
 
-        plt.plot (self.beta*1e-3, p*self.norm , color='green', linewidth = 2, label = 'classical')
-        plt.title ("tau = " +str(curr_tau)+ " us, phase = "+str(curr_phase)+" deg --> outcome: "+str(outcome)+" -- T2* = "+str(curr_t2star)+ " us", fontsize = 18)
+#        if free_evo:
+#            T2gauss = np.exp(-(self.beta*1e-3 * (.5*T2echo*1e3))**2)
+#            T2exp = 2*np.pi*np.exp(((self.beta*1e-3)**2 + (.5*T2echo*1e3)**-2)**-1)
+#            p = np.convolve(p,T2gauss,'same')
+        #plt.plot (self.beta*1e-3, p*self.norm , color='green', linewidth = 2, label = 'classical')
+        plt.plot (self.beta*1e-3, p/max(p) , color='green', linewidth = 2, label = 'classical')
+        plt.title ("tau = " +str(curr_tau)+ " us, phase = "+str(curr_phase)+" deg --> outcome: "+str(outcome)+" -- T2* = "+str(curr_t2star)+ " us -- free evo: "+str(self.fv) , fontsize = 18)
         plt.xlabel (' hyperfine (kHz)', fontsize=18)
         fwhm = self.FWHM()
         plt.xlim((max(-1000, m*1e-3-15*fwhm), min (1000, m*1e-3+15*fwhm)))
+        plt.xlim(-1000, 1000)
         if self._save_plots:
             plt.savefig(os.path.join(self.folder+'/', 'rep_%.04d_%.04d.png'%(self.curr_rep, self.step)))
         if self._show_plots:
@@ -282,7 +292,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         plt.plot (az2, self.p_az_old , 'o', color='r')
         plt.plot (az2, self.p_az_old , ':', color='r')
         plt.xlabel (' hyperfine (kHz)', fontsize=18)
-        T2gauss = np.exp(-(self.beta*1e-3 * self.T2_est)**2)
+        T2gauss = np.exp(-(self.beta*1e-3 * self.nbath.T2echo)**2)
         p_broad = np.convolve(p,T2gauss,'same')
         plt.xlim(min(az2), max(az2))
         plt.legend()
@@ -388,15 +398,15 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         az, pd = np.real(self.nbath.get_probability_density())
         self.fliplist = self.nbath.flipArr
 		
-        p = self.return_p_fB()[0]
+        pB = self.return_p_fB()[0]
 
-        self.BayesianMax.append(self.beta[(p.tolist()).index(max(p))]*1e-3)
+        self.BayesianMax.append(self.beta[(pB.tolist()).index(max(pB))]*1e-3)
         self.QuantumMax.append(az[(pd.tolist()).index(max(pd))])
 
-        BayMean = min(p, key=lambda x:abs(x-np.mean(p)))
+        BayMean = min(pB, key=lambda x:abs(x-np.mean(pB)))
         QuantMean = min(pd, key=lambda x:abs(x-np.mean(pd)))
 
-        self.BayesianMean.append(self.beta[(p.tolist()).index(BayMean)]*1e-3)
+        self.BayesianMean.append(self.beta[(pB.tolist()).index(BayMean)]*1e-3)
         self.QuantumMean.append(az[(pd.tolist()).index(QuantMean)])
 
 
@@ -405,7 +415,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 
         return m
             
-    def freeevo (self, ms_curr=0., t=0.):
+    def freeevo (self, ms_curr=0., tf=0.):
 
         '''
         Ramsey experiment simulation
@@ -420,15 +430,13 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         '''
 
         az0, pd0 = np.real(self.nbath.get_probability_density())
-        m = self.nbath.FreeEvo (ms=ms_curr, tau=t)
+        m = self.nbath.FreeEvo (ms=ms_curr, tau=tf)
         az, pd = np.real(self.nbath.get_probability_density())
-
-        self.plot_distr()
         
-    def hahn (self, tauarr):
+    def hahn (self, tr, pulses, tauarr):
 
+        #self.nbath.Hahn_Echo_clus (tauarr = tauarr, phi = 0, tr = tr, pulses = pulses, do_compare=False)
         self.nbath.Hahn_Echo_clus (tauarr = tauarr, phi = 0, do_compare=False)
-        #self.nbath.Hahn_eco (tauarr)
 
     def find_optimal_k (self, alpha = 1., strategy='int'):
         
@@ -453,7 +461,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         
         return k
 
-    def single_estimation_step (self, k, k_old=0, T2_track=False, adptv_phase = False, pi2_phase = False, cap_method = False):
+    def single_estimation_step (self, k, k_old=0, T2_track=False, tf = 1e-3, adptv_phase = False, pi2_phase = False, cap_method = False, free_evo = False):
 
         if cap_method:
             t_i = int(2**k)
@@ -466,17 +474,26 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         t2_list = []
 
         activate_cappellaro_phase = 1
-
-        M = int(self.G + self.F*k)
+		
+        if free_evo:
+            M=1
+		
+        else:
+            M = int(self.G + self.F*k)
 
         for m in range(M):
-            if adptv_phase:
-                ctrl_phase = np.mod(activate_cappellaro_phase*0.5*np.angle (self.p_k[int(ttt+self.points)])
-                        +self.add_phase, np.pi)
+            if free_evo:
+                m_res = self._latest_outcome
+                ctrl_phase = 0
             else:
-                ctrl_phase = np.pi*m/M
+                if adptv_phase:
+                    ctrl_phase = np.mod(activate_cappellaro_phase*0.5*np.angle (self.p_k[int(ttt+self.points)])
+                    +self.add_phase, np.pi)
+                else:
+                    ctrl_phase = np.pi*m/M
 
-            m_res = self.ramsey (theta=ctrl_phase, t = t_i*self.tau0, do_plot=False)
+                m_res = self.ramsey (theta=ctrl_phase, t = t_i*self.tau0, do_plot=False)
+					
             self._latest_outcome = m_res
             m_list.append(m_res)
             if pi2_phase:
@@ -485,9 +502,9 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
             self._curr_res = m_res
 
             if m==0:
-                self.bayesian_update (m_n = m_res, phase_n = ctrl_phase, t_n = t_i, T2_track = T2_track, T2_est = self.T2_est, do_plot=False)
+                self.bayesian_update (m_n = m_res, phase_n = ctrl_phase, t_n = t_i, T2_track = T2_track, T2_est = self.T2_est, tf = tf*free_evo, do_plot=False)
             else:
-                self.bayesian_update (m_n = m_res, phase_n = ctrl_phase, t_n = t_i, T2_track = False, T2_est = self.T2_est, do_plot=False)
+                self.bayesian_update (m_n = m_res, phase_n = ctrl_phase, t_n = t_i, T2_track = False, T2_est = self.T2_est, tf = tf*free_evo, do_plot=False)
             
             FWHM = self.FWHM()*1e3
 
@@ -595,6 +612,16 @@ class BathNarrowing (TimeSequenceQ):
 
         i = 0
         k = 0
+		
+        tr = 4*self.nbath.T2h
+        print('T2star', self.nbath.T2h)
+        pulses = 1
+        tauarr = np.linspace(0,.001,1e5)
+        maxT = tauarr[-1]
+        #self.hahn(tr = tr, pulses = pulses, tauarr = tauarr)
+
+        i = 0
+        k = 0
 
         while ((k<=self.K+1) and (i<max_nr_steps) and (sparsity < .5*max(p_az))):
 
@@ -609,7 +636,17 @@ class BathNarrowing (TimeSequenceQ):
             print('sparsity',sparsity,max(p_az))
             if sparsity >= .5*max(p_az):
                 print('sparsity condition reached')
-                
+
+#        print('T2', self.nbath.T2echo)
+#        #self.freeevo(ms_curr=self._latest_outcome, tf=.001)
+#        self.fv=True
+#        self.bayesian_update (m_n = self.outcomes_list[-1], phase_n = 0, t_n = 0, T2_track = False, T2_est = self.nbath.T2echo, tf=1e-3, free_evo=True)
+#        pB = self.return_p_fB()[0]
+#        self.plot_hyperfine_distr(tau=1, theta = 0,
+#        T2track = False, T2est = self.T2_est)
+#        #M = self.single_estimation_step (k=k, T2_track=False, adptv_phase = True, pi2_phase = True, cap_method = False, free_evo=True)
+#        #self.t2star = self.T2starlist[-1]
+
 
     def adaptive_1step_paola (self, max_nr_steps=50):
 
@@ -626,12 +663,13 @@ class BathNarrowing (TimeSequenceQ):
         i = 0
         k = 0
 		
-        #self.hahn(tauarr = np.linspace(0,200e-3,50))
-        #self.hahn(tauarr = np.linspace(0,200e-3,100))
-        #maxT = .01#3*2*np.pi*9.341359619368419e-08
-        #self.hahn(tauarr = np.linspace(0, maxT,int(maxT / (2*np.pi*9.341359619368419e-08))+1))
-        #self.hahn(tauarr = np.linspace(0, maxT,int(maxT / (20*2*np.pi*9.341359619368419e-08))+1))
-		#self.hahn(tauarr = np.linspace(0, maxT,10*(int(maxT / (2*np.pi*9.341359619368419e-08))+1)))
+        tr = 4*self.nbath.T2h
+        print('T2star', self.nbath.T2h)
+        pulses = 1
+        tauarr = np.linspace(0,.001,1e5)
+        maxT = tauarr[-1]
+        #self.hahn(tr = tr, pulses = pulses, tauarr = tauarr)
+
 
         while ((k<=self.K+1) and (i<max_nr_steps) and (sparsity <.5*max(p_az))):
 
@@ -649,5 +687,9 @@ class BathNarrowing (TimeSequenceQ):
             print('sparsity',sparsity,max(p_az))
             if sparsity >= .5*max(p_az):
                 print('sparsity condition reached')
+
+        #print('T2', self.nbath.T2echo)
+        #self.freeevo(ms_curr=0, tf=10*self.nbath.T2echo)
+
 
 

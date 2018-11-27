@@ -14,6 +14,7 @@
 import numpy as np
 from numpy import *
 from operator import mul
+from scipy.optimize import curve_fit
 import pylab as plt
 import math as mt
 import copy as cp
@@ -21,12 +22,14 @@ import operator as op
 import itertools as it
 import scipy.linalg as lin
 import scipy.spatial.distance as dst
+import scipy.signal as sg
 import numpy.random as ran
 import time as time
 import random as rand
 import tabulate as tb
 import functools as ft
 import logging
+
 
 import matplotlib as mpl
 from matplotlib import pyplot as plt
@@ -55,11 +58,11 @@ class NSpinBath ():
 	    self.log = logging.getLogger ('nBath')
 	    logging.basicConfig (level = logging.INFO)
 
-	def generate_NSpin_distr (self, cluster, conc=0.02, N=25, do_sphere = True, eng_bath=False):
+	def generate_NSpin_distr (self, eng_bath_cluster, conc=0.02, N=25, do_sphere = True, eng_bath=False):
 
 	    pi = np.pi
         
-	    Nseed = len(cluster)
+	    Nseed = len(eng_bath_cluster)
 
 	    ##Carbon Lattice Definition
 	    #Rotation matrix to get b along z-axis
@@ -201,7 +204,14 @@ class NSpinBath ():
 	        phi = np.asarray([phi_s for r_s,Ap_s,Ao_s,Axx_s,Ayy_s,Axy_s,Ayx_s,Axz_s,Ayz_s,Azx_s,Azy_s,x_s,y_s,z_s,theta_s,phi_s in zipped])    
 	    
 	    # here we choose the grid points that contain a carbon 13 spin, dependent on concentration
-	    Sel = (np.array(rand.sample(list(range(int(L_size/2))), N)),)#np.where(np.random.rand(int(L_size/2)) < conc)
+	    Sel = []
+	    while(len(Sel)<N):
+	        lst_sel=[sel for sel in np.where(np.random.rand(int(L_size/2)) < conc)[0].tolist() if sel not in Sel]
+	        Sel+=lst_sel
+	        print("Sel", Sel)
+
+	    #Sel = (np.array(rand.sample(list(range(int(L_size/2))), N)),)#np.where(np.random.rand(int(L_size/2)) < conc)
+	    Sel = (np.array(Sel)[:N],)
 	    #np.random.shuffle(Sel)
 	    Ap_NV =[ Ap[u] for u in Sel]
 	    Ao_NV =[ Ao[u] for u in Sel]
@@ -218,6 +228,7 @@ class NSpinBath ():
 	    z_NV = [ z[u] for u in Sel]          
 	    r_NV = [ r[u] for u in Sel]
 
+	    print(Sel)
 	    theta_NV = [ theta[u] for u in Sel]
 	    phi_NV = [ phi[u] for u in Sel]
 	    # NV_list.append(A_NV[0]) #index 0 is to get rid of outher brackets in A_NV0
@@ -281,7 +292,7 @@ class NSpinBath ():
 	                spin_nbours = []
 	                for pair in pair_sort:
 	                    if pair[1] not in new_nuc_list:
-	                        if j>=cluster[nuc]:
+	                        if j>=eng_bath_cluster[nuc]:
 	                            break
 	                        spin_nbours+=[pair[0],pair[1]]
 	                        pair_nbours+=[(pair[0],pair[1])]
@@ -325,7 +336,7 @@ class NSpinBath ():
 
 		self.Bp = Bp
 		self.Bo = Bo
-        
+	
 	def set_B_Cart (self, Bx, By, Bz):
 
 		self.Bz = Bz
@@ -419,17 +430,17 @@ class NSpinBath ():
 		self.L_hahn = np.ones (len(tau)) 
 		self._set_pars (tau=tau)
 
-		self.hp_1 = self.Bp - self.Ap#/self.gam_n
-		self.ho_1 = self.Bo - self.Ao#/self.gam_n
+		self.hp_1 = (self.gam_n/(2*np.pi))*self.Bp - self.Ap
+		self.ho_1 = (self.gam_n/(2*np.pi))*self.Bo - self.Ao
 		self.h_1 = (self.hp_1**2+self.ho_1**2)**0.5
-		self.hp_0 = self.Bp*np.ones (self._nr_nucl_spins)
-		self.ho_0 = self.Bo*np.ones (self._nr_nucl_spins)
+		self.hp_0 = (self.gam_n/(2*np.pi))*self.Bp*np.ones (self._nr_nucl_spins)
+		self.ho_0 = (self.gam_n/(2*np.pi))*self.Bo*np.ones (self._nr_nucl_spins)
 		self.h_0 = (self.hp_0**2+self.ho_0**2)**0.5
 		self.phi_01 = np.arccos((self.hp_0*self.hp_1 + self.ho_0*self.ho_1)/(self.h_0*self.h_1))
 
 		for i in np.arange(self._nr_nucl_spins):
-			th_0 = self.gam_n*self.h_0[i]*tau
-			th_1 = self.gam_n*self.h_1[i]*tau
+			th_0 = self.h_0[i]*tau/2#self.gam_n*self.h_0[i]*tau
+			th_1 = self.h_1[i]*tau/2#self.gam_n*self.h_1[i]*tau
 			a1 = np.sin(self.phi_01[i])**2
 			a2 = np.sin(th_0)**2
 			a3 = np.sin(th_1)**2
@@ -442,11 +453,13 @@ class NSpinBath ():
 		for i in np.arange(self._nr_nucl_spins):
 			self.L_hahn = self.L_hahn * self.L[i, :]
 
-		plt.figure (figsize=(30,10))
-		plt.plot (tau, self.L_hahn, 'RoyalBlue')
-		plt.plot (tau, self.L_hahn, 'o')
-		plt.title ('Hahn echo')
-		plt.show()
+		#plt.figure (figsize=(30,10))
+		#plt.plot (tau, self.L_hahn, 'RoyalBlue')
+		#plt.plot (tau, self.L_hahn, 'o')
+		#plt.title ('Hahn echo')
+		#plt.show()
+		
+		return self.L_hahn
 
 	def dynamical_decoupling (self, nr_pulses, tau):
 
@@ -540,7 +553,7 @@ class CentralSpinExperiment ():
 
 		print(tb.tabulate(T, stralign='center'))
 	
-	def generate (self, cluster, nr_spins, concentration = .1, 
+	def generate (self, eng_bath_cluster, nr_spins, concentration = .1, 
 				hf_approx = False, clus = True, do_plot = False, eng_bath=False):
 		'''
 		Sets up spin bath and external field
@@ -557,7 +570,7 @@ class CentralSpinExperiment ():
 		self._curr_step = 0
 		self.exp = NSpinBath ()
 		self.Ap, self.Ao, self.Azx, self.Azy, self.r , self.pair_lst , self.geom_lst , self.dC_list, self.T2h, self.T2l= \
-				self.exp.generate_NSpin_distr (cluster, conc = concentration, N = nr_spins, do_sphere=True, eng_bath=eng_bath)
+				self.exp.generate_NSpin_distr (eng_bath_cluster, conc = concentration, N = nr_spins, do_sphere=True, eng_bath=eng_bath)
 	
 		self._hf_approx = hf_approx
 		self._clus = clus
@@ -567,10 +580,12 @@ class CentralSpinExperiment ():
 
 		#modified previous code to give necessary Cartesian components of hf vector (not just Ap and Ao)
 		self.exp.set_spin_bath (self.Ap, self.Ao, self.Azx, self.Azy)
-		self.Bx, self.By, self.Bz = self.exp.set_B_Cart (Bx=0, By=0 , Bz=.000075)
+		self.Bx, self.By, self.Bz = self.exp.set_B_Cart (Bx=0, By=0 , Bz=1)
+		self.exp.set_B (Bp=1, Bo=0)
 
 		self.Larm = self.exp.larm_vec (self._hf_approx)
 		self._nr_nucl_spins = int(self.exp._nr_nucl_spins)
+		self.exp.plot_spin_bath_info()
 		
 		close_cntr = 0
 
@@ -690,7 +705,7 @@ class CentralSpinExperiment ():
 		
 		self.Cz_mean = np.mean([Carr[j][2] for j in range(len(self.pair_lst))])
 		
-		return np.multiply(1,Carr)
+		return Carr
 		
 	def _dCmn (self, ms, m, n):
 		'''
@@ -716,22 +731,8 @@ class CentralSpinExperiment ():
 						  [0,0,0]])
 		
 		dCmn = -((self.ZFS*self.gam_n/self.gam_el)**2 / (self.ZFS*(2-3*ms))) * (dgm.T).dot(dgn)
-
+		
 		return dCmn
-
-#	def _C_merit(self):
-#		'''
-#		sqrt(C^xx_mn **2 + C^yy_mn **2 + C^zz_mn **2) calculated for each pair for sorting. c.f. DOI:10.1103/PhysRevB.78.094303
-#		
-#		'''
-#		
-#		Cmn = self._Cmn()
-#	
-#		Cij = [np.sqrt(sum(Cmn[j][k][k]**2 for k in range(3))) for j in range(self._nCr(self._nr_nucl_spins,2))]
-#		
-#		self.T2est = np.mean([(Cij[j]**-1) for j in range(self._nCr(self._nr_nucl_spins,2))])
-#		
-#		return Cij
 
 	def _C_merit(self):
 		'''
@@ -749,7 +750,7 @@ class CentralSpinExperiment ():
 		
 		return Cij_srt, pair_lst_srt
 
-	def _group_algo(self, g=4):
+	def _group_algo(self, g=1):
 		'''
 		Returns a list of groups for which we will calculate In.Cnm.Im based on DOI:10.1103/PhysRevB.78.094303 grouping algorithm:
 		
@@ -785,6 +786,7 @@ class CentralSpinExperiment ():
 		ind = [[] for j in range(self._nr_nucl_spins)]
 		check_lst = []
 		
+		print("START")
 		if g==1:
 			self._grp_lst = [[j for j in range(self._nr_nucl_spins)]]#[[j] for j in range(self._nr_nucl_spins)]
 		
@@ -817,26 +819,39 @@ class CentralSpinExperiment ():
 		for k in range(len(self._grp_lst)):
 			if len(self._grp_lst[k]) > 1:
 				self._sorted_pairs_test.append(list(it.combinations(self._grp_lst[k], 2)))
+				
+			else:
+				self._sorted_pairs_test.append([-1])
 	
 		self._ind_arr = [[] for j in range(len(self._sorted_pairs_test))]
 		
 		for j in range(len(self._sorted_pairs_test)):
-			for k in range(len(self._sorted_pairs_test[j])):
-				self._ind_arr[j].append(self._sorted_pairs.index(self._sorted_pairs_test[j][k]))
-				
+			if self._sorted_pairs_test[j][0]!=-1:
+				for k in range(len(self._sorted_pairs_test[j])):
+					self._ind_arr[j].append(self._sorted_pairs.index(self._sorted_pairs_test[j][k]))
+
+			else:
+				self._ind_arr[j].append(-1)
+
+		print(self._ind_arr)
 		self._ind_arr_unsrt = [[] for j in range(len(self._sorted_pairs_test))]
 		
 		for j in range(len(self._sorted_pairs_test)):
-			for k in range(len(self._sorted_pairs_test[j])):
-				self._ind_arr_unsrt[j].append(self.pair_lst.index(self._sorted_pairs_test[j][k]))
+			if self._sorted_pairs_test[j][0]!=-1:
+				for k in range(len(self._sorted_pairs_test[j])):
+					self._ind_arr_unsrt[j].append(self.pair_lst.index(self._sorted_pairs_test[j][k]))
+
+			else:
+				self._ind_arr_unsrt[j].append(-1)
 
 		#new list of sorting parameter values (not used)
-		Cmer_arr = [[C[j] for j in self._ind_arr[k]] for k in range(len(self._ind_arr))]
-		ind_test = [[self._ind_arr[k][j] for j in range(len(self._ind_arr[k]))] for k in range(len(self._ind_arr))]
+		Cmer_arr = [[C[j] for j in self._ind_arr[k]] for k in range(len(self._ind_arr)) if self._ind_arr[k][0]!=-1]
+		ind_test = [[self._ind_arr[k][j] for j in range(len(self._ind_arr[k]))] for k in range(len(self._ind_arr)) if self._ind_arr[k][0]!=-1]
 		
 		print('unsorted index array', self._ind_arr_unsrt)
 		print('grouped', self._grp_lst)
 		print('nuc-nuc coupling strength', Cmer_arr)
+		print("FINISH")
 
 
 	def _op_sd(self, Op):
@@ -1051,6 +1066,7 @@ class FullBathDynamics (CentralSpinExperiment):
 			sig = np.trace(U0.dot((self._curr_rho/np.trace(self._curr_rho)).dot(U1)))
 
 			self.hahn_sig.append(sig.real)
+		
 	
 		plt.figure (figsize=(10,5))
 		plt.plot (tauarr, self.hahn_sig, 'Red', label='Interacting')
@@ -1058,7 +1074,10 @@ class FullBathDynamics (CentralSpinExperiment):
 		plt.legend(fontsize=15)
 		plt.title ('Hahn echo')
 		plt.show()
-		
+	
+	
+	def gaus(self,x,sigma):
+		return np.exp(-x**2/(2*sigma**2))
 		
 	def Hahn_Echo_clus (self, tauarr, phi, do_compare=True):
 		'''
@@ -1072,49 +1091,159 @@ class FullBathDynamics (CentralSpinExperiment):
 		
 		self.arr_test = []
 		self.arr_test_clus = []
+		maxsigntauarr = []
 		count=0
 		
 		print('Group list', self._grp_lst, self._ind_arr_unsrt)
+		
+		Hahn_an = self.exp.Hahn_eco(tauarr)
+		peaktopeak = max([tauarr[s] for s in range(len(Hahn_an)) if (Hahn_an[s] >= .999999 and s%5==0)])
+
+		signallist = [n*peaktopeak for n in range(20)]
+
+		newtauarr = []
+		for signal in signallist[:1]:
+			newtauarr.append(np.linspace(signal,signal+.5*.1*peaktopeak,5).tolist())
+		
+		for signal in signallist[1:]:
+			newtauarr.append(np.linspace(signal-.5*.1*peaktopeak,signal+.5*.1*peaktopeak,5).tolist())
+		
+		for sublist in newtauarr:
+		
+			sig_clus_lst = []
+		
+			for t in sublist:
+		
+				print(count/(len(newtauarr)*len(sublist)) * 100,'%')
+				count+=1
+			
+				if do_compare:
+				
+					U_in = [self._U_op_int(0, t), self._U_op_int(1, t)]
+					
+					U0 = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0]).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in[1]))
+					U1 = (np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0]).conj().T).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in[1]).conj().T)
+
+					sig = np.trace(U0.dot(self._curr_rho.dot(U1))).real
+					self.arr_test.append(sig)
+				
+				sig_clus = 1
+				
+				for j in range(len(self._grp_lst)):
+					U_in_clus = [self._U_op_clus(j, 0, t), self._U_op_clus(j, 1, t)]
+					
+					U0_clus = np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]))
+					U1_clus = (np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).conj().T).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]).conj().T)
+				
+					sig_clus *= np.trace(U0_clus.dot(self._block_rho[j].dot(U1_clus)))
+		
+				sig_clus_lst.append(sig_clus)
+
+			self.arr_test_clus.append(max(sig_clus_lst).real)
+			maxsigntauarr.append(sublist[sig_clus_lst.index(max(sig_clus_lst))])
+			print(self.arr_test_clus)
+
+		popt,pcov = curve_fit(self.gaus,np.array(maxsigntauarr),np.array(self.arr_test_clus))
+		
+		self.T2echo = abs(popt[0])
+
+#		plt.figure (figsize=(10,5))
+#		if do_compare:
+#			plt.plot (tauarr, self.arr_test, 'RoyalBlue')
+#			plt.plot (tauarr, self.arr_test, 'o', ms=3)
+#		#plt.plot (tauarr, Hahn_an, 'RoyalBlue')
+#		plt.plot (maxsigntauarr, np.array(self.arr_test_clus),'o',ms=2)
+#		plt.plot(maxsigntauarr,np.exp(-np.array(maxsigntauarr)**2/(2*self.T2echo**2)), color= 'Red', label = '$T_2 = $%.2f'%abs(popt[0]))
+#		plt.ylim(0,1)
+#		plt.title ('Hahn echo')
+#		plt.legend(fontsize=15)
+#		plt.show()
+
+	def Hahn_Echo_clus_trainpulses (self, tauarr, phi, tr, pulses, do_compare=False):
+		'''
+		Caclulates signal for spin echo
+
+		Input:
+		tauarr  [array]		: time array for spin echo
+		phi  [radians]		: Rotation angle of the spin readout basis
+
+		'''
+		
+		self.arr_test = []
+		self.arr_test_clus = []
+		count=0
+		
+		print('Group list', self._grp_lst, self._ind_arr_unsrt)
+		
+		tkarr = np.zeros(pulses+1) #evolution times for the different stages before/after pi pulses
 		
 		for t in tauarr:
 		
 			print(count/len(tauarr) *100,'%')
 			count+=1
-		
-			if do_compare:
-			
-				U_in = [self._U_op_int(0, t), self._U_op_int(1, t)]
-				
-				U0 = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0]).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in[1]))
-				U1 = (np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0]).conj().T).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in[1]).conj().T)
 
-#				sig = .5*(1+np.trace(U0.dot(self._curr_rho.dot(U1))).real)
-				sig = np.trace(U0.dot(self._curr_rho.dot(U1))).real
-				self.arr_test.append(sig)
-			
 			sig_clus = 1
-			
-			for j in range(len(self._grp_lst)):
-				U_in_clus = [self._U_op_clus(j, 0, t), self._U_op_clus(j, 1, t)]
-				
-				U0_clus = np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]))
-				U1_clus = (np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).conj().T).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]).conj().T)
-				
-				sig_clus *= np.trace(U0_clus.dot(self._block_rho[j].dot(U1_clus)))
 
-			#self.arr_test_clus.append(.5*(1 + sig_clus.real))
-			self.arr_test_clus.append(np.abs(sig_clus))
+			for j in range(len(self._grp_lst)):
+			
+				for k in range(pulses+1):
+					if t < (2*k+1)*tr:
+						if k==0:
+							tkarr[k] =t
+						else:
+							tkarr[k] = t-(2*k-1)*tr
+							if tkarr[k]<0:
+								tkarr[k]=0
+			
+					else:
+						if k==0:
+							tkarr[k] = tr
+						else:
+							tkarr[k] = 2*tr
+				
+				Udag = np.eye(2**len(self._grp_lst[j]))
+				U = np.eye(2**len(self._grp_lst[j]))
+				
+				msorder = 0
+				for tk in tkarr:
+					Udag = Udag.dot(self._U_op_clus(j, msorder%2, tk).conj().T)
+					U = (self._U_op_clus(j, (msorder+1)%2, tk)).dot(U)
+					msorder+=1
 	
+				sig_clus *= np.trace(U.dot(self._block_rho[j].dot(Udag)))
+				
+			self.arr_test_clus.append(sig_clus)
+	
+		self.exp.Hahn_eco(tauarr)
+		
 		plt.figure (figsize=(10,5))
 		if do_compare:
-			plt.plot (tauarr, self.arr_test, 'RoyalBlue')#, label='Independent')
-			plt.plot (tauarr, self.arr_test, 'o',ms=3)
-		plt.plot (tauarr, self.arr_test_clus, 'Red', label='Interacting')
-		plt.plot (tauarr, self.arr_test_clus, 'o',ms=3)
-		#plt.legend(fontsize=15)
-		#plt.ylim(0.8,1)
+			plt.plot (tauarr, (1+np.array(self.arr_test))/2, 'RoyalBlue')#, label='Independent')
+			plt.plot (tauarr, (1+np.array(self.arr_test))/2, 'o',ms=3)
+		plt.plot (tauarr, (1+np.array(self.arr_test_clus))/2, 'Red', label='Interacting')
+		plt.plot (tauarr, (1+np.array(self.arr_test_clus))/2, 'o',ms=3)
+		for k in range(pulses+1):
+			plt.axvline((2*k+1)*tr)
+		plt.axhline(1)
 		plt.title ('Hahn echo')
 		plt.show()
+
+	def EchoTest(self):
+	
+		pair_ind = [j for j in range(self._nCr(self._nr_nucl_spins,2))]
+		pair = self.pair_lst
+		pair_enum = list(it.combinations(list(range(self._nr_nucl_spins)),2))
+		
+		Hmsi = []
+		
+		Cmn = self._Cmn()
+		
+		#dCmn = [self._dCmn(ms, pair[index][0], pair[index][1]) for index in range(len(pair_ind))]
+	
+		CmnMean = np.mean(np.array([np.mean(Cmn[index]) for index in range(self._nCr(self._nr_nucl_spins,2))]))
+		print("MEAN", CmnMean)
+	
+		return CmnMean
 
 	def _H_op_clus(self, group, ms):
 		'''
@@ -1129,31 +1258,41 @@ class FullBathDynamics (CentralSpinExperiment):
 		ms 		[0/1]	:  electron spin state
 		
 		'''
-		
-		pair_ind = self._ind_arr_unsrt[group]
-		pair = self._sorted_pairs_test[group]
-		pair_enum = list(it.combinations(list(range(len(self._grp_lst[group]))),2))
-		
-		Hmsi = []
-		
-		Cmn = self._Cmn()
-		
-		dCmn = [self._dCmn(ms, pair[index][0], pair[index][0]) for index in range(len(pair_ind))]
 
 		Hms = sum(sum(self.Larm[ms][self._grp_lst[group][j]][h]*self.In_tens_disjoint[group][j][h] for j in range(len(self._grp_lst[group]))) for h in range(3))
 
-		Hc = (sum(sum(sum(np.asarray(csr_matrix.todense(Cmn[pair_ind[index]][cartm][cartn]*csr_matrix(self.In_tens_disjoint[group][pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens_disjoint[group][pair_enum[index][1]][cartn]))))
-		for cartn in [0,1,2])
-		for cartm in [0,1,2])
-		for index in range(len(pair_ind)))
-		+ sum(sum(sum(np.asarray(csr_matrix.todense(dCmn[index][cartm][cartn]*csr_matrix(self.In_tens_disjoint[group][pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens_disjoint[group][pair_enum[index][1]][cartn]))))
-		for cartn in [0,1,2])
-		for cartm in [0,1,2])
-		for index in range(len(pair_ind)))
-		)
+		if len(self._grp_lst[group])>1:
+			
+			pair_ind = self._ind_arr_unsrt[group]
+			pair = self._sorted_pairs_test[group]
+			pair_enum = list(it.combinations(list(range(len(self._grp_lst[group]))),2))
 		
+			Hmsi = []
+		
+			Cmn = self._Cmn()
+		
+			dCmn = [self._dCmn(ms, pair[index][0], pair[index][0]) for index in range(len(pair_ind))]
+			
+			Hms = sum(sum(self.Larm[ms][self._grp_lst[group][j]][h]*self.In_tens_disjoint[group][j][h] for j in range(len(self._grp_lst[group]))) for h in range(3))
+			
+			Hc = (sum(sum(sum(np.asarray(csr_matrix.todense(Cmn[pair_ind[index]][cartm][cartn]*csr_matrix(self.In_tens_disjoint[group][pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens_disjoint[group][pair_enum[index][1]][cartn]))))
+			for cartn in [0,1,2])
+			for cartm in [0,1,2])
+			for index in range(len(pair_ind)))
+			+ sum(sum(sum(np.asarray(csr_matrix.todense(dCmn[index][cartm][cartn]*csr_matrix(self.In_tens_disjoint[group][pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens_disjoint[group][pair_enum[index][1]][cartn]))))
+			for cartn in [0,1,2])
+			for cartm in [0,1,2])
+			for index in range(len(pair_ind)))
+			)
 
-		return Hms + Hc #+(self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**len(self._grp_lst[group]))
+			return Hms + Hc #+(self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**len(self._grp_lst[group]))
+
+		else:
+			
+			Hms = sum(self.Larm[ms][self._grp_lst[group][0]][h]*self.In_tens_disjoint[group][0][h] for h in range(3))
+
+			return Hms #+(self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**len(self._grp_lst[group]))
+
 
 	# Functions below not in use until we figure out how to propagate the cluster density matrices individually
 	def _U_op_clus(self, group, ms, tau):
