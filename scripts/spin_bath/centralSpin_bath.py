@@ -3,8 +3,8 @@ import numpy as np
 import pylab as plt
 
 import matplotlib 
-matplotlib.rc('xtick', labelsize=18) 
-matplotlib.rc('ytick', labelsize=18) 
+matplotlib.rc('xtick', labelsize=25) 
+matplotlib.rc('ytick', labelsize=25) 
 
 #idea is to create an object-oriented approach, where I add electron spin object, nuclear spin objects
 # and I can then calculate the effect of the nuclear spin on the electronic spin or viceversa
@@ -234,7 +234,7 @@ class CentralSpinExperiment ():
 		self.__set_h_vector (tau=tau, S1=S1, S0=S0)
 		k = int(self.N/2)
 
-		plt.figure (figsize=(50,10))
+		#plt.figure (figsize=(50,10))
 
 		for i in np.arange(self._nr_nucl_spins):
 			th_0 = self.gam_n*self.h_0[i]*tau
@@ -248,8 +248,8 @@ class CentralSpinExperiment ():
 				self.L[i, :] = np.ones(len(tau)) -2*a1*a2
 			else:
 				print ("Not yet")
-			plt.plot (tau*1e6, self.L[i, :])
-		plt.show()
+			#plt.plot (tau*1e6, self.L[i, :])
+		#plt.show()
 
 
 		for i in np.arange(self._nr_nucl_spins):
@@ -258,7 +258,7 @@ class CentralSpinExperiment ():
 		plt.figure (figsize=(50,10))
 		plt.plot (tau*1e6, self.L_dd, 'RoyalBlue')
 		plt.plot (tau*1e6, self.L_dd, 'o')
-		plt.title ('Dynamical Decoupling')
+		plt.title ('Dynamical Decoupling  -  S0 = '+str(S0)+', S1 = '+str(S1), fontsize=25)
 		plt.show()
 
 
@@ -267,12 +267,12 @@ class CentralSpinExperiment ():
 
 exp = CentralSpinExperiment ()
 
-Ap, Ao, r = exp.generate_NSpin_distr (N = 15)
+Ap, Ao, r = exp.generate_NSpin_distr (N = 20, conc = 0.02)
 exp.set_spin_bath (Ap, Ao)
 exp.plot_spin_bath_info ()
 Bz_gauss = 300
-exp.set_B (Bp=0.00, Bo = Bz_gauss*1e-4)
-#exp.FID (tau = np.linspace (1, 10000, 10000)*1e-9)
+exp.set_B (Bp=Bz_gauss*1e-4, Bo = 0)
+exp.FID (tau = np.linspace (1, 100000, 10000)*1e-9)
 
 tau_max= 1e-3
 exp.Hahn_eco (S1=1, S0=0, tau = np.linspace (0, tau_max, 100000))

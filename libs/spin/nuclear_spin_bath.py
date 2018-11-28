@@ -101,6 +101,7 @@ class NSpinBath ():
 	    y = np.zeros(L_size)
 	    z = np.zeros(L_size)
 	    o=0
+
 	    #Calculate Hyperfine strength for all gridpoints
 	    #A[o] changed to 1-3cos^2 and not 3cos^2 - 1        
 	    for n in range(N):
@@ -133,6 +134,7 @@ class NSpinBath ():
 	                    #else:
 	                    #    Azx[o] = 0
 	                    #    Azy[o] = Ao[o]
+
 	                    #Elements for dC correction of Cnm:
 	                    Axx[o] = self.prefactor*np.power(r[o],-3)*(1-3*(np.sin(theta[o])**2)*(np.cos(phi[o])**2))
 	                    Ayy[o] = self.prefactor*np.power(r[o],-3)*(1-3*(np.sin(theta[o])**2)*(np.sin(phi[o])**2))
@@ -177,7 +179,9 @@ class NSpinBath ():
 	                    Azy[o] = Ayz[o]
 	                    Ap[o] = self.prefactor*np.power(r[o],-3)*(1-3*np.cos(theta[o])**2)
 	                    o+=1
-	    # Generate different NV-Objects by randomly selecting which gridpoints contain a carbon.
+
+	    # Generate different NV-Objects by randomly selecting which gridpoints 
+	    # contain a carbon.
 		
 	    if do_sphere == True:
 	        zipped = zip(r,Ap,Ao,Axx,Ayy,Axy,Ayx,Axz,Ayz,Azx,Azy,x,y,z,theta,phi)
@@ -200,7 +204,8 @@ class NSpinBath ():
 	        theta = np.asarray([theta_s for r_s,Ap_s,Ao_s,Axx_s,Ayy_s,Axy_s,Ayx_s,Axz_s,Ayz_s,Azx_s,Azy_s,x_s,y_s,z_s,theta_s,phi_s in zipped])
 	        phi = np.asarray([phi_s for r_s,Ap_s,Ao_s,Axx_s,Ayy_s,Axy_s,Ayx_s,Axz_s,Ayz_s,Azx_s,Azy_s,x_s,y_s,z_s,theta_s,phi_s in zipped])    
 	    
-	    # here we choose the grid points that contain a carbon 13 spin, dependent on concentration
+	    # here we choose the grid points that contain a carbon 13 spin, 
+	    # dependent on the specified concentration
 	    Sel = (np.array(rand.sample(list(range(int(L_size/2))), N)),)#np.where(np.random.rand(int(L_size/2)) < conc)
 	    #np.random.shuffle(Sel)
 	    Ap_NV =[ Ap[u] for u in Sel]
@@ -226,8 +231,8 @@ class NSpinBath ():
 	
 	    self._nr_nucl_spins = len(Ap_NV[0])
 	    self.log.debug ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
-	    self.log.debug ("T2* -- high field: {0} ms".format(T2_h*1e3))
-	    self.log.debug ("T2* -- low field: {0} ms".format (T2_l*1e3))
+	    self.log.debug ("Expected T2* -- high field: {0} ms".format(T2_h*1e3))
+	    self.log.debug ("Expected T2* -- low field: {0} ms".format (T2_l*1e3))
 	    self.T2star_lowField = T2_l
 	    self.T2star_highField = T2_h
         
@@ -238,7 +243,6 @@ class NSpinBath ():
 	        phi_ij_C = []
 	        geom_lst = []
 	        dC_lst = []
-
             
 	    else:
 	        pair_lst = list(it.combinations(list(range(self._nr_nucl_spins)), 2))
@@ -490,7 +494,7 @@ class NSpinBath ():
 		plt.figure (figsize=(50,10))
 		plt.plot (tau, self.L_dd, 'RoyalBlue')
 		plt.plot (tau, self.L_dd, 'o')
-		plt.title ('Dynamical Decoupling')
+		plt.title ('Dynamical Decoupling  -  S0 = '+str(S0)+', S1 = '+str(S1), fontsize=15)
 		plt.show()
 
 class CentralSpinExperiment ():
