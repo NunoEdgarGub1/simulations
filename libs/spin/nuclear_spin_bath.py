@@ -234,7 +234,7 @@ class NSpinBath ():
 	    while(len(Sel)<N):
 	        lst_sel=[sel for sel in np.where(np.random.rand(int(L_size/2)) < conc)[0].tolist() if sel not in Sel]
 	        Sel+=lst_sel
-	        print("Sel", Sel)
+	        #print("Sel", Sel)
 
 	    #Sel = (np.array(rand.sample(list(range(int(L_size/2))), N)),)#np.where(np.random.rand(int(L_size/2)) < conc)
 	    Sel = (np.array(Sel)[:N],)
@@ -254,7 +254,7 @@ class NSpinBath ():
 	    z_NV = [ z[u] for u in Sel]          
 	    r_NV = [ r[u] for u in Sel]
 
-	    print(Sel)
+	    #print(Sel)
 	    theta_NV = [ theta[u] for u in Sel]
 	    phi_NV = [ phi[u] for u in Sel]
 	    # NV_list.append(A_NV[0]) #index 0 is to get rid of outher brackets in A_NV0
@@ -634,12 +634,13 @@ class CentralSpinExperiment ():
 
 		self.In_tens = [[] for j in range(self._nr_nucl_spins)]
 
-		for j in range(self._nr_nucl_spins):
-			Q1 = np.diag([1 for f in range(2**j)])
-			Q2 = np.diag([1 for f in range(2**(self._nr_nucl_spins-(j+1)))])
-			
-			for k in range(3):
-				self.In_tens[j].append(self.kron_test(self.kron_test(self.In[k],2**j),2**(self._nr_nucl_spins-(j+1)), reverse=True))#append(np.kron(np.kron(Q1,self.In[k]),Q2))
+		if not single_exp:
+			for j in range(self._nr_nucl_spins):
+				Q1 = np.diag([1 for f in range(2**j)])
+				Q2 = np.diag([1 for f in range(2**(self._nr_nucl_spins-(j+1)))])
+				
+				for k in range(3):
+					self.In_tens[j].append(self.kron_test(self.kron_test(self.In[k],2**j),2**(self._nr_nucl_spins-(j+1)), reverse=True))#append(np.kron(np.kron(Q1,self.In[k]),Q2))
 	
 		#Run group algo for next step
 		self._group_algo()
@@ -654,7 +655,8 @@ class CentralSpinExperiment ():
 				for k in range(3):
 					self.In_tens_disjoint[l][j].append(np.kron(np.kron(Q1,self.In[k]),Q2))
 
-		self._curr_rho = np.diag([2**-self._nr_nucl_spins for j in range(2**self._nr_nucl_spins)])
+		if not single_exp:
+			self._curr_rho = np.diag([2**-self._nr_nucl_spins for j in range(2**self._nr_nucl_spins)])
 
 		#Create sub matrices based on result of group algo
 		self._block_rho = []
