@@ -15,5 +15,13 @@ reload (NBath)
 
 exp = NBath.CentralSpinExperiment()
 exp.set_thresholds (A = 500e3, sparse = 10)
-exp.generate (nr_spins = 34, concentration = 0.02, single_exp = True)
+exp.set_magnetic_field (Bz=0.001, Bx=0)
+exp.generate (nr_spins = 50, concentration = 0.02, single_exp = True)
 exp.print_nuclear_spins()
+exp.FID_indep_Nspins (tau = np.linspace (0, 30e-6, 1000))
+
+tau_max= 1e-3
+exp.Hahn_echo_indep_Nspins (S1=1, S0=0, tau = np.linspace (0, tau_max, 100000))
+exp.Hahn_echo_indep_Nspins (S1=-0.5, S0=0.5, tau = np.linspace (0, tau_max, 100000))
+exp.Hahn_echo_indep_Nspins (S1=-1.5, S0=-0.5, tau = np.linspace (0, tau_max, 100000))
+

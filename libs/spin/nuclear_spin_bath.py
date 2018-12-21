@@ -262,9 +262,9 @@ class NSpinBath ():
 	    T2_l = sum(Ap_NV[0][u]**2 + Ao_NV[0][u]**2 for u in range(len(Ap_NV[0])))**-0.5
 	
 	    self._nr_nucl_spins = len(Ap_NV[0])
-	    self.log.debug ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
-	    self.log.debug ("T2* -- high field: {0} ms".format(T2_h*1e3))
-	    self.log.debug ("T2* -- low field: {0} ms".format (T2_l*1e3))
+	    self.log.info ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
+	    self.log.info ("T2* -- high field: {0} us".format(T2_h*1e6))
+	    self.log.info ("T2* -- low field: {0} us".format (T2_l*1e6))
 	    self.T2star_lowField = T2_l
 	    self.T2star_highField = T2_h
         
@@ -304,7 +304,7 @@ class NSpinBath ():
 	        geom_lst = [r_ij_C , theta_ij_C , phi_ij_C] #all parameters to calculate nuclear bath couplings
 	        dC_lst = [[Axx_NV[0],Axy_NV[0],Axz_NV[0]],[Ayx_NV[0],Ayy_NV[0],Ayz_NV[0]]] #additional hf values to calculate dC
 
-	        self.log.info ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
+	        #self.log.info ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
 	        return Ap_NV[0], Ao_NV[0] , Azx_NV[0] , Azy_NV[0] , r_NV[0] , pair_lst , geom_lst , dC_lst, T2_h, T2_l
 
 
@@ -321,6 +321,7 @@ class NSpinBath ():
 
 		self.Bp = Bp
 		self.Bo = Bo
+		self.Bx, self.By, self.Bz = self.set_B_Cart (Bx=Bo, Bz=Bp, By=0)
 	
 	def set_B_Cart (self, Bx, By, Bz):
 
@@ -335,15 +336,10 @@ class NSpinBath ():
 		A = (self.Ap**2+self.Ao**2)**0.5
 		phi = np.arccos((self.Ap)/A)*180/np.pi
 
-		plt.plot (A/1000., 'o', color='Crimson')
-		plt.xlabel ('nuclear spins', fontsize=15)
-		plt.ylabel ('hyperfine [kHz]', fontsize=15)
+		plt.hist (A/1000., bins=100,color='Crimson')
+		plt.xlabel ('hyperfine [kHz]', fontsize=15)
 		plt.show()
 
-		plt.plot (phi, 'o', color = 'RoyalBlue')
-		plt.xlabel ('nuclear spins', fontsize=15)
-		plt.ylabel ('angle [deg]', fontsize=15)
-		plt.show()
 
 	#gives Larmor vector. hf_approx condition set to normal condition before we agree if setting azx and azy is a valid approximation...
 	def larm_vec (self, hf_approx):
@@ -370,18 +366,10 @@ class NSpinBath ():
 				lar_0[f] = (self.gam_n/(2*np.pi))*np.array([self.Bx,self.By,self.Bz])
 	
 
-		print('LARM', (self.gam_n/(2*np.pi) *self.Bz + self.Ap.mean())**-1)
+		self.log.debug ('Larmor frequency:', (self.gam_n/(2*np.pi) *self.Bz + self.Ap.mean())**-1)
 		return lar_0, lar_1
 
 	def _set_pars (self, tau):
-	
-		'''
-		Hyperfine parameters used for FID signal without nuc-nuc interactions
-		
-		Input:
-		tau   [array]   : time array for FID signal
-		
-		'''
 
 		self.hp_1 = self.Bp - self.Ap/self.gam_n
 		self.ho_1 = self.Bo - self.Ao/self.gam_n
@@ -392,17 +380,8 @@ class NSpinBath ():
 		self.phi_01 = np.arccos((self.hp_0*self.hp_1 + self.ho_0*self.ho_1)/(self.h_0*self.h_1))
 
 
-
 	def FID (self, tau):
 
-		'''
-		Calculates FID signal for no nuc-nuc interactions
-		
-		Input:
-		tau   [array]   : time array for FID signal
-		
-		'''
-		
 		self.L = np.zeros ((self._nr_nucl_spins, len(tau)))
 		self.L_fid = np.ones (len(tau)) 
 		self._set_pars (tau=tau)
@@ -412,8 +391,6 @@ class NSpinBath ():
 			th_1 = self.gam_n*self.h_1[i]*tau
 			self.L[i, :] = np.cos (th_0/2.)*np.cos (th_1/2.) + \
 						np.sin (th_0/2.)*np.sin (th_1/2.)*np.cos (self.phi_01[i])
-			#plt.plot (tau, self.L[i, :])
-		#plt.show()
 
 		for i in np.arange(self._nr_nucl_spins):
 			self.L_fid = self.L_fid * self.L[i, :]
@@ -424,55 +401,55 @@ class NSpinBath ():
 		plt.title ('Free induction decay', fontsize = 15)
 		plt.show()
 
-        
-	def Hahn_eco (self, tau):
-
+	def __set_h_vector(self, tau, S1 = 1., S0 = 0.):
 		self.L = np.zeros ((self._nr_nucl_spins, len(tau)))
 		self.L_hahn = np.ones (len(tau)) 
+		self.L = np.zeros ((self._nr_nucl_spins, len(tau)))
+		self.L_dd = np.ones (len(tau)) 
 		self._set_pars (tau=tau)
 
-		self.hp_1 = (self.gam_n/(2*np.pi))*self.Bp - self.Ap
-		self.ho_1 = (self.gam_n/(2*np.pi))*self.Bo - self.Ao
+		self.hp_1 = self.Bp*np.ones (self._nr_nucl_spins) + S1*self.Ap/self.gam_n
+		self.ho_1 = self.Bo*np.ones (self._nr_nucl_spins) + S1*self.Ao/self.gam_n
 		self.h_1 = (self.hp_1**2+self.ho_1**2)**0.5
-		self.hp_0 = (self.gam_n/(2*np.pi))*self.Bp*np.ones (self._nr_nucl_spins)
-		self.ho_0 = (self.gam_n/(2*np.pi))*self.Bo*np.ones (self._nr_nucl_spins)
+		self.hp_0= self.Bp*np.ones (self._nr_nucl_spins) + S0*self.Ap/self.gam_n
+		self.ho_0 = self.Bo*np.ones (self._nr_nucl_spins) + S0*self.Ao/self.gam_n
 		self.h_0 = (self.hp_0**2+self.ho_0**2)**0.5
+
 		self.phi_01 = np.arccos((self.hp_0*self.hp_1 + self.ho_0*self.ho_1)/(self.h_0*self.h_1))
 
+
+
+	def Hahn_echo (self, tau, S1=1, S0=0):
+
+		self.__set_h_vector (tau=tau, S1=S1, S0=S0)
+
 		for i in np.arange(self._nr_nucl_spins):
-			th_0 = self.h_0[i]*tau/2#self.gam_n*self.h_0[i]*tau
-			th_1 = self.h_1[i]*tau/2#self.gam_n*self.h_1[i]*tau
+			th_0 = self.gam_n*self.h_0[i]*tau
+			th_1 = self.gam_n*self.h_1[i]*tau
 			a1 = np.sin(self.phi_01[i])**2
 			a2 = np.sin(th_0)**2
 			a3 = np.sin(th_1)**2
 
 			self.L[i, :] = np.ones(len(tau)) -2*a1*a2*a3
 
-			#plt.plot (tau, self.L[i, :])
-		#plt.show()
-
 		for i in np.arange(self._nr_nucl_spins):
 			self.L_hahn = self.L_hahn * self.L[i, :]
-		
-		return self.L_hahn
 
-	def dynamical_decoupling (self, nr_pulses, tau):
+		plt.figure (figsize=(30,10))
+		plt.plot (tau*1e6, self.L_hahn, 'RoyalBlue')
+		plt.plot (tau*1e6, self.L_hahn, 'o')
+		plt.xlabel ('time (us)', fontsize=18)
+		plt.axis ([min(tau*1e6), max(tau*1e6), -0.05, 1.05])
+		plt.title ('Hahn echo')
+		plt.show()
+
+	def dynamical_decoupling (self, nr_pulses, tau, S1=1, S0=0):
 
 		self.N = nr_pulses
-		self.L = np.zeros ((self._nr_nucl_spins, len(tau)))
-		self.L_dd = np.ones (len(tau)) 
-		self._set_pars (tau=tau)
-
-		self.hp_1 = self.Bp + 1.5*self.Ap/self.gam_n
-		self.ho_1 = self.Bo + 1.5*self.Ao/self.gam_n
-		self.h_1 = (self.hp_1**2+self.ho_1**2)**0.5
-		self.hp_0= self.Bp - 0.5*self.Ap/self.gam_n
-		self.ho_0 = self.Bo - 0.5*self.Ao/self.gam_n
-		self.h_0 = (self.hp_0**2+self.ho_0**2)**0.5
-		self.phi_01 = np.arccos((self.hp_0*self.hp_1 + self.ho_0*self.ho_1)/(self.h_0*self.h_1))
+		self.__set_h_vector (tau=tau, S1=S1, S0=S0)
 		k = int(self.N/2)
 
-		plt.figure (figsize=(50,10))
+		#plt.figure (figsize=(50,10))
 
 		for i in np.arange(self._nr_nucl_spins):
 			th_0 = self.gam_n*self.h_0[i]*tau
@@ -485,19 +462,20 @@ class NSpinBath ():
 				a2 = np.sin(k*theta/2.)**2
 				self.L[i, :] = np.ones(len(tau)) -2*a1*a2
 			else:
-				print("Not yet")
-			plt.plot (tau, self.L[i, :])
-		plt.show()
+				print ("Not yet")
+			#plt.plot (tau*1e6, self.L[i, :])
+		#plt.show()
 
 
 		for i in np.arange(self._nr_nucl_spins):
 			self.L_dd = self.L_dd * self.L[i, :]
 
 		plt.figure (figsize=(50,10))
-		plt.plot (tau, self.L_dd, 'RoyalBlue')
-		plt.plot (tau, self.L_dd, 'o')
-		plt.title ('Dynamical Decoupling')
+		plt.plot (tau*1e6, self.L_dd, 'RoyalBlue')
+		plt.plot (tau*1e6, self.L_dd, 'o')
+		plt.title ('Dynamical Decoupling  -  S0 = '+str(S0)+', S1 = '+str(S1), fontsize=25)
 		plt.show()
+
 
 class CentralSpinExperiment ():
     
@@ -513,8 +491,6 @@ class CentralSpinExperiment ():
 		self._sparse_thr = 10
 		self.close_cntr = 0
 		self.sparse_distribution = False
-		
-		super()
 		self._store_evol_dict = False
 
 		self.gam_el = 1.760859 *10**11 #Gyromagnetic ratio rad s-1 T-1
@@ -526,6 +502,8 @@ class CentralSpinExperiment ():
 		self.flipArr = []
 
 		self.prefactor = self.mu0*(self.gam_n**2)/(4*np.pi)*self.hbar**2 /self.hbar/(2*np.pi) #Last /hbar/2pi is to convert from Joule to Hz
+
+		self.nbath = NSpinBath ()
 
 		# current density matrix for nuclear spin bath
 		self._curr_rho = []
@@ -540,6 +518,11 @@ class CentralSpinExperiment ():
 	def set_thresholds (self, A, sparse):
 		self._A_thr = A
 		self._sparse_thr = sparse
+
+	def set_magnetic_field (self, Bz, Bx):
+		self._Bz = Bz
+		self._Bx = Bx
+		self.nbath.set_B (Bp=self._Bz, Bo = self._Bx)
 
 	def set_log_level (self, value):
 		self.log.setLevel (value)
@@ -602,21 +585,21 @@ class CentralSpinExperiment ():
 		'''
 
 		self._curr_step = 0
-		self.exp = NSpinBath ()
 		self.Ap, self.Ao, self.Azx, self.Azy, self.r , self.pair_lst , self.geom_lst , self.dC_list, self.T2h, self.T2l= \
-				self.exp.generate_NSpin_distr (conc = concentration, N = nr_spins, do_sphere=True)
+				self.nbath.generate_NSpin_distr (conc = concentration, N = nr_spins, do_sphere=True)
 	
 		self._hf_approx = hf_approx
 		self._clus = clus
 
 		#modified previous code to give necessary Cartesian components of hf vector (not just Ap and Ao)
-		self.exp.set_spin_bath (self.Ap, self.Ao, self.Azx, self.Azy)
-		self.Bx, self.By, self.Bz = self.exp.set_B_Cart (Bx=0, By=0 , Bz=1)
-		self.exp.set_B (Bp=1, Bo=0)
+		self.nbath.set_spin_bath (self.Ap, self.Ao, self.Azx, self.Azy)
+		# Why do we need to set B hard-coded? Cristian
+		#self.Bx, self.By, self.Bz = self.nbath.set_B_Cart (Bx=0, By=0 , Bz=1)
+		#self.nbath.set_B (Bp=1, Bo=0)
 
-		self.Larm = self.exp.larm_vec (self._hf_approx)
-		self._nr_nucl_spins = int(self.exp._nr_nucl_spins)
-		self.exp.plot_spin_bath_info()
+		self.Larm = self.nbath.larm_vec (self._hf_approx)
+		self._nr_nucl_spins = int(self.nbath._nr_nucl_spins)
+		self.nbath.plot_spin_bath_info()
 		
 		close_cntr = 0
 
@@ -664,7 +647,7 @@ class CentralSpinExperiment ():
 			self._block_rho.append(np.multiply(np.eye(2**len(self._grp_lst[j])),(2**-len(self._grp_lst[j]))))
 
 		if do_plot:
-			self.exp.plot_spin_bath_info()
+			self.nbath.plot_spin_bath_info()
 
 		if not single_exp:
 			pd = np.real(self.get_probability_density())
@@ -708,6 +691,11 @@ class CentralSpinExperiment ():
 			}
 
 
+	def FID_indep_Nspins (self, tau):
+		self.nbath.FID (tau=tau)
+
+	def Hahn_echo_indep_Nspins (self, S1, S0, tau):
+		self.nbath.Hahn_echo (tau=tau, S1=S1, S0=S0)
 
 	def _Cmn (self):
 		'''
@@ -863,7 +851,7 @@ class CentralSpinExperiment ():
 			else:
 				self._ind_arr[j].append(-1)
 
-		print(self._ind_arr)
+		#print(self._ind_arr)
 		self._ind_arr_unsrt = [[] for j in range(len(self._sorted_pairs_test))]
 		
 		for j in range(len(self._sorted_pairs_test)):
@@ -878,9 +866,9 @@ class CentralSpinExperiment ():
 		Cmer_arr = [[C[j] for j in self._ind_arr[k]] for k in range(len(self._ind_arr)) if self._ind_arr[k][0]!=-1]
 		ind_test = [[self._ind_arr[k][j] for j in range(len(self._ind_arr[k]))] for k in range(len(self._ind_arr)) if self._ind_arr[k][0]!=-1]
 		
-		print('unsorted index array', self._ind_arr_unsrt)
-		print('grouped', self._grp_lst)
-		print('nuc-nuc coupling strength', Cmer_arr)
+		self.log.debug ('unsorted index array', self._ind_arr_unsrt)
+		self.log.debug ('grouped', self._grp_lst)
+		self.log.debug ('nuc-nuc coupling strength', Cmer_arr)
 
 
 	def _op_sd(self, Op):
@@ -1035,7 +1023,7 @@ class CentralSpinExperiment ():
 		
 		print('Group list', self._grp_lst, self._ind_arr_unsrt)
 		
-		Hahn_an = self.exp.Hahn_eco(tauarr)
+		Hahn_an = self.nbath.Hahn_eco(tauarr)
 		peaktopeak = max([tauarr[s] for s in range(len(Hahn_an)) if (Hahn_an[s] >= 1-tol and s%5==0)])
 
 		signallist = [n*peaktopeak for n in range(20)]
@@ -1183,6 +1171,7 @@ class CentralSpinExperiment ():
 		else:
 
 			self.log.warning ("Evolution dictionary is not updated.")
+
 
 class FullBathDynamics (CentralSpinExperiment):
 
