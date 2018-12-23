@@ -572,7 +572,7 @@ class CentralSpinExperiment ():
 		return prod
 
 	def generate (self, nr_spins, concentration = .1,
-				hf_approx = False, clus = True, single_exp = False, do_plot = False):
+				hf_approx = False, clus = True, single_exp = False, do_plot = False, Bp=0.001):
 		'''
 		Sets up spin bath and external field
 
@@ -600,7 +600,7 @@ class CentralSpinExperiment ():
 		#modified previous code to give necessary Cartesian components of hf vector (not just Ap and Ao)
 		self.nbath.set_spin_bath (self.Ap, self.Ao, self.Azx, self.Azy)
 		# Why do we need to set B hard-coded? Cristian
-		self.Bp = 0.001
+		self.Bp=Bp
 		self.Bx, self.By, self.Bz = self.nbath.set_B_Cart (Bx=0, By=0 , Bz=self.Bp)
 		self.nbath.set_B (Bp=self.Bp, Bo=0)
 

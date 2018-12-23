@@ -18,7 +18,7 @@ for B in [0,5,10, 20, 50, 100, 500, 1000, 3000]:
     exp.set_thresholds (A = 500e3, sparse = 10)
     exp.set_magnetic_field (Bz=B*1e-4, Bx=0)
     print ("------- MAGNETIC FIELD: ", B, " gauss")
-    exp.generate (nr_spins = 35, concentration = 0.02, single_exp = True)
+    exp.generate (nr_spins = 35, concentration = 0.02, single_exp = True, Bp = B*1e-4)
     #exp.print_nuclear_spins()
     exp.FID_indep_Nspins (tau = np.linspace (0, 30e-6, 1000))
 
