@@ -88,6 +88,7 @@ class NSpinBath ():
 		
 	    '''
 
+	    self.log.info ("Generating spin bath...")
 	    pi = np.pi
 
 	    ##Carbon Lattice Definition
@@ -402,6 +403,7 @@ class NSpinBath ():
 		plt.show()
 
 	def __set_h_vector(self, tau, S1 = 1., S0 = 0.):
+		print ("Bp = ", self.Bp)
 		self.L = np.zeros ((self._nr_nucl_spins, len(tau)))
 		self.L_hahn = np.ones (len(tau)) 
 		self.L = np.zeros ((self._nr_nucl_spins, len(tau)))
@@ -420,6 +422,8 @@ class NSpinBath ():
 
 
 	def Hahn_echo (self, tau, S1=1, S0=0):
+
+		print ("Hahn echo - magnetic field: ", self.Bp)
 
 		self.__set_h_vector (tau=tau, S1=S1, S0=S0)
 
@@ -442,6 +446,8 @@ class NSpinBath ():
 		plt.axis ([min(tau*1e6), max(tau*1e6), -0.05, 1.05])
 		plt.title ('Hahn echo')
 		plt.show()
+
+		return self.L_hahn
 
 	def dynamical_decoupling (self, nr_pulses, tau, S1=1, S0=0):
 
@@ -594,8 +600,9 @@ class CentralSpinExperiment ():
 		#modified previous code to give necessary Cartesian components of hf vector (not just Ap and Ao)
 		self.nbath.set_spin_bath (self.Ap, self.Ao, self.Azx, self.Azy)
 		# Why do we need to set B hard-coded? Cristian
-		#self.Bx, self.By, self.Bz = self.nbath.set_B_Cart (Bx=0, By=0 , Bz=1)
-		#self.nbath.set_B (Bp=1, Bo=0)
+		self.Bp = 0.001
+		self.Bx, self.By, self.Bz = self.nbath.set_B_Cart (Bx=0, By=0 , Bz=self.Bp)
+		self.nbath.set_B (Bp=self.Bp, Bo=0)
 
 		self.Larm = self.nbath.larm_vec (self._hf_approx)
 		self._nr_nucl_spins = int(self.nbath._nr_nucl_spins)
@@ -697,6 +704,10 @@ class CentralSpinExperiment ():
 	def Hahn_echo_indep_Nspins (self, S1, S0, tau):
 		self.nbath.Hahn_echo (tau=tau, S1=S1, S0=S0)
 
+	def dynamical_decoupling_indep_Nspins (self, S1, S0, tau, nr_pulses):
+		self.nbath.dynamical_decoupling (tau=tau, S1=S1, S0=S0, nr_pulses=nr_pulses)
+
+
 	def _Cmn (self):
 		'''
 		Calculates Cmn tensor for every pair in self.pair_lst
@@ -796,6 +807,7 @@ class CentralSpinExperiment ():
 		
 		'''
 		
+		self.log.info ("Running grouping algorithm...")
 		if self._nr_nucl_spins == 1:
 			self._grp_lst = [[0]]
 		
@@ -866,6 +878,7 @@ class CentralSpinExperiment ():
 		Cmer_arr = [[C[j] for j in self._ind_arr[k]] for k in range(len(self._ind_arr)) if self._ind_arr[k][0]!=-1]
 		ind_test = [[self._ind_arr[k][j] for j in range(len(self._ind_arr[k]))] for k in range(len(self._ind_arr)) if self._ind_arr[k][0]!=-1]
 		
+		self.log.info ("Completed.")
 		self.log.debug ('unsorted index array', self._ind_arr_unsrt)
 		self.log.debug ('grouped', self._grp_lst)
 		self.log.debug ('nuc-nuc coupling strength', Cmer_arr)
@@ -1023,7 +1036,7 @@ class CentralSpinExperiment ():
 		
 		print('Group list', self._grp_lst, self._ind_arr_unsrt)
 		
-		Hahn_an = self.nbath.Hahn_eco(tauarr)
+		Hahn_an = self.nbath.Hahn_echo(tauarr)
 		peaktopeak = max([tauarr[s] for s in range(len(Hahn_an)) if (Hahn_an[s] >= 1-tol and s%5==0)])
 
 		signallist = [n*peaktopeak for n in range(20)]
@@ -1070,10 +1083,55 @@ class CentralSpinExperiment ():
 			maxsigntauarr.append(sublist[sig_clus_lst.index(max(sig_clus_lst))])
 			print(self.arr_test_clus)
 
-		popt,pcov = curve_fit(self.gaus,np.array(maxsigntauarr),np.array(self.arr_test_clus))
+		#popt,pcov = curve_fit(self.gaus,np.array(maxsigntauarr),np.array(self.arr_test_clus))
 		
-		self.T2echo = abs(popt[0])
+		#self.T2echo = abs(popt[0])
+		#print ("T2 - Hahn echo: ", self.T2echo)
 		
+	def Hahn_echo (self, tau, phi=0):
+		'''
+		Caclulates signal for spin echo with disjoint clusters [2]
+
+		Input: 
+		tauarr  [array]		: time array for spin echo
+		phi     [radians]	: rotation angle of the spin readout basis
+		
+		1) First calculate Hahn echo without nuc-nuc interactions to find where roughly the peaks
+		should be for the interacting case, as only a rough envelope is required to calculate
+		T2. 
+		2) Select every 5th peak for lower comp. time with peak within [1-tol, 1].
+		3) Create arrays of points in the neighbourhood of the maxima positions (newtauarr)
+		4) For each array in newtauarr, ca;lculate Hahn echo signal for the interacting case,
+		and select maximum from each subset.
+		5) Fit Gaussian to the new data to get approximate value of T2
+		
+
+		'''
+		
+		self.arr_test = []
+		self.arr_test_clus = []
+		sig_clus_lst = []
+		
+		for t in tau:
+				
+			sig_clus = 1
+		
+			for j in range(len(self._grp_lst)):
+				U_in_clus = [self._U_op_clus(j, 0, t), self._U_op_clus(j, 1, t)]
+			
+				U0_clus = np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]))
+				U1_clus = (np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).conj().T).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]).conj().T)
+		
+				sig_clus *= np.trace(U0_clus.dot(self._block_rho[j].dot(U1_clus)))
+
+			#print ("H-E: ", t, sig_clus)
+			#sig_clus_lst.append(sig_clus)
+			self.arr_test_clus.append(sig_clus.real)
+
+		plt.figure()
+		plt.plot (tau*1e6, self.arr_test_clus)
+		plt.show()
+
 
 	def _H_op_clus(self, group, ms):
 		'''
@@ -1140,6 +1198,64 @@ class CentralSpinExperiment ():
 		H = self._H_op_clus(group, ms)
 		
 		U = lin.expm(np.around(-np.multiply(complex(0,1)*tau,H),10))
+		
+		return U
+
+	def _H_op_int(self, ms):
+		'''
+		
+		Updated method to generate Hamiltonian, works for both clustered/full dynamics approach
+		
+		Calculates the Hamiltonian in the presence of non-zero nuclear-nuclear interaction.
+		pair_enum is the pair in group corresponding to pair_ind from the sorting algorithm
+		
+		Input:
+		group 	[int]	:  group number based on sorting algorithm
+		ms 		[0/1]	:  electron spin state
+		
+		'''
+		
+		pair_ind = [j for j in range(self._nCr(self._nr_nucl_spins,2))]
+		pair = self.pair_lst
+		pair_enum = list(it.combinations(list(range(self._nr_nucl_spins)),2))
+		
+		Hmsi = []
+		
+		Cmn = self._Cmn()
+		
+		dCmn = [self._dCmn(ms, pair[index][0], pair[index][1]) for index in range(len(pair_ind))]
+		
+		Hms = sum(sum(np.multiply(self.Larm[ms][j][h],self.In_tens[j][h]) for j in range(self._nr_nucl_spins)) for h in range(3))
+		
+		Hc = (sum(sum(sum(np.asarray(csr_matrix.todense(Cmn[index][cartm][cartn]*csr_matrix(self.In_tens[pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens[pair_enum[index][1]][cartn]))))
+		for cartn in [0,1,2])
+		for cartm in [0,1,2])
+		for index in range(self._nCr(self._nr_nucl_spins,2)))
+		+ sum(sum(sum(np.asarray(csr_matrix.todense(dCmn[index][cartm][cartn]*csr_matrix(self.In_tens[pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens[pair_enum[index][1]][cartn]))))
+		for cartn in [0,1,2])
+		for cartm in [0,1,2])
+		for index in range(self._nCr(self._nr_nucl_spins,2)))
+		)
+
+
+		return Hms + Hc #+ (self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**len(self._grp_lst[group]))
+
+	def _U_op_int(self, ms, tau):
+		'''
+		
+		Updated method to generate Hamiltonian, works for both clustered/full dynamics approach
+		
+		Returns matrix element U_ms
+		(to be used to calculate the evolution in the Ramsey)
+
+		Input:
+		ms 		[0/1]		electron spin state
+		tau 	[seconds]	free-evolution time Ramsey
+		'''
+		
+		H = self._H_op_int(ms)
+		
+		U = lin.expm(-np.multiply(complex(0,1)*tau,H))
 		
 		return U
 
@@ -1246,64 +1362,6 @@ class FullBathDynamics (CentralSpinExperiment):
 	def gaus(self,x,sigma):
 		return np.exp(-x**2/(2*sigma**2))
 		
-	def _H_op_int(self, ms):
-		'''
-		
-		Updated method to generate Hamiltonian, works for both clustered/full dynamics approach
-		
-		Calculates the Hamiltonian in the presence of non-zero nuclear-nuclear interaction.
-		pair_enum is the pair in group corresponding to pair_ind from the sorting algorithm
-		
-		Input:
-		group 	[int]	:  group number based on sorting algorithm
-		ms 		[0/1]	:  electron spin state
-		
-		'''
-		
-		pair_ind = [j for j in range(self._nCr(self._nr_nucl_spins,2))]
-		pair = self.pair_lst
-		pair_enum = list(it.combinations(list(range(self._nr_nucl_spins)),2))
-		
-		Hmsi = []
-		
-		Cmn = self._Cmn()
-		
-		dCmn = [self._dCmn(ms, pair[index][0], pair[index][1]) for index in range(len(pair_ind))]
-		
-		Hms = sum(sum(np.multiply(self.Larm[ms][j][h],self.In_tens[j][h]) for j in range(self._nr_nucl_spins)) for h in range(3))
-		
-		Hc = (sum(sum(sum(np.asarray(csr_matrix.todense(Cmn[index][cartm][cartn]*csr_matrix(self.In_tens[pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens[pair_enum[index][1]][cartn]))))
-		for cartn in [0,1,2])
-		for cartm in [0,1,2])
-		for index in range(self._nCr(self._nr_nucl_spins,2)))
-		+ sum(sum(sum(np.asarray(csr_matrix.todense(dCmn[index][cartm][cartn]*csr_matrix(self.In_tens[pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens[pair_enum[index][1]][cartn]))))
-		for cartn in [0,1,2])
-		for cartm in [0,1,2])
-		for index in range(self._nCr(self._nr_nucl_spins,2)))
-		)
-
-
-		return Hms + Hc #+ (self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**len(self._grp_lst[group]))
-
-	def _U_op_int(self, ms, tau):
-		'''
-		
-		Updated method to generate Hamiltonian, works for both clustered/full dynamics approach
-		
-		Returns matrix element U_ms
-		(to be used to calculate the evolution in the Ramsey)
-
-		Input:
-		ms 		[0/1]		electron spin state
-		tau 	[seconds]	free-evolution time Ramsey
-		'''
-		
-		H = self._H_op_int(ms)
-		
-		U = lin.expm(-np.multiply(complex(0,1)*tau,H))
-		
-		return U
-
 
 	def Ramsey (self, tau,  phi, flip_prob = 0, t_read = 0):
 		'''
