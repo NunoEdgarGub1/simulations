@@ -13,19 +13,24 @@ reload (NBath)
 #exp.set_B (Bp=0.001, Bo =0.000)
 #exp.FID (tau = np.linspace (1, 100000, 10000)*1e-9)
 
-for B in [0,5,10, 20, 50, 100, 500, 1000, 3000]:
+for B in [1, 10, 100, 1000, 5000]:
     exp = NBath.CentralSpinExperiment()
     exp.set_thresholds (A = 500e3, sparse = 10)
     exp.set_magnetic_field (Bz=B*1e-4, Bx=0)
     print ("------- MAGNETIC FIELD: ", B, " gauss")
-    exp.generate (nr_spins = 35, concentration = 0.02, single_exp = True, Bp = B*1e-4)
+    exp.generate (nr_spins = 50, concentration = 0.02, single_exp = True, Bp = B*1e-4)
     #exp.print_nuclear_spins()
     exp.FID_indep_Nspins (tau = np.linspace (0, 30e-6, 1000))
 
-    tau_max= 10.e-3
-    exp.Hahn_echo_indep_Nspins (S1=1, S0=0, tau = np.linspace (0, tau_max, 100000))
+    tau_max= 5.e-3
+    ind = exp.Hahn_echo_indep_Nspins (S1=1, S0=0, tau = np.linspace (0, tau_max, 100000), do_plot=False)
     #exp.Hahn_Echo_clus (tauarr = np.linspace (0, tau_max, 500), phi = 0, do_compare = False)
-    exp.Hahn_echo (tau = np.linspace (0, tau_max, 1000), phi = 0)
+    clus = exp.Hahn_echo (tau = np.linspace (0, tau_max, 500), phi = 0, do_plot = False)
+
+    plt.figure (figsize = (15,8))
+    plt.plot (1e6*np.linspace (0, tau_max, 100000), ind, color = 'crimson')
+    plt.plot (1e6*np.linspace (0, tau_max, 500), clus, color = 'royalblue')
+    plt.show()
 
 #exp.Hahn_echo_indep_Nspins (S1=-0.5, S0=0.5, tau = np.linspace (0, tau_max, 100000))
 #exp.Hahn_echo_indep_Nspins (S1=-1.5, S0=-0.5, tau = np.linspace (0, tau_max, 100000))

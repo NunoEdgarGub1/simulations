@@ -421,35 +421,37 @@ class NSpinBath ():
 
 
 
-	def Hahn_echo (self, tau, S1=1, S0=0):
+	def Hahn_echo (self, tau, S1=1, S0=0, do_plot = True):
 
 		print ("Hahn echo - magnetic field: ", self.Bp)
 
 		self.__set_h_vector (tau=tau, S1=S1, S0=S0)
 
 		for i in np.arange(self._nr_nucl_spins):
-			th_0 = self.gam_n*self.h_0[i]*tau
-			th_1 = self.gam_n*self.h_1[i]*tau
+			# !!!!!! attention: is this /(2pi) correct???
+			th_0 = self.gam_n*self.h_0[i]*tau/(2*np.pi)
+			th_1 = self.gam_n*self.h_1[i]*tau/(2*np.pi)
 			a1 = np.sin(self.phi_01[i])**2
-			a2 = np.sin(th_0)**2
-			a3 = np.sin(th_1)**2
+			a2 = np.sin(th_0/2)**2
+			a3 = np.sin(th_1/2)**2
 
-			self.L[i, :] = np.ones(len(tau)) -2*a1*a2*a3
+			self.L[i, :] = np.ones(len(tau)) - 2*a1*a2*a3
 
 		for i in np.arange(self._nr_nucl_spins):
 			self.L_hahn = self.L_hahn * self.L[i, :]
 
-		plt.figure (figsize=(30,10))
-		plt.plot (tau*1e6, self.L_hahn, 'RoyalBlue')
-		plt.plot (tau*1e6, self.L_hahn, 'o')
-		plt.xlabel ('time (us)', fontsize=18)
-		plt.axis ([min(tau*1e6), max(tau*1e6), -0.05, 1.05])
-		plt.title ('Hahn echo')
-		plt.show()
+		if do_plot:
+			plt.figure (figsize=(30,10))
+			plt.plot (tau*1e6, self.L_hahn, 'RoyalBlue')
+			plt.plot (tau*1e6, self.L_hahn, 'o')
+			plt.xlabel ('time (us)', fontsize=18)
+			plt.axis ([min(tau*1e6), max(tau*1e6), -0.05, 1.05])
+			plt.title ('Hahn echo')
+			plt.show()
 
 		return self.L_hahn
 
-	def dynamical_decoupling (self, nr_pulses, tau, S1=1, S0=0):
+	def dynamical_decoupling (self, nr_pulses, tau, S1=1, S0=0, do_plot = True):
 
 		self.N = nr_pulses
 		self.__set_h_vector (tau=tau, S1=S1, S0=S0)
@@ -476,12 +478,14 @@ class NSpinBath ():
 		for i in np.arange(self._nr_nucl_spins):
 			self.L_dd = self.L_dd * self.L[i, :]
 
-		plt.figure (figsize=(50,10))
-		plt.plot (tau*1e6, self.L_dd, 'RoyalBlue')
-		plt.plot (tau*1e6, self.L_dd, 'o')
-		plt.title ('Dynamical Decoupling  -  S0 = '+str(S0)+', S1 = '+str(S1), fontsize=25)
-		plt.show()
+		if do_plot:
+			plt.figure (figsize=(50,10))
+			plt.plot (tau*1e6, self.L_dd, 'RoyalBlue')
+			plt.plot (tau*1e6, self.L_dd, 'o')
+			plt.title ('Dynamical Decoupling  -  S0 = '+str(S0)+', S1 = '+str(S1), fontsize=25)
+			plt.show()
 
+		return self.L_dd
 
 class CentralSpinExperiment ():
     
@@ -600,9 +604,8 @@ class CentralSpinExperiment ():
 		#modified previous code to give necessary Cartesian components of hf vector (not just Ap and Ao)
 		self.nbath.set_spin_bath (self.Ap, self.Ao, self.Azx, self.Azy)
 		# Why do we need to set B hard-coded? Cristian
-		self.Bp=Bp
-		self.Bx, self.By, self.Bz = self.nbath.set_B_Cart (Bx=0, By=0 , Bz=self.Bp)
-		self.nbath.set_B (Bp=self.Bp, Bo=0)
+		self.Bx, self.By, self.Bz = self.nbath.set_B_Cart (Bx=0, By=0 , Bz=Bp)
+		self.nbath.set_B (Bp=Bp, Bo=0)
 
 		self.Larm = self.nbath.larm_vec (self._hf_approx)
 		self._nr_nucl_spins = int(self.nbath._nr_nucl_spins)
@@ -701,8 +704,9 @@ class CentralSpinExperiment ():
 	def FID_indep_Nspins (self, tau):
 		self.nbath.FID (tau=tau)
 
-	def Hahn_echo_indep_Nspins (self, S1, S0, tau):
-		self.nbath.Hahn_echo (tau=tau, S1=S1, S0=S0)
+	def Hahn_echo_indep_Nspins (self, S1, S0, tau, do_plot = True):
+		hahn = self.nbath.Hahn_echo (tau=tau, S1=S1, S0=S0, do_plot = do_plot)
+		return hahn
 
 	def dynamical_decoupling_indep_Nspins (self, S1, S0, tau, nr_pulses):
 		self.nbath.dynamical_decoupling (tau=tau, S1=S1, S0=S0, nr_pulses=nr_pulses)
@@ -1007,7 +1011,7 @@ class CentralSpinExperiment ():
 			return m, s
 			
 			
-	def Hahn_Echo_clus (self, tauarr, phi, tol=1e-6, do_compare=True):
+	def Hahn_Echo_clus (self, tauarr, phi, tol=1e-6, do_compare=True, do_plot = True):
 		'''
 		Caclulates signal for spin echo with disjoint clusters [2]
 
@@ -1088,7 +1092,7 @@ class CentralSpinExperiment ():
 		#self.T2echo = abs(popt[0])
 		#print ("T2 - Hahn echo: ", self.T2echo)
 		
-	def Hahn_echo (self, tau, phi=0):
+	def Hahn_echo (self, tau, phi=0, do_plot = True):
 		'''
 		Caclulates signal for spin echo with disjoint clusters [2]
 
@@ -1128,10 +1132,12 @@ class CentralSpinExperiment ():
 			#sig_clus_lst.append(sig_clus)
 			self.arr_test_clus.append(sig_clus.real)
 
-		plt.figure()
-		plt.plot (tau*1e6, self.arr_test_clus)
-		plt.show()
+		if do_plot:
+			plt.figure()
+			plt.plot (tau*1e6, self.arr_test_clus)
+			plt.show()
 
+		return self.arr_test_clus
 
 	def _H_op_clus(self, group, ms):
 		'''
