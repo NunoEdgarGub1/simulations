@@ -380,6 +380,7 @@ class NSpinBath ():
 		self.phi_01 = np.arccos((self.hp_0*self.hp_1 + self.ho_0*self.ho_1)/(self.h_0*self.h_1))
 
 
+
 	def FID (self, tau):
 
 		self.L = np.zeros ((self._nr_nucl_spins, len(tau)))
@@ -525,6 +526,34 @@ class CentralSpinExperiment ():
 		self.log = logging.getLogger ('nBath')
 		logging.basicConfig (level = logging.INFO)
 
+	def generate_bath (self, concentration = .1, hf_approx = False, do_plot = False):
+		'''
+		Sets up spin bath and external field
+
+		Input:
+		concentration 	[float]		: concnetration of nuclei with I>0
+		hf_approx       [boolean]   : high Bz field approximation: neglects Azx and Azy components
+		
+		clus			[boolean]	: apply corrections to HF vector due to secular approximation
+									  in disjoint cluster method c.f. DOI:10.1103/PhysRevB.78.094303
+									  		
+		'''
+
+		clus = True
+		self._curr_step = 0
+		self.Ap, self.Ao, self.Azx, self.Azy, self.r , self.pair_lst , self.geom_lst , self.dC_list, self.T2h, self.T2l= \
+				self.nbath.generate_NSpin_distr (conc = concentration, do_sphere=True)
+	
+		self._hf_approx = hf_approx
+		self._clus = clus
+
+		#modified previous code to give necessary Cartesian components of hf vector 
+		#(not just Ap and Ao)
+		self.nbath.set_spin_bath (self.Ap, self.Ao, self.Azx, self.Azy)
+		#self.Larm = self.nbath.larm_vec (self._hf_approx)
+		self._nr_nucl_spins = int(self.nbath._nr_nucl_spins)
+		self.nbath.plot_spin_bath_info()
+
 	def set_thresholds (self, A, sparse):
 		self._A_thr = A
 		self._sparse_thr = sparse
@@ -576,112 +605,156 @@ class CentralSpinExperiment ():
 
 		return prod
 
-	def generate_old (self, concentration = .1,
-				hf_approx = False, clus = True, single_exp = False, do_plot = False, Bp=0.001):
+	def FID_indep_Nspins (self, tau):
+		self.nbath.FID (tau=tau)
+
+	def Hahn_echo_indep_Nspins (self, S1, S0, tau, do_plot = True):
+		hahn = self.nbath.Hahn_echo (tau=tau, S1=S1, S0=S0, do_plot = do_plot)
+		return hahn
+
+	def dynamical_decoupling_indep_Nspins (self, S1, S0, tau, nr_pulses):
+		self.nbath.dynamical_decoupling (tau=tau, S1=S1, S0=S0, nr_pulses=nr_pulses)
+
+	
+	def _nCr(self, n, k):
+		k = min(k, n-k)
+		n = ft.reduce(op.mul, range(n, n-k, -1), 1)
+		d = ft.reduce(op.mul, range(1, k+1), 1)
+		return n//d
+
+
+	def _H_op_clus(self, group, ms):
 		'''
-		Sets up spin bath and external field
+		
+		Updated method to generate Hamiltonian, works for both clustered/full dynamics approach
+		
+		Calculates the Hamiltonian in the presence of non-zero nuclear-nuclear interaction.
+		pair_enum is the pair in group corresponding to pair_ind from the sorting algorithm
+		
+		Input:
+		group 	[int]	:  group number based on sorting algorithm
+		ms 		[0/1]	:  electron spin state
+		
+		'''
+
+		Hms = sum(sum(self.Larm[ms][self._grp_lst[group][j]][h]*self.In_tens_disjoint[group][j][h] for j in range(len(self._grp_lst[group]))) for h in range(3))
+
+		if len(self._grp_lst[group])>1:
+			
+			pair_ind = self._ind_arr_unsrt[group]
+			pair = self._sorted_pairs_test[group]
+			pair_enum = list(it.combinations(list(range(len(self._grp_lst[group]))),2))
+		
+			Hmsi = []
+		
+			Cmn = self._Cmn()
+		
+			dCmn = [self._dCmn(ms, pair[index][0], pair[index][0]) for index in range(len(pair_ind))]
+			
+			Hms = sum(sum(self.Larm[ms][self._grp_lst[group][j]][h]*self.In_tens_disjoint[group][j][h] for j in range(len(self._grp_lst[group]))) for h in range(3))
+			
+			Hc = (sum(sum(sum(np.asarray(csr_matrix.todense(Cmn[pair_ind[index]][cartm][cartn]*csr_matrix(self.In_tens_disjoint[group][pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens_disjoint[group][pair_enum[index][1]][cartn]))))
+			for cartn in [0,1,2])
+			for cartm in [0,1,2])
+			for index in range(len(pair_ind)))
+			+ sum(sum(sum(np.asarray(csr_matrix.todense(dCmn[index][cartm][cartn]*csr_matrix(self.In_tens_disjoint[group][pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens_disjoint[group][pair_enum[index][1]][cartn]))))
+			for cartn in [0,1,2])
+			for cartm in [0,1,2])
+			for index in range(len(pair_ind)))
+			)
+
+			return Hms + Hc #+(self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**len(self._grp_lst[group]))
+
+		else:
+			
+			Hms = sum(self.Larm[ms][self._grp_lst[group][0]][h]*self.In_tens_disjoint[group][0][h] for h in range(3))
+
+			return Hms #+(self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**len(self._grp_lst[group]))
+
+
+	def _U_op_clus(self, group, ms, tau):
+		'''
+		
+		Updated method to generate Hamiltonian, works for both clustered/full dynamics approach
+		
+		Returns matrix element U_ms
+		(to be used to calculate the evolution in the Ramsey)
 
 		Input:
-		nr_spins 		[integer]	: number of nuclear spins in simulation
-		concentration 	[float]		: concnetration of nuclei with I>0
-		hf_approx       [boolean]   : high Bz field approximation: neglects Azx and Azy components
+		ms 		[0/1]		electron spin state
+		tau 	[seconds]	free-evolution time Ramsey
+		'''
 		
-		clus			[boolean]	: apply corrections to HF vector due to secular approximation
-									  in disjoint cluster method c.f. DOI:10.1103/PhysRevB.78.094303
-									  
-		single_exp      [boolean]   : if False, doesn't update the probability distribution and 
-									  can apply the disjoint cluster methods. Otherwise, full dynamics
-									  have to be considered due to the required Overhauser operator.
+		H = self._H_op_clus(group, ms)
+		
+		U = lin.expm(np.around(-np.multiply(complex(0,1)*tau,H),10))
+		
+		return U
+
+	def _H_op_int(self, ms):
+		'''
+		
+		Updated method to generate Hamiltonian, works for both clustered/full dynamics approach
+		
+		Calculates the Hamiltonian in the presence of non-zero nuclear-nuclear interaction.
+		pair_enum is the pair in group corresponding to pair_ind from the sorting algorithm
+		
+		Input:
+		group 	[int]	:  group number based on sorting algorithm
+		ms 		[0/1]	:  electron spin state
 		
 		'''
-
-		self._curr_step = 0
-		self.Ap, self.Ao, self.Azx, self.Azy, self.r , self.pair_lst , self.geom_lst , self.dC_list, self.T2h, self.T2l= \
-				self.nbath.generate_NSpin_distr (conc = concentration, do_sphere=True)
-	
-		self._hf_approx = hf_approx
-		self._clus = clus
-
-		#modified previous code to give necessary Cartesian components of hf vector (not just Ap and Ao)
-		self.nbath.set_spin_bath (self.Ap, self.Ao, self.Azx, self.Azy)
-		# Why do we need to set B hard-coded? Cristian
-		self.Bx, self.By, self.Bz = self.nbath.set_B_Cart (Bx=0, By=0 , Bz=Bp)
-		self.nbath.set_B (Bp=Bp, Bo=0)
-
-		self.Larm = self.nbath.larm_vec (self._hf_approx)
-		self._nr_nucl_spins = int(self.nbath._nr_nucl_spins)
-		self.nbath.plot_spin_bath_info()
 		
-		close_cntr = 0
+		pair_ind = [j for j in range(self._nCr(self._nr_nucl_spins,2))]
+		pair = self.pair_lst
+		pair_enum = list(it.combinations(list(range(self._nr_nucl_spins)),2))
+		
+		Hmsi = []
+		
+		Cmn = self._Cmn()
+		
+		dCmn = [self._dCmn(ms, pair[index][0], pair[index][1]) for index in range(len(pair_ind))]
+		
+		Hms = sum(sum(np.multiply(self.Larm[ms][j][h],self.In_tens[j][h]) for j in range(self._nr_nucl_spins)) for h in range(3))
+		
+		Hc = (sum(sum(sum(np.asarray(csr_matrix.todense(Cmn[index][cartm][cartn]*csr_matrix(self.In_tens[pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens[pair_enum[index][1]][cartn]))))
+		for cartn in [0,1,2])
+		for cartm in [0,1,2])
+		for index in range(self._nCr(self._nr_nucl_spins,2)))
+		+ sum(sum(sum(np.asarray(csr_matrix.todense(dCmn[index][cartm][cartn]*csr_matrix(self.In_tens[pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens[pair_enum[index][1]][cartn]))))
+		for cartn in [0,1,2])
+		for cartm in [0,1,2])
+		for index in range(self._nCr(self._nr_nucl_spins,2)))
+		)
 
-		if not(self._A_thr == None):
-			self.log.debug("Checking hyperfine threshold...")
-			for j in range(self._nr_nucl_spins):
-				if np.abs(self.Ap[j]) > self._A_thr:
-					close_cntr +=1
-			
-			self.log.warning ('{0} spins with |A| > {1}MHz.'.format(close_cntr, self._A_thr*1e-6))
-		self.close_cntr = close_cntr
 
-		#hyperfine vector
-		self.HFvec = np.array([[self.Azx[j], self.Azy[j], self.Ap[j]] for j in range(self._nr_nucl_spins)])
+		return Hms + Hc #+ (self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**len(self._grp_lst[group]))
 
-		self.In_tens = [[] for j in range(self._nr_nucl_spins)]
+	def _U_op_int(self, ms, tau):
+		'''
+		
+		Updated method to generate Hamiltonian, works for both clustered/full dynamics approach
+		
+		Returns matrix element U_ms
+		(to be used to calculate the evolution in the Ramsey)
 
-		if not single_exp:
-			for j in range(self._nr_nucl_spins):
-				Q1 = np.diag([1 for f in range(2**j)])
-				Q2 = np.diag([1 for f in range(2**(self._nr_nucl_spins-(j+1)))])
-				
-				for k in range(3):
-					self.In_tens[j].append(self.kron_test(self.kron_test(self.In[k],2**j),2**(self._nr_nucl_spins-(j+1)), reverse=True))#append(np.kron(np.kron(Q1,self.In[k]),Q2))
-	
-		#Run group algo for next step
-		self._group_algo()
+		Input:
+		ms 		[0/1]		electron spin state
+		tau 	[seconds]	free-evolution time Ramsey
+		'''
+		
+		H = self._H_op_int(ms)
+		
+		U = lin.expm(-np.multiply(complex(0,1)*tau,H))
+		
+		return U
 
-		#Creating 2**g * 2**g spin Pauli matrices. For disjoint cluster only
-		self.In_tens_disjoint = [[[] for l in range(len(self._grp_lst[j]))] for j in range(len(self._grp_lst))]
-		for l in range(len(self._grp_lst)):
-			for j in range(len(self._grp_lst[l])):
-				Q1 = np.eye(2**j)
-				Q2 = np.eye(2**(len(self._grp_lst[l])-(j+1)))
 
-				for k in range(3):
-					self.In_tens_disjoint[l][j].append(np.kron(np.kron(Q1,self.In[k]),Q2))
 
-		if not single_exp:
-			self._curr_rho = np.diag([2**-self._nr_nucl_spins for j in range(2**self._nr_nucl_spins)])
+class CentralSpinExp_cluster (CentralSpinExperiment):
 
-		#Create sub matrices based on result of group algo
-		self._block_rho = []
-		for j in range(len(self._grp_lst)):
-			self._block_rho.append(np.multiply(np.eye(2**len(self._grp_lst[j])),(2**-len(self._grp_lst[j]))))
-
-		if do_plot:
-			self.nbath.plot_spin_bath_info()
-
-		if not single_exp:
-			pd = np.real(self.get_probability_density())
-
-			if not(self._sparse_thr == None):
-				az, p_az = self.get_probability_density()
-				az2 = np.roll(az,-1)
-				if max(az2[:-1]-az[:-1]) > self._sparse_thr:
-					self.log.debug ('Sparse distribution:{0} kHz'.format(max(az2[:-1]-az[:-1])))
-					self.sparse_distribution = True
-				else:
-					self.sparse_distribution = False
-
-			self.values_Az_kHz = pd[0]
-			stat = self.get_overhauser_stat()
-			if self._store_evol_dict:
-				self._evol_dict ['0'] = {
-					'mean_OH': np.real(stat[0]),
-					'std_OH': np.real(stat[1]),
-					'prob_Az': pd[1],
-					'outcome': None,
-				}
-
+	def __init__ (self, nr_spins):
+		CentralSpinExperiment.__init__ (self=self, nr_spins=nr_spins)
 
 	def generate_bath (self, concentration = .1, hf_approx = False, do_plot = False):
 		'''
@@ -747,36 +820,6 @@ class CentralSpinExperiment ():
 
 		if do_plot:
 			self.nbath.plot_spin_bath_info()
-
-
-	def reset_bath_unpolarized (self, do_plot = True):
-
-		self.log.debug ("Reset bath...")
-		self._evol_dict = {}
-		self._curr_rho = np.eye(2**self._nr_nucl_spins)/np.trace(np.eye(2**self._nr_nucl_spins))
-
-		pd = np.real(self.get_probability_density())
-		self.values_Az_kHz = pd[0]
-		stat = self.get_overhauser_stat()
-		self._evol_dict = {}
-		if self._store_evol_dict:
-			self._evol_dict ['0'] = {
-				'mean_OH': np.real(stat[0]),
-				'std_OH': np.real(stat[1]),
-				'prob_Az': pd[1],
-				'outcome': None,
-			}
-
-
-	def FID_indep_Nspins (self, tau):
-		self.nbath.FID (tau=tau)
-
-	def Hahn_echo_indep_Nspins (self, S1, S0, tau, do_plot = True):
-		hahn = self.nbath.Hahn_echo (tau=tau, S1=S1, S0=S0, do_plot = do_plot)
-		return hahn
-
-	def dynamical_decoupling_indep_Nspins (self, S1, S0, tau, nr_pulses):
-		self.nbath.dynamical_decoupling (tau=tau, S1=S1, S0=S0, nr_pulses=nr_pulses)
 
 
 	def _Cmn (self):
@@ -956,127 +999,6 @@ class CentralSpinExperiment ():
 		self.log.debug ('nuc-nuc coupling strength', Cmer_arr)
 
 
-	def _op_sd(self, Op):
-		'''
-		Calculates the standard deviation of operator Op with density matric rho
-
-		Input:
-		Op: matrix representing operator (whatever dimension)
-		'''
-		
-		SD = np.sqrt(np.trace(Op.dot(Op.dot(self._curr_rho))) - np.trace(Op.dot(self._curr_rho))**2)
-		
-		return SD
-	
-	def _nCr(self, n, k):
-		k = min(k, n-k)
-		n = ft.reduce(op.mul, range(n, n-k, -1), 1)
-		d = ft.reduce(op.mul, range(1, k+1), 1)
-		return n//d
-
-
-	def _op_mean(self, Op):
-		'''
-		Calculates the mean of operator Op with density matric rho
-
-		Input:
-		Op: matrix representing operator (whatever dimension)
-		'''
-		
-		Mean = np.trace(Op.dot(self._curr_rho))
-		
-		return Mean
-	
-	
-	def _overhauser_op(self):
-		
-		'''
-		Creates Overhauser operator for updating probability distribution.
-		Does not admit clustering due to sum over different clusters having different dimensions
-		
-		Output:
-		self._over_op  [list] :  list of Overhauser operator Cartesian components
-		
-		'''
-
-		self._over_op = []
-		
-		for j in range(3):
-			self._over_op.append(sum(self.HFvec[k][j]*self.In_tens[k][j] for k in range(self._nr_nucl_spins)))
-
-		return self._over_op
-
-
-	def get_probability_density(self):
-		'''
-		(1) Calculates eigenvalues (Az) and (normalized) eigenvectors (|Az>) of the Overhauser Operator z component
-		(2) Sorts list of P(Az) = eigvec_prob[j] = Tr(|Az><Az| rho) according to sorted Az list (to plot later on)
-		(3) returns list of eigvals and P(Az) list
-		
-		Output:
-		eigvals       [kHz]: sorted Az list
-		eigvec_prob        : Tr(|Az><Az| rho) list sorted according to Az list
-		
-		Note:
-		I believe this is what's being shown in Fig.1 of DOI: 10.1103/PhysRevA.74.032316, although they start from a Gaussian distribution. Discuss.
-		'''
-		
-		eigvals, eigvecs = np.linalg.eig(self._overhauser_op()[2])
-		eigvecs = [x for (y,x) in sorted(zip(eigvals,eigvecs), key=lambda pair: pair[0], reverse=True)]
-		eigval_prob = multiply((2*np.sqrt(np.pi))**-1 * 1e-3, sorted(eigvals))#multiply((2*np.pi)**-1 * 1e-3, sorted(eigvals))
-		
-		#Calculate Tr(|Az><Az| rho)
-		eigvec_prob = np.zeros(2**self._nr_nucl_spins,dtype=complex)
-		for j in range(2**self._nr_nucl_spins):
-		
-			#takes the non zero element from each eigvector in the sorted list
-			dum_var = [i for i, e in enumerate(eigvecs[j]) if e != 0][0]
-			eigvec_prob[j] = self._curr_rho[dum_var,dum_var]
-
-
-		return eigval_prob, eigvec_prob
-		
-	def get_values_Az (self):
-		return self.values_Az_kHz
-
-	def get_histogram_Az (self, nbins = 50):
-		hist, bin_edges = np.histogram (self.get_values_Az(), nbins)
-		bin_ctrs = 0.5*(bin_edges[1:]+bin_edges[:-1])
-		return hist, bin_ctrs
-		
-	def plot_curr_probability_density (self, title = ''):
-		az, pd = np.real(self.get_probability_density())
-
-		plt.figure (figsize = (10,6))
-		plt.plot (az, pd, 'o', color = 'RoyalBlue')
-		plt.xlabel ('(kHz)', fontsize = 18)
-		plt.xlabel ('frequency hyperfine (kHz)', fontsize=18)
-		plt.ylabel ('probability', fontsize=18)
-		plt.title (title, fontsize=18)
-		plt.show()
-
-	def get_overhauser_stat (self, component=None):
-		'''
-		Calculates mean and standard deviation of Overhauser field
-
-		Input:
-		component [int]: 1,2,3
-
-		Output:
-		mean, standard_deviation [int]
-		'''
-
-		if component in [0,1,2]:
-			return self._op_mean(self._overhauser_op()[component]), self._op_sd(self._overhauser_op()[component])
-
-		else:
-			m = np.zeros(3)
-			s = np.zeros(3)
-			for j in range(3):
-				m[j] = np.real(self._op_mean(self._overhauser_op()[j]))
-				s[j] = np.real(self._op_sd(self._overhauser_op()[j]))
-
-			return m, s
 			
 			
 	def Hahn_Echo_clus (self, tauarr, phi, tol=1e-6, do_compare=True, do_plot = True):
@@ -1197,160 +1119,6 @@ class CentralSpinExperiment ():
 
 		return self.arr_test_clus
 
-	def _H_op_clus(self, group, ms):
-		'''
-		
-		Updated method to generate Hamiltonian, works for both clustered/full dynamics approach
-		
-		Calculates the Hamiltonian in the presence of non-zero nuclear-nuclear interaction.
-		pair_enum is the pair in group corresponding to pair_ind from the sorting algorithm
-		
-		Input:
-		group 	[int]	:  group number based on sorting algorithm
-		ms 		[0/1]	:  electron spin state
-		
-		'''
-
-		Hms = sum(sum(self.Larm[ms][self._grp_lst[group][j]][h]*self.In_tens_disjoint[group][j][h] for j in range(len(self._grp_lst[group]))) for h in range(3))
-
-		if len(self._grp_lst[group])>1:
-			
-			pair_ind = self._ind_arr_unsrt[group]
-			pair = self._sorted_pairs_test[group]
-			pair_enum = list(it.combinations(list(range(len(self._grp_lst[group]))),2))
-		
-			Hmsi = []
-		
-			Cmn = self._Cmn()
-		
-			dCmn = [self._dCmn(ms, pair[index][0], pair[index][0]) for index in range(len(pair_ind))]
-			
-			Hms = sum(sum(self.Larm[ms][self._grp_lst[group][j]][h]*self.In_tens_disjoint[group][j][h] for j in range(len(self._grp_lst[group]))) for h in range(3))
-			
-			Hc = (sum(sum(sum(np.asarray(csr_matrix.todense(Cmn[pair_ind[index]][cartm][cartn]*csr_matrix(self.In_tens_disjoint[group][pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens_disjoint[group][pair_enum[index][1]][cartn]))))
-			for cartn in [0,1,2])
-			for cartm in [0,1,2])
-			for index in range(len(pair_ind)))
-			+ sum(sum(sum(np.asarray(csr_matrix.todense(dCmn[index][cartm][cartn]*csr_matrix(self.In_tens_disjoint[group][pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens_disjoint[group][pair_enum[index][1]][cartn]))))
-			for cartn in [0,1,2])
-			for cartm in [0,1,2])
-			for index in range(len(pair_ind)))
-			)
-
-			return Hms + Hc #+(self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**len(self._grp_lst[group]))
-
-		else:
-			
-			Hms = sum(self.Larm[ms][self._grp_lst[group][0]][h]*self.In_tens_disjoint[group][0][h] for h in range(3))
-
-			return Hms #+(self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**len(self._grp_lst[group]))
-
-
-	def _U_op_clus(self, group, ms, tau):
-		'''
-		
-		Updated method to generate Hamiltonian, works for both clustered/full dynamics approach
-		
-		Returns matrix element U_ms
-		(to be used to calculate the evolution in the Ramsey)
-
-		Input:
-		ms 		[0/1]		electron spin state
-		tau 	[seconds]	free-evolution time Ramsey
-		'''
-		
-		H = self._H_op_clus(group, ms)
-		
-		U = lin.expm(np.around(-np.multiply(complex(0,1)*tau,H),10))
-		
-		return U
-
-	def _H_op_int(self, ms):
-		'''
-		
-		Updated method to generate Hamiltonian, works for both clustered/full dynamics approach
-		
-		Calculates the Hamiltonian in the presence of non-zero nuclear-nuclear interaction.
-		pair_enum is the pair in group corresponding to pair_ind from the sorting algorithm
-		
-		Input:
-		group 	[int]	:  group number based on sorting algorithm
-		ms 		[0/1]	:  electron spin state
-		
-		'''
-		
-		pair_ind = [j for j in range(self._nCr(self._nr_nucl_spins,2))]
-		pair = self.pair_lst
-		pair_enum = list(it.combinations(list(range(self._nr_nucl_spins)),2))
-		
-		Hmsi = []
-		
-		Cmn = self._Cmn()
-		
-		dCmn = [self._dCmn(ms, pair[index][0], pair[index][1]) for index in range(len(pair_ind))]
-		
-		Hms = sum(sum(np.multiply(self.Larm[ms][j][h],self.In_tens[j][h]) for j in range(self._nr_nucl_spins)) for h in range(3))
-		
-		Hc = (sum(sum(sum(np.asarray(csr_matrix.todense(Cmn[index][cartm][cartn]*csr_matrix(self.In_tens[pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens[pair_enum[index][1]][cartn]))))
-		for cartn in [0,1,2])
-		for cartm in [0,1,2])
-		for index in range(self._nCr(self._nr_nucl_spins,2)))
-		+ sum(sum(sum(np.asarray(csr_matrix.todense(dCmn[index][cartm][cartn]*csr_matrix(self.In_tens[pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens[pair_enum[index][1]][cartn]))))
-		for cartn in [0,1,2])
-		for cartm in [0,1,2])
-		for index in range(self._nCr(self._nr_nucl_spins,2)))
-		)
-
-
-		return Hms + Hc #+ (self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**len(self._grp_lst[group]))
-
-	def _U_op_int(self, ms, tau):
-		'''
-		
-		Updated method to generate Hamiltonian, works for both clustered/full dynamics approach
-		
-		Returns matrix element U_ms
-		(to be used to calculate the evolution in the Ramsey)
-
-		Input:
-		ms 		[0/1]		electron spin state
-		tau 	[seconds]	free-evolution time Ramsey
-		'''
-		
-		H = self._H_op_int(ms)
-		
-		U = lin.expm(-np.multiply(complex(0,1)*tau,H))
-		
-		return U
-
-
-	def plot_bath_evolution (self):
-
-		if self._store_evol_dict:
-
-			y = self.values_Az_kHz
-			x = np.arange(self._curr_step+1)
-			
-			[X, Y] = np.meshgrid (x,y)
-
-			# make 2D matrix with prob(Az) as function of time
-			M = np.zeros ([len(y), self._curr_step+1])
-
-			for j in range(self._curr_step+1):
-				M [:, j] = np.ndarray.transpose(self._evol_dict[str(j)]['prob_Az'])
-
-			plt.figure (figsize = (15, 8));
-			plt.pcolor (X, Y, M)
-			plt.xlabel ('step number', fontsize=22)
-			plt.ylabel ('Az (kHz)', fontsize=22)
-			for j in y:
-				plt.axhline(j,c='r',alpha=0.1,ls=':')
-			plt.colorbar(orientation='vertical')
-			plt.show()
-
-		else:
-
-			self.log.warning ("Evolution dictionary is not updated.")
 
 
 class FullBathDynamics (CentralSpinExperiment):
@@ -1384,6 +1152,138 @@ class FullBathDynamics (CentralSpinExperiment):
 
 		self.log = logging.getLogger ('nBath')
 		logging.basicConfig (level = logging.INFO)
+
+
+	def generate_bath (self, concentration = .1,
+				hf_approx = False, clus = True, single_exp = False, do_plot = False, Bp=0.001):
+		'''
+		Sets up spin bath and external field
+
+		Input:
+		nr_spins 		[integer]	: number of nuclear spins in simulation
+		concentration 	[float]		: concnetration of nuclei with I>0
+		hf_approx       [boolean]   : high Bz field approximation: neglects Azx and Azy components
+		
+		clus			[boolean]	: apply corrections to HF vector due to secular approximation
+									  in disjoint cluster method c.f. DOI:10.1103/PhysRevB.78.094303
+									  
+		single_exp      [boolean]   : if False, doesn't update the probability distribution and 
+									  can apply the disjoint cluster methods. Otherwise, full dynamics
+									  have to be considered due to the required Overhauser operator.
+		
+		'''
+
+
+		# this one has to overload generate_bath, amking it specific to
+		# a sequence of correlated measurements, where we need to plot the 
+		# probability distribution and record its evolution
+		# TO BE DONE!!!! (now I just copy-pasted the old one -CB)
+		self._curr_step = 0
+		self.Ap, self.Ao, self.Azx, self.Azy, self.r , self.pair_lst , self.geom_lst , self.dC_list, self.T2h, self.T2l= \
+				self.nbath.generate_NSpin_distr (conc = concentration, do_sphere=True)
+	
+		self._hf_approx = hf_approx
+		self._clus = clus
+
+		#modified previous code to give necessary Cartesian components of hf vector (not just Ap and Ao)
+		self.nbath.set_spin_bath (self.Ap, self.Ao, self.Azx, self.Azy)
+		# Why do we need to set B hard-coded? Cristian
+		self.Bx, self.By, self.Bz = self.nbath.set_B_Cart (Bx=0, By=0 , Bz=Bp)
+		self.nbath.set_B (Bp=Bp, Bo=0)
+
+		self.Larm = self.nbath.larm_vec (self._hf_approx)
+		self._nr_nucl_spins = int(self.nbath._nr_nucl_spins)
+		self.nbath.plot_spin_bath_info()
+		
+		close_cntr = 0
+
+		if not(self._A_thr == None):
+			self.log.debug("Checking hyperfine threshold...")
+			for j in range(self._nr_nucl_spins):
+				if np.abs(self.Ap[j]) > self._A_thr:
+					close_cntr +=1
+			
+			self.log.warning ('{0} spins with |A| > {1}MHz.'.format(close_cntr, self._A_thr*1e-6))
+		self.close_cntr = close_cntr
+
+		#hyperfine vector
+		self.HFvec = np.array([[self.Azx[j], self.Azy[j], self.Ap[j]] for j in range(self._nr_nucl_spins)])
+
+		self.In_tens = [[] for j in range(self._nr_nucl_spins)]
+
+		if not single_exp:
+			for j in range(self._nr_nucl_spins):
+				Q1 = np.diag([1 for f in range(2**j)])
+				Q2 = np.diag([1 for f in range(2**(self._nr_nucl_spins-(j+1)))])
+				
+				for k in range(3):
+					self.In_tens[j].append(self.kron_test(self.kron_test(self.In[k],2**j),2**(self._nr_nucl_spins-(j+1)), reverse=True))#append(np.kron(np.kron(Q1,self.In[k]),Q2))
+	
+		#Run group algo for next step
+		self._group_algo()
+
+		#Creating 2**g * 2**g spin Pauli matrices. For disjoint cluster only
+		self.In_tens_disjoint = [[[] for l in range(len(self._grp_lst[j]))] for j in range(len(self._grp_lst))]
+		for l in range(len(self._grp_lst)):
+			for j in range(len(self._grp_lst[l])):
+				Q1 = np.eye(2**j)
+				Q2 = np.eye(2**(len(self._grp_lst[l])-(j+1)))
+
+				for k in range(3):
+					self.In_tens_disjoint[l][j].append(np.kron(np.kron(Q1,self.In[k]),Q2))
+
+		if not single_exp:
+			self._curr_rho = np.diag([2**-self._nr_nucl_spins for j in range(2**self._nr_nucl_spins)])
+
+		#Create sub matrices based on result of group algo
+		self._block_rho = []
+		for j in range(len(self._grp_lst)):
+			self._block_rho.append(np.multiply(np.eye(2**len(self._grp_lst[j])),(2**-len(self._grp_lst[j]))))
+
+		if do_plot:
+			self.nbath.plot_spin_bath_info()
+
+		if not single_exp:
+			pd = np.real(self.get_probability_density())
+
+			if not(self._sparse_thr == None):
+				az, p_az = self.get_probability_density()
+				az2 = np.roll(az,-1)
+				if max(az2[:-1]-az[:-1]) > self._sparse_thr:
+					self.log.debug ('Sparse distribution:{0} kHz'.format(max(az2[:-1]-az[:-1])))
+					self.sparse_distribution = True
+				else:
+					self.sparse_distribution = False
+
+			self.values_Az_kHz = pd[0]
+			stat = self.get_overhauser_stat()
+			if self._store_evol_dict:
+				self._evol_dict ['0'] = {
+					'mean_OH': np.real(stat[0]),
+					'std_OH': np.real(stat[1]),
+					'prob_Az': pd[1],
+					'outcome': None,
+				}
+
+
+	def reset_bath_unpolarized (self, do_plot = True):
+
+		self.log.debug ("Reset bath...")
+		self._evol_dict = {}
+		self._curr_rho = np.eye(2**self._nr_nucl_spins)/np.trace(np.eye(2**self._nr_nucl_spins))
+
+		pd = np.real(self.get_probability_density())
+		self.values_Az_kHz = pd[0]
+		stat = self.get_overhauser_stat()
+		self._evol_dict = {}
+		if self._store_evol_dict:
+			self._evol_dict ['0'] = {
+				'mean_OH': np.real(stat[0]),
+				'std_OH': np.real(stat[1]),
+				'prob_Az': pd[1],
+				'outcome': None,
+			}
+
 
 	def Hahn_Echo (self, tauarr, phi, do_compare=True):
 		'''
@@ -1551,3 +1451,146 @@ class FullBathDynamics (CentralSpinExperiment):
 				'outcome': ms,
 			}
 
+	def _op_sd(self, Op):
+		'''
+		Calculates the standard deviation of operator Op with density matric rho
+
+		Input:
+		Op: matrix representing operator (whatever dimension)
+		'''
+		
+		SD = np.sqrt(np.trace(Op.dot(Op.dot(self._curr_rho))) - np.trace(Op.dot(self._curr_rho))**2)
+		
+		return SD
+
+	def _op_mean(self, Op):
+		'''
+		Calculates the mean of operator Op with density matric rho
+
+		Input:
+		Op: matrix representing operator (whatever dimension)
+		'''
+		
+		Mean = np.trace(Op.dot(self._curr_rho))
+		
+		return Mean
+	
+	
+	def _overhauser_op(self):
+		
+		'''
+		Creates Overhauser operator for updating probability distribution.
+		Does not admit clustering due to sum over different clusters having different dimensions
+		
+		Output:
+		self._over_op  [list] :  list of Overhauser operator Cartesian components
+		
+		'''
+
+		self._over_op = []
+		
+		for j in range(3):
+			self._over_op.append(sum(self.HFvec[k][j]*self.In_tens[k][j] for k in range(self._nr_nucl_spins)))
+
+		return self._over_op
+
+
+	def get_probability_density(self):
+		'''
+		(1) Calculates eigenvalues (Az) and (normalized) eigenvectors (|Az>) of the Overhauser Operator z component
+		(2) Sorts list of P(Az) = eigvec_prob[j] = Tr(|Az><Az| rho) according to sorted Az list (to plot later on)
+		(3) returns list of eigvals and P(Az) list
+		
+		Output:
+		eigvals       [kHz]: sorted Az list
+		eigvec_prob        : Tr(|Az><Az| rho) list sorted according to Az list
+		
+		Note:
+		I believe this is what's being shown in Fig.1 of DOI: 10.1103/PhysRevA.74.032316, although they start from a Gaussian distribution. Discuss.
+		'''
+		
+		eigvals, eigvecs = np.linalg.eig(self._overhauser_op()[2])
+		eigvecs = [x for (y,x) in sorted(zip(eigvals,eigvecs), key=lambda pair: pair[0], reverse=True)]
+		eigval_prob = multiply((2*np.sqrt(np.pi))**-1 * 1e-3, sorted(eigvals))#multiply((2*np.pi)**-1 * 1e-3, sorted(eigvals))
+		
+		#Calculate Tr(|Az><Az| rho)
+		eigvec_prob = np.zeros(2**self._nr_nucl_spins,dtype=complex)
+		for j in range(2**self._nr_nucl_spins):
+		
+			#takes the non zero element from each eigvector in the sorted list
+			dum_var = [i for i, e in enumerate(eigvecs[j]) if e != 0][0]
+			eigvec_prob[j] = self._curr_rho[dum_var,dum_var]
+
+
+		return eigval_prob, eigvec_prob
+		
+	def get_values_Az (self):
+		return self.values_Az_kHz
+
+	def get_histogram_Az (self, nbins = 50):
+		hist, bin_edges = np.histogram (self.get_values_Az(), nbins)
+		bin_ctrs = 0.5*(bin_edges[1:]+bin_edges[:-1])
+		return hist, bin_ctrs
+		
+	def plot_curr_probability_density (self, title = ''):
+		az, pd = np.real(self.get_probability_density())
+
+		plt.figure (figsize = (10,6))
+		plt.plot (az, pd, 'o', color = 'RoyalBlue')
+		plt.xlabel ('(kHz)', fontsize = 18)
+		plt.xlabel ('frequency hyperfine (kHz)', fontsize=18)
+		plt.ylabel ('probability', fontsize=18)
+		plt.title (title, fontsize=18)
+		plt.show()
+
+	def get_overhauser_stat (self, component=None):
+		'''
+		Calculates mean and standard deviation of Overhauser field
+
+		Input:
+		component [int]: 1,2,3
+
+		Output:
+		mean, standard_deviation [int]
+		'''
+
+		if component in [0,1,2]:
+			return self._op_mean(self._overhauser_op()[component]), self._op_sd(self._overhauser_op()[component])
+
+		else:
+			m = np.zeros(3)
+			s = np.zeros(3)
+			for j in range(3):
+				m[j] = np.real(self._op_mean(self._overhauser_op()[j]))
+				s[j] = np.real(self._op_sd(self._overhauser_op()[j]))
+
+			return m, s
+
+
+	def plot_bath_evolution (self):
+
+		if self._store_evol_dict:
+
+			y = self.values_Az_kHz
+			x = np.arange(self._curr_step+1)
+			
+			[X, Y] = np.meshgrid (x,y)
+
+			# make 2D matrix with prob(Az) as function of time
+			M = np.zeros ([len(y), self._curr_step+1])
+
+			for j in range(self._curr_step+1):
+				M [:, j] = np.ndarray.transpose(self._evol_dict[str(j)]['prob_Az'])
+
+			plt.figure (figsize = (15, 8));
+			plt.pcolor (X, Y, M)
+			plt.xlabel ('step number', fontsize=22)
+			plt.ylabel ('Az (kHz)', fontsize=22)
+			for j in y:
+				plt.axhline(j,c='r',alpha=0.1,ls=':')
+			plt.colorbar(orientation='vertical')
+			plt.show()
+
+		else:
+
+			self.log.warning ("Evolution dictionary is not updated.")

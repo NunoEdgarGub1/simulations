@@ -13,7 +13,7 @@ reload (NBath)
 #exp.set_B (Bp=0.001, Bo =0.000)
 #exp.FID (tau = np.linspace (1, 100000, 10000)*1e-9)
 
-exp = NBath.CentralSpinExperiment(nr_spins = 35)
+exp = NBath.CentralSpinExp_cluster (nr_spins = 35)
 exp.generate_bath (concentration = 0.011)
 #exp.print_nuclear_spins()
 
