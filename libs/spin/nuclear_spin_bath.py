@@ -30,20 +30,21 @@ import random as rand
 import tabulate as tb
 import functools as ft
 import logging
-
+import numba
 
 import matplotlib as mpl
 from matplotlib import pyplot as plt
 from matplotlib.colors import ListedColormap
 from scipy.sparse import csr_matrix
 from mpl_toolkits.mplot3d import Axes3D
+from importlib import reload
+
 mpl.rc('xtick', labelsize=18) 
 mpl.rc('ytick', labelsize=18)
 
-
 class NSpinBath ():
 
-	def __init__ (self):
+	def __init__ (self, nr_spins):
 
 	    #Constants
 	    #lattice parameter
@@ -54,12 +55,123 @@ class NSpinBath ():
 	    self.hbar = 1.05457173*10**(-34)
 	    self.mu0 = 4*np.pi*10**(-7)
 	    self.ZFS = 2.87*10**9
+	    self.nr_spins = nr_spins
 
 	    self.prefactor = self.mu0*self.gam_el*self.gam_n/(4*np.pi)*self.hbar**2 /self.hbar/(2*np.pi) #Last /hbar/2pi is to convert from Joule to Hz
 	    self.log = logging.getLogger ('nBath')
 	    logging.basicConfig (level = logging.INFO)
 
-	def generate_NSpin_distr (self, conc=0.02, N=25, do_sphere = True):
+	    self.log.info ("Generating lattice...")
+	    self.Ap0, self.Ao0, self.Azx0, self.Azy0, self.Axx0, self.Ayy0, self.Axy0, self.Ayx0, self.Axz0, self.Ayz0, self.r0, self.theta0, self.phi0, self.x0, self.y0, self.z0 = self._generate_lattice (N=self.nr_spins, a0=self.a0, prefactor = self.prefactor)
+	    self.log.info ("Created lattice.")
+
+	def _generate_lattice (self, N, a0, prefactor):
+	    pi = np.pi
+	    ##Carbon Lattice Definition
+	    #Rotation matrix to get b along z-axis
+	    Rz=np.array([[np.cos(pi/4),-np.sin(pi/4),0],[np.sin(pi/4),np.cos(pi/4),0],[0,0,1]])
+	    Rx=np.array([[1,0,0],[0,np.cos(np.arctan(np.sqrt(2))),-np.sin(np.arctan(np.sqrt(2)))],[0,np.sin(np.arctan(np.sqrt(2))),np.cos(np.arctan(np.sqrt(2)))]])
+	    # Basis vectors
+	    a = np.array([0,0,0])
+	    b = a0/4*np.array([1,1,1])
+	    b = Rx.dot(Rz).dot(b)
+	    # Basisvectors of Bravais lattice
+	    i = a0/2*np.array([0,1,1])
+	    i = Rx.dot(Rz).dot(i)
+	    j = a0/2*np.array([1,0,1])
+	    j = Rx.dot(Rz).dot(j)
+	    k = a0/2*np.array([1,1,0])
+	    k = Rx.dot(Rz).dot(k)
+
+	    # define position of NV in middle of the grid
+	    NVPos = round(N/2) *i +round(N/2)*j+round(N/2)*k
+
+	    #Initialise
+	    L_size = 2*(N)**3-2 # minus 2 for N and V positions
+	    Ap = np.zeros(L_size) #parallel
+	    Ao = np.zeros(L_size) # perpendicular component
+	    Azx = np.zeros(L_size) # perpendicular component
+	    Azy = np.zeros(L_size) # perpendicular component
+	    
+	    #Elements for dC correction of Cnm:
+	    Axx = np.zeros(L_size)
+	    Ayy = np.zeros(L_size)
+	    Axy = np.zeros(L_size)
+	    Ayx = np.zeros(L_size)
+	    Axz = np.zeros(L_size)
+	    Ayz = np.zeros(L_size)
+	    r = np.zeros(L_size)
+	    theta = np.zeros(L_size)
+	    phi = np.zeros(L_size)
+	    x = np.zeros(L_size)
+	    y = np.zeros(L_size)
+	    z = np.zeros(L_size)
+
+	    o = 0
+	    for n in range(N):
+	        for m in range(N):
+	            for l in range(N):
+	                if (n== round(N/2) and m==round(N/2) and l == round(N/2)):
+	                    #Omit the Nitrogen and the Vacancy centre in the calculations
+	                    o+=0
+	                else:
+	                    pos1 = n*i + m*j+l*k - NVPos
+	                    pos2 = pos1 + b
+	                    r[o] = np.sqrt(pos1.dot(pos1))
+	                    #Ap[o] = self.prefactor*np.power(r[o],-3)*(1-3*np.power(pos1[2],2)*np.power(r[o],-2))
+	                    Ao[o] = prefactor*np.power(r[o],-3)*3*(np.sqrt(np.power(pos1[0],2)+np.power(pos1[1],2))*pos1[2]*np.power(r[o],-2))                            
+	                    x[o] = pos1[0]
+	                    y[o] = pos1[1]
+	                    z[o] = pos1[2]
+	                    if x[o] != 0:
+	                        phi[o] = np.arctan(y[o]/x[o])
+	                    else:
+	                        phi[o] = np.pi/2
+	                           
+	                    if r[o] != 0:
+	                        theta[o] = np.arccos(z[o]/r[o])
+	                    else:
+	                        print ('Error: nuclear spin overlapping with NV centre')
+	                            
+	                    Axx[o] = prefactor*(r[o]**(-3))*(1-3*(np.sin(theta[o])**2)*(np.cos(phi[o])**2))
+	                    Ayy[o] = prefactor*(r[o]**(-3))*(1-3*(np.sin(theta[o])**2)*(np.sin(phi[o])**2))
+	                    Axy[o] = prefactor*(r[o]**(-3))*(-1.5*(np.sin(theta[o])**2)*(np.sin(2*phi[o])))
+	                    Ayx[o] = Axy[o]
+	                    Axz[o] = prefactor*(r[o]**(-3))*(-3*np.cos(theta[o])*np.sin(theta[o])*np.cos(phi[o]))
+	                    Ayz[o] = prefactor*(r[o]**(-3))*(-3*np.cos(theta[o])*np.sin(theta[o])*np.sin(phi[o]))
+	                    Azx[o] = Axz[o]
+	                    Azy[o] = Ayz[o]
+	                    Ap[o] = prefactor*(r[o]**(-3))*(1-3*np.cos(theta[o])**2)
+	                    o +=1
+	                    r[o] = np.sqrt(pos2.dot(pos2))
+	                    Ao[o] = prefactor*(r[o]**(-3))*3*(np.sqrt(np.power(pos2[0],2)+np.power(pos2[1],2))*pos2[2]*np.power(r[o],-2))
+	                    x[o] = pos2[0]
+	                    y[o] = pos2[1]
+	                    z[o] = pos2[2]
+	                    if x[o] != 0:
+	                        phi[o] = np.arctan(y[o]/x[o])
+	                    else:
+	                        phi[o] = np.pi/2
+	                           
+	                    if r[o] != 0:
+	                        theta[o] = np.arccos(z[o]/r[o])
+	                    else:
+	                        print ('Error: nuclear spin overlapping with NV centre') 
+	                            
+	                    Axx[o] = prefactor*(r[o]**(-3))*(1-3*(np.sin(theta[o])**2)*(np.cos(phi[o])**2))
+	                    Ayy[o] = prefactor*(r[o]**(-3))*(1-3*(np.sin(theta[o])**2)*(np.sin(phi[o])**2))
+	                    Axy[o] = prefactor*(r[o]**(-3))*(-1.5*(np.sin(theta[o])**2)*(np.sin(2*phi[o])))
+	                    Ayx[o] = Axy[o]
+	                    Axz[o] = prefactor*(r[o]**(-3))*(-3*np.cos(theta[o])*np.sin(theta[o])*np.cos(phi[o]))
+	                    Ayz[o] = prefactor*(r[o]**(-3))*(-3*np.cos(theta[o])*np.sin(theta[o])*np.sin(phi[o]))
+	                    Azx[o] = Axz[o]
+	                    Azy[o] = Ayz[o]
+	                    Ap[o] = prefactor*(r[o]**(-3))*(1-3*np.cos(theta[o])**2)
+	                    o+=1
+
+	    return Ap, Ao, Azx, Azy, Axx, Ayy, Axy, Ayx, Axz, Ayz, r, theta, phi, x, y, z
+
+	def generate_NSpin_distr (self, conc=0.02, do_sphere = True):
 	
 	    '''
 	    Delft code to generate nuclear spins.
@@ -88,129 +200,17 @@ class NSpinBath ():
 		
 	    '''
 
-	    self.log.info ("Generating spin bath...")
-	    pi = np.pi
 
-	    ##Carbon Lattice Definition
-	    #Rotation matrix to get b along z-axis
-	    Rz=np.array([[np.cos(pi/4),-np.sin(pi/4),0],[np.sin(pi/4),np.cos(pi/4),0],[0,0,1]])
-	    Rx=np.array([[1,0,0],[0,np.cos(np.arctan(np.sqrt(2))),-np.sin(np.arctan(np.sqrt(2)))],[0,np.sin(np.arctan(np.sqrt(2))),np.cos(np.arctan(np.sqrt(2)))]])
-	    # Basis vectors
-	    a = np.array([0,0,0])
-	    b = self.a0/4*np.array([1,1,1])
-	    b = Rx.dot(Rz).dot(b)
-	    # Basisvectors of Bravais lattice
-	    i = self.a0/2*np.array([0,1,1])
-	    i = Rx.dot(Rz).dot(i)
-	    j = self.a0/2*np.array([1,0,1])
-	    j = Rx.dot(Rz).dot(j)
-	    k = self.a0/2*np.array([1,1,0])
-	    k = Rx.dot(Rz).dot(k)
-
-	    # define position of NV in middle of the grid
-	    NVPos = round(N/2) *i +round(N/2)*j+round(N/2)*k
-
-	    #Initialise
-	    L_size = 2*(N)**3-2 # minus 2 for N and V positions
-	    Ap = np.zeros(L_size) #parallel
-	    Ao = np.zeros(L_size) # perpendicular component
-	    Azx = np.zeros(L_size) # perpendicular component
-	    Azy = np.zeros(L_size) # perpendicular component
+	    self.log.info ("Generating nuclear spin bath...")
 	    
-	    #Elements for dC correction of Cnm:
-	    Axx = np.zeros(L_size)
-	    Ayy = np.zeros(L_size)
-	    Axy = np.zeros(L_size)
-	    Ayx = np.zeros(L_size)
-	    Axz = np.zeros(L_size)
-	    Ayz = np.zeros(L_size)
-	    r = np.zeros(L_size)
-	    theta = np.zeros(L_size)
-	    phi = np.zeros(L_size)
-	    x = np.zeros(L_size)
-	    y = np.zeros(L_size)
-	    z = np.zeros(L_size)
-	    o=0
-	    #Calculate Hyperfine strength for all gridpoints
-	    #A[o] changed to 1-3cos^2 and not 3cos^2 - 1        
-	    for n in range(N):
-	        for m in range(N):
-	            for l in range(N):
-	                if (n== round(N/2) and m==round(N/2) and l == round(N/2)) :#Omit the Nitrogen and the Vacancy centre in the calculations
-	                    o+=0
-	                else:
-	                    pos1 = n*i + m*j+l*k - NVPos
-	                    pos2 = pos1 + b
-	                    r[o] = np.sqrt(pos1.dot(pos1))
-	                    #Ap[o] = self.prefactor*np.power(r[o],-3)*(1-3*np.power(pos1[2],2)*np.power(r[o],-2))
-	                    Ao[o] = self.prefactor*np.power(r[o],-3)*3*(np.sqrt(np.power(pos1[0],2)+np.power(pos1[1],2))*pos1[2]*np.power(r[o],-2))                            
-	                    x[o] = pos1[0]
-	                    y[o] = pos1[1]
-	                    z[o] = pos1[2]
-	                    if x[o] != 0:
-	                        phi[o] = np.arctan(y[o]/x[o])
-	                    else:
-	                        phi[o] = np.pi/2
-	                           
-	                    if r[o] != 0:
-	                        theta[o] = np.arccos(z[o]/r[o])
-	                    else:
-	                        self.log.error ('Error: nuclear spin overlapping with NV centre')
-	                            
-	                    #if x[o] != 0:
-	                    #    Azx[o] = Ao[o]*np.cos(phi[o])
-	                    #    Azy[o] = Ao[o]*np.sin(phi[o])
-	                    #else:
-	                    #    Azx[o] = 0
-	                    #    Azy[o] = Ao[o]
-	                    #Elements for dC correction of Cnm:
-	                    Axx[o] = self.prefactor*np.power(r[o],-3)*(1-3*(np.sin(theta[o])**2)*(np.cos(phi[o])**2))
-	                    Ayy[o] = self.prefactor*np.power(r[o],-3)*(1-3*(np.sin(theta[o])**2)*(np.sin(phi[o])**2))
-	                    Axy[o] = self.prefactor*np.power(r[o],-3)*(-1.5*(np.sin(theta[o])**2)*(np.sin(2*phi[o])))
-	                    Ayx[o] = Axy[o]
-	                    Axz[o] = self.prefactor*np.power(r[o],-3)*(-3*np.cos(theta[o])*np.sin(theta[o])*np.cos(phi[o]))
-	                    Ayz[o] = self.prefactor*np.power(r[o],-3)*(-3*np.cos(theta[o])*np.sin(theta[o])*np.sin(phi[o]))
-	                    Azx[o] = Axz[o]
-	                    Azy[o] = Ayz[o]
-	                    Ap[o] = self.prefactor*np.power(r[o],-3)*(1-3*np.cos(theta[o])**2)
-	                    o +=1
-	                    r[o] = np.sqrt(pos2.dot(pos2))
-	                    #Ap[o] = self.prefactor*np.power(r[o],-3)*(1-3*np.power(pos2[2],2)*np.power(r[o],-2))
-	                    Ao[o] = self.prefactor*np.power(r[o],-3)*3*(np.sqrt(np.power(pos2[0],2)+np.power(pos2[1],2))*pos2[2]*np.power(r[o],-2))
-	                    x[o] = pos2[0]
-	                    y[o] = pos2[1]
-	                    z[o] = pos2[2]
-	                    if x[o] != 0:
-	                        phi[o] = np.arctan(y[o]/x[o])
-	                    else:
-	                        phi[o] = np.pi/2
-	                           
-	                    if r[o] != 0:
-	                        theta[o] = np.arccos(z[o]/r[o])
-	                    else:
-	                        self.log.error ('Error: nuclear spin overlapping with NV centre') 
-	                            
-	                    #if x[o] != 0:
-	                    #    Azx[o] = Ao[o]*np.cos(phi[o])
-	                    #    Azy[o] = Ao[o]*np.sin(phi[o])
-	                    #else:
-	                    #    Azx[o] = 0
-	                    #    Azy[o] = Ao[o]
-	                    #Elements for dC correction of Cnm:
-	                    Axx[o] = self.prefactor*np.power(r[o],-3)*(1-3*(np.sin(theta[o])**2)*(np.cos(phi[o])**2))
-	                    Ayy[o] = self.prefactor*np.power(r[o],-3)*(1-3*(np.sin(theta[o])**2)*(np.sin(phi[o])**2))
-	                    Axy[o] = self.prefactor*np.power(r[o],-3)*(-1.5*(np.sin(theta[o])**2)*(np.sin(2*phi[o])))
-	                    Ayx[o] = Axy[o]
-	                    Axz[o] = self.prefactor*np.power(r[o],-3)*(-3*np.cos(theta[o])*np.sin(theta[o])*np.cos(phi[o]))
-	                    Ayz[o] = self.prefactor*np.power(r[o],-3)*(-3*np.cos(theta[o])*np.sin(theta[o])*np.sin(phi[o]))
-	                    Azx[o] = Axz[o]
-	                    Azy[o] = Ayz[o]
-	                    Ap[o] = self.prefactor*np.power(r[o],-3)*(1-3*np.cos(theta[o])**2)
-	                    o+=1
-	    # Generate different NV-Objects by randomly selecting which gridpoints contain a carbon.
-		
+	    pi = np.pi
+	    N = self.nr_spins
+	    L_size = 2*(N)**3-2 # minus 2 for N and V positions
+
+	    # Generate different NV-Objects by randomly selecting which gridpoints contain a carbon
+	    r,Ap,Ao,Axx0,Ayy,Axy,Ayx,Axz,Ayz,Azx,Azy,x,y,z,theta,phi = self.r0,self.Ap0,self.Ao0,self.Axx0,self.Ayy0,self.Axy0,self.Ayx0,self.Axz0,self.Ayz0,self.Azx0,self.Azy0,self.x0,self.y0,self.z0,self.theta0,self.phi0
 	    if do_sphere == True:
-	        zipped = zip(r,Ap,Ao,Axx,Ayy,Axy,Ayx,Axz,Ayz,Azx,Azy,x,y,z,theta,phi)
+	        zipped = zip(r,Ap,Ao,Axx0,Ayy,Axy,Ayx,Axz,Ayz,Azx,Azy,x,y,z,theta,phi)
 	        zipped = sorted(zipped, key=lambda r: r[0]) # sort list as function of r
 	        zipped = zipped[0:int(len(r)/2)] # only take half of the occurences
 	        r = np.asarray([r_s for r_s,Ap_s,Ao_s,Axx_s,Ayy_s,Axy_s,Ayx_s,Axz_s,Ayz_s,Azx_s,Azy_s,x_s,y_s,z_s,theta_s,phi_s in zipped])
@@ -305,7 +305,6 @@ class NSpinBath ():
 	        geom_lst = [r_ij_C , theta_ij_C , phi_ij_C] #all parameters to calculate nuclear bath couplings
 	        dC_lst = [[Axx_NV[0],Axy_NV[0],Axz_NV[0]],[Ayx_NV[0],Ayy_NV[0],Ayz_NV[0]]] #additional hf values to calculate dC
 
-	        #self.log.info ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
 	        return Ap_NV[0], Ao_NV[0] , Azx_NV[0] , Azy_NV[0] , r_NV[0] , pair_lst , geom_lst , dC_lst, T2_h, T2_l
 
 
@@ -489,7 +488,7 @@ class NSpinBath ():
 
 class CentralSpinExperiment ():
     
-	def __init__ (self):
+	def __init__ (self, nr_spins):
 
 		# Pauli matrices
 		self.sx = np.array([[0,1],[1,0]])
@@ -502,6 +501,7 @@ class CentralSpinExperiment ():
 		self.close_cntr = 0
 		self.sparse_distribution = False
 		self._store_evol_dict = False
+		self.nr_spins = nr_spins
 
 		self.gam_el = 1.760859 *10**11 #Gyromagnetic ratio rad s-1 T-1
 		self.gam_n = 67.262 *10**6 #rad s-1 T-1
@@ -513,7 +513,7 @@ class CentralSpinExperiment ():
 
 		self.prefactor = self.mu0*(self.gam_n**2)/(4*np.pi)*self.hbar**2 /self.hbar/(2*np.pi) #Last /hbar/2pi is to convert from Joule to Hz
 
-		self.nbath = NSpinBath ()
+		self.nbath = NSpinBath (nr_spins = self.nr_spins)
 
 		# current density matrix for nuclear spin bath
 		self._curr_rho = []
@@ -575,7 +575,7 @@ class CentralSpinExperiment ():
 
 		return prod
 
-	def generate (self, nr_spins, concentration = .1,
+	def generate (self, concentration = .1,
 				hf_approx = False, clus = True, single_exp = False, do_plot = False, Bp=0.001):
 		'''
 		Sets up spin bath and external field
@@ -596,7 +596,7 @@ class CentralSpinExperiment ():
 
 		self._curr_step = 0
 		self.Ap, self.Ao, self.Azx, self.Azy, self.r , self.pair_lst , self.geom_lst , self.dC_list, self.T2h, self.T2l= \
-				self.nbath.generate_NSpin_distr (conc = concentration, N = nr_spins, do_sphere=True)
+				self.nbath.generate_NSpin_distr (conc = concentration, do_sphere=True)
 	
 		self._hf_approx = hf_approx
 		self._clus = clus
