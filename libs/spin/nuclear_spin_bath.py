@@ -529,10 +529,11 @@ class CentralSpinExperiment ():
 		self._A_thr = A
 		self._sparse_thr = sparse
 
-	def set_magnetic_field (self, Bz, Bx):
-		self._Bz = Bz
-		self._Bx = Bx
-		self.nbath.set_B (Bp=self._Bz, Bo = self._Bx)
+	def set_magnetic_field (self, Bz, Bx, By=0):
+		self.Bz = Bz
+		self.Bx = Bx
+		self.By = By
+		self.nbath.set_B (Bp=self.Bz, Bo = (self.Bx**2+self.By**2)**0.5)
 
 	def set_log_level (self, value):
 		self.log.setLevel (value)
@@ -575,7 +576,7 @@ class CentralSpinExperiment ():
 
 		return prod
 
-	def generate (self, concentration = .1,
+	def generate_old (self, concentration = .1,
 				hf_approx = False, clus = True, single_exp = False, do_plot = False, Bp=0.001):
 		'''
 		Sets up spin bath and external field
@@ -680,6 +681,72 @@ class CentralSpinExperiment ():
 					'prob_Az': pd[1],
 					'outcome': None,
 				}
+
+
+	def generate_bath (self, concentration = .1, hf_approx = False, do_plot = False):
+		'''
+		Sets up spin bath and external field
+
+		Input:
+		concentration 	[float]		: concnetration of nuclei with I>0
+		hf_approx       [boolean]   : high Bz field approximation: neglects Azx and Azy components
+		
+		clus			[boolean]	: apply corrections to HF vector due to secular approximation
+									  in disjoint cluster method c.f. DOI:10.1103/PhysRevB.78.094303
+									  		
+		'''
+
+		clus = True
+		self._curr_step = 0
+		self.Ap, self.Ao, self.Azx, self.Azy, self.r , self.pair_lst , self.geom_lst , self.dC_list, self.T2h, self.T2l= \
+				self.nbath.generate_NSpin_distr (conc = concentration, do_sphere=True)
+	
+		self._hf_approx = hf_approx
+		self._clus = clus
+
+		#modified previous code to give necessary Cartesian components of hf vector 
+		#(not just Ap and Ao)
+		self.nbath.set_spin_bath (self.Ap, self.Ao, self.Azx, self.Azy)
+		#self.Larm = self.nbath.larm_vec (self._hf_approx)
+		self._nr_nucl_spins = int(self.nbath._nr_nucl_spins)
+		self.nbath.plot_spin_bath_info()
+		
+		close_cntr = 0
+
+		if not(self._A_thr == None):
+			self.log.debug("Checking hyperfine threshold...")
+			for j in range(self._nr_nucl_spins):
+				if np.abs(self.Ap[j]) > self._A_thr:
+					close_cntr +=1
+			
+			self.log.warning ('{0} spins with |A| > {1}MHz.'.format(close_cntr, self._A_thr*1e-6))
+		self.close_cntr = close_cntr
+
+		#hyperfine vector
+		self.HFvec = np.array([[self.Azx[j], self.Azy[j], self.Ap[j]] for j in range(self._nr_nucl_spins)])
+
+		self.In_tens = [[] for j in range(self._nr_nucl_spins)]
+	
+		#Run group algo for next step
+		self._group_algo()
+
+		#Creating 2**g * 2**g spin Pauli matrices. For disjoint cluster only
+		self.In_tens_disjoint = [[[] for l in range(len(self._grp_lst[j]))] for j in range(len(self._grp_lst))]
+		for l in range(len(self._grp_lst)):
+			for j in range(len(self._grp_lst[l])):
+				Q1 = np.eye(2**j)
+				Q2 = np.eye(2**(len(self._grp_lst[l])-(j+1)))
+
+				for k in range(3):
+					self.In_tens_disjoint[l][j].append(np.kron(np.kron(Q1,self.In[k]),Q2))
+
+		#Create sub matrices based on result of group algo
+		self._block_rho = []
+		for j in range(len(self._grp_lst)):
+			self._block_rho.append(np.multiply(np.eye(2**len(self._grp_lst[j])),(2**-len(self._grp_lst[j]))))
+
+		if do_plot:
+			self.nbath.plot_spin_bath_info()
 
 
 	def reset_bath_unpolarized (self, do_plot = True):
@@ -812,6 +879,7 @@ class CentralSpinExperiment ():
 		'''
 		
 		self.log.info ("Running grouping algorithm...")
+
 		if self._nr_nucl_spins == 1:
 			self._grp_lst = [[0]]
 		
@@ -1099,19 +1167,9 @@ class CentralSpinExperiment ():
 		Input: 
 		tauarr  [array]		: time array for spin echo
 		phi     [radians]	: rotation angle of the spin readout basis
-		
-		1) First calculate Hahn echo without nuc-nuc interactions to find where roughly the peaks
-		should be for the interacting case, as only a rough envelope is required to calculate
-		T2. 
-		2) Select every 5th peak for lower comp. time with peak within [1-tol, 1].
-		3) Create arrays of points in the neighbourhood of the maxima positions (newtauarr)
-		4) For each array in newtauarr, ca;lculate Hahn echo signal for the interacting case,
-		and select maximum from each subset.
-		5) Fit Gaussian to the new data to get approximate value of T2
-		
-
 		'''
-		
+
+		self.Larm = self.nbath.larm_vec (self._hf_approx)
 		self.arr_test = []
 		self.arr_test_clus = []
 		sig_clus_lst = []
