@@ -31,13 +31,15 @@ import tabulate as tb
 import functools as ft
 import logging
 import numba
-
+import os, time
 import matplotlib as mpl
 from matplotlib import pyplot as plt
 from matplotlib.colors import ListedColormap
 from scipy.sparse import csr_matrix
 from mpl_toolkits.mplot3d import Axes3D
+from tools import data_object as DO
 from importlib import reload
+reload (DO)
 
 mpl.rc('xtick', labelsize=18) 
 mpl.rc('ytick', labelsize=18)
@@ -182,7 +184,6 @@ class NSpinBath ():
 		
 	    Input:
 	    conc        [float]     : concentration of nuclear spins (if random number is generated)
-	    N           [int]       : number of spins to be generated (if fixed number of spins is generated)
 	    do_sphere   [Boolean]   : ???
 		
 	    Output:
@@ -199,7 +200,6 @@ class NSpinBath ():
 		
 		
 	    '''
-
 
 	    self.log.info ("Generating nuclear spin bath...")
 	    
@@ -235,11 +235,8 @@ class NSpinBath ():
 	    while(len(Sel)<N):
 	        lst_sel=[sel for sel in np.where(np.random.rand(int(L_size/2)) < conc)[0].tolist() if sel not in Sel]
 	        Sel+=lst_sel
-	        #print("Sel", Sel)
 
-	    #Sel = (np.array(rand.sample(list(range(int(L_size/2))), N)),)#np.where(np.random.rand(int(L_size/2)) < conc)
 	    Sel = (np.array(Sel)[:N],)
-	    #np.random.shuffle(Sel)
 	    Ap_NV =[ Ap[u] for u in Sel]
 	    Ao_NV =[ Ao[u] for u in Sel]
 	    Axx_NV =[ Axx[u] for u in Sel]
@@ -255,7 +252,6 @@ class NSpinBath ():
 	    z_NV = [ z[u] for u in Sel]          
 	    r_NV = [ r[u] for u in Sel]
 
-	    #print(Sel)
 	    theta_NV = [ theta[u] for u in Sel]
 	    phi_NV = [ phi[u] for u in Sel]
 	    # NV_list.append(A_NV[0]) #index 0 is to get rid of outher brackets in A_NV0
@@ -487,9 +483,9 @@ class NSpinBath ():
 
 		return self.L_dd
 
-class CentralSpinExperiment ():
+class CentralSpinExperiment (DO.DataObjectHDF5):
     
-	def __init__ (self, nr_spins):
+	def __init__ (self, nr_spins, auto_save = False):
 
 		# Pauli matrices
 		self.sx = np.array([[0,1],[1,0]])
@@ -523,10 +519,26 @@ class CentralSpinExperiment ():
 		self._evol_dict = {}
 		self._store_evol_dict = True
 
+		self._auto_save = auto_save
+
 		self.log = logging.getLogger ('nBath')
 		logging.basicConfig (level = logging.INFO)
 
-	def generate_bath (self, concentration = .1, hf_approx = False, do_plot = False):
+	def set_workfolder (self, folder):
+		if os.path.exists (folder):
+			self._work_folder = folder
+		else:
+			self.log.error ('Folder not valid.')
+
+	def _save_sequence (self, tau, signal, tag = '', name = ''):
+		tstamp = time.strftime ('%Y%m%d_%H%M%S')
+		grp = tag+'_'+name+'_'+tstamp
+		d = {}
+		d['tau'] = np.array(tau)
+		d['signal'] = np.array(signal)
+		self.save_dict_to_file(d=d, file_name = self._curr_file, group_name = grp)
+
+	def generate_bath (self, concentration = .1, hf_approx = False, do_plot = False, name = '', excl_save = False):
 		'''
 		Sets up spin bath and external field
 
@@ -553,6 +565,13 @@ class CentralSpinExperiment ():
 		#self.Larm = self.nbath.larm_vec (self._hf_approx)
 		self._nr_nucl_spins = int(self.nbath._nr_nucl_spins)
 		self.nbath.plot_spin_bath_info()
+
+		if ((self._auto_save) and (not(excl_save))):
+			self._curr_file = self.create_file (folder = self._work_folder, name = name)
+			self.save_object_to_file (obj = self.nbath, file_name = self._curr_file, group_name = 'nuclear_spin_bath')
+			print ("File created!")
+		else:
+			print ("File not created!", self._auto_save, excl_save)
 
 	def set_thresholds (self, A, sparse):
 		self._A_thr = A
@@ -608,20 +627,20 @@ class CentralSpinExperiment ():
 	def FID_indep_Nspins (self, tau):
 		self.nbath.FID (tau=tau)
 
-	def Hahn_echo_indep_Nspins (self, S1, S0, tau, do_plot = True):
+
+	def Hahn_echo_indep_Nspins (self, S1, S0, tau, do_plot = True, name = ''):
 		hahn = self.nbath.Hahn_echo (tau=tau, S1=S1, S0=S0, do_plot = do_plot)
+		self._save_sequence (tau=tau, signal=hahn, tag = 'HahnEcho_indep_Nspins', name = name)
 		return hahn
 
 	def dynamical_decoupling_indep_Nspins (self, S1, S0, tau, nr_pulses):
 		self.nbath.dynamical_decoupling (tau=tau, S1=S1, S0=S0, nr_pulses=nr_pulses)
 
-	
 	def _nCr(self, n, k):
 		k = min(k, n-k)
 		n = ft.reduce(op.mul, range(n, n-k, -1), 1)
 		d = ft.reduce(op.mul, range(1, k+1), 1)
 		return n//d
-
 
 	def _H_op_clus(self, group, ms):
 		'''
@@ -753,10 +772,10 @@ class CentralSpinExperiment ():
 
 class CentralSpinExp_cluster (CentralSpinExperiment):
 
-	def __init__ (self, nr_spins):
-		CentralSpinExperiment.__init__ (self=self, nr_spins=nr_spins)
+	def __init__ (self, nr_spins, auto_save=False):
+		CentralSpinExperiment.__init__ (self=self, nr_spins=nr_spins, auto_save = auto_save)
 
-	def generate_bath (self, concentration = .1, hf_approx = False, do_plot = False):
+	def generate_bath (self, concentration = .1, hf_approx = False, do_plot = False, name = '', excl_save = False):
 		'''
 		Sets up spin bath and external field
 
@@ -769,19 +788,9 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 									  		
 		'''
 
-		clus = True
-		self._curr_step = 0
-		self.Ap, self.Ao, self.Azx, self.Azy, self.r , self.pair_lst , self.geom_lst , self.dC_list, self.T2h, self.T2l= \
-				self.nbath.generate_NSpin_distr (conc = concentration, do_sphere=True)
-	
-		self._hf_approx = hf_approx
-		self._clus = clus
+		CentralSpinExperiment.generate_bath (self=self, concentration = concentration,
+						 hf_approx = hf_approx, do_plot = do_plot, name = name, excl_save = True)
 
-		#modified previous code to give necessary Cartesian components of hf vector 
-		#(not just Ap and Ao)
-		self.nbath.set_spin_bath (self.Ap, self.Ao, self.Azx, self.Azy)
-		#self.Larm = self.nbath.larm_vec (self._hf_approx)
-		self._nr_nucl_spins = int(self.nbath._nr_nucl_spins)
 		self.nbath.plot_spin_bath_info()
 		
 		close_cntr = 0
@@ -821,6 +830,12 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		if do_plot:
 			self.nbath.plot_spin_bath_info()
 
+		if ((self._auto_save) and (not(excl_save))):
+			self._curr_file = self.create_file (folder = self._work_folder, name = name)
+			self.save_object_to_file (obj = self.nbath, file_name = self._curr_file, group_name = 'nuclear_spin_bath')	
+			print ("File created!")
+		else:
+			print ("File not created!")
 
 	def _Cmn (self):
 		'''
@@ -1082,9 +1097,9 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		#self.T2echo = abs(popt[0])
 		#print ("T2 - Hahn echo: ", self.T2echo)
 		
-	def Hahn_echo (self, tau, phi=0, do_plot = True):
+	def Hahn_echo (self, tau, phi=0, do_plot = True, name = '', excl_save = False):
 		'''
-		Caclulates signal for spin echo with disjoint clusters [2]
+		Calculates signal for spin echo with disjoint clusters [2]
 
 		Input: 
 		tauarr  [array]		: time array for spin echo
@@ -1111,6 +1126,10 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 			#print ("H-E: ", t, sig_clus)
 			#sig_clus_lst.append(sig_clus)
 			self.arr_test_clus.append(sig_clus.real)
+
+		if (self._auto_save and (not(excl_save))):
+			self._save_sequence (tau = tau, signal = self.arr_test_clus, 
+							tag = 'HahnEcho_cluster', name = name)
 
 		if do_plot:
 			plt.figure()

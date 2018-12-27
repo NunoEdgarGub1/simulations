@@ -13,19 +13,20 @@ reload (NBath)
 #exp.set_B (Bp=0.001, Bo =0.000)
 #exp.FID (tau = np.linspace (1, 100000, 10000)*1e-9)
 
-exp = NBath.CentralSpinExp_cluster (nr_spins = 35)
-exp.generate_bath (concentration = 0.011)
+exp = NBath.CentralSpinExp_cluster (nr_spins = 35, auto_save = True)
+exp.set_workfolder (r'C:\Users\cristian\Research\Work-Data')
+exp.generate_bath (concentration = 0.011, name = 'bath1')
 #exp.print_nuclear_spins()
 
-for B in [1, 400, 5000]:
+for B in [1, 100, 400, 1000, 5000]:
     exp.set_thresholds (A = 500e3, sparse = 10)
     exp.set_magnetic_field (Bz=B*1e-4, Bx=0)
     print ("------- MAGNETIC FIELD: ", B, " gauss")
-    exp.FID_indep_Nspins (tau = np.linspace (0, 30e-6, 1000))
+    #exp.FID_indep_Nspins (tau = np.linspace (0, 30e-6, 1000))
 
     tau_max= 5.e-3
     ind = exp.Hahn_echo_indep_Nspins (S1=1, S0=0, tau = np.linspace (0, tau_max, 100000), do_plot=False)
-    nr_points_hahn = 25
+    nr_points_hahn = 3
     clus = exp.Hahn_echo (tau = np.linspace (0, tau_max, nr_points_hahn), phi = 0, do_plot = False)
 
     plt.figure (figsize = (15,8))
