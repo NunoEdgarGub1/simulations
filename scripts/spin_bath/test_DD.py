@@ -1,7 +1,7 @@
-
 import numpy as np
 import matplotlib.pyplot as plt
 from importlib import reload
+sys.path.append (folder)
 from simulations.libs.spin import nuclear_spin_bath as NBath
 reload (NBath)
 
@@ -15,6 +15,11 @@ reload (NBath)
 
 exp = NBath.CentralSpinExp_cluster (nr_spins = 35, auto_save = True)
 exp.set_workfolder (r'C:\Users\cristian\Research\Work-Data')
+
+clus_size=10
+exp.set_cluster_size(g=clus_size)
+print ("------- CLUSTER SIZE: ", clus_size)
+
 exp.generate_bath (concentration = 0.011, name = 'bath1')
 #exp.print_nuclear_spins()
 
