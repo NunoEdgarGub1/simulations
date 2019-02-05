@@ -64,10 +64,10 @@ class NSpinBath ():
 	    logging.basicConfig (level = logging.INFO)
 
 	    self.log.info ("Generating lattice...")
-	    self.Ap0, self.Ao0, self.Azx0, self.Azy0, self.Axx0, self.Ayy0, self.Axy0, self.Ayx0, self.Axz0, self.Ayz0, self.r0, self.theta0, self.phi0, self.x0, self.y0, self.z0 = self._generate_diamond_lattice (N=self.nr_spins, a0=self.a0, prefactor = self.prefactor)
+	    self.Ap0, self.Ao0, self.Azx0, self.Azy0, self.Axx0, self.Ayy0, self.Axy0, self.Ayx0, self.Axz0, self.Ayz0, self.r0, self.theta0, self.phi0, self.x0, self.y0, self.z0 = self._generate_lattice (N=self.nr_spins, a0=self.a0, prefactor = self.prefactor)
 	    self.log.info ("Created lattice.")
 
-	def _generate_diamond_lattice (self, N, a0, prefactor):
+	def _generate_lattice (self, N, a0, prefactor):
 	    pi = np.pi
 	    ##Carbon Lattice Definition
 	    #Rotation matrix to get b along z-axis
@@ -569,6 +569,9 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 		if ((self._auto_save) and (not(excl_save))):
 			self._curr_file = self.create_file (folder = self._work_folder, name = name)
 			self.save_object_to_file (obj = self.nbath, file_name = self._curr_file, group_name = 'nuclear_spin_bath')
+			print ("File created!")
+		else:
+			print ("File not created!", self._auto_save, excl_save)
 
 	def set_thresholds (self, A, sparse):
 		self._A_thr = A
@@ -579,6 +582,9 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 		self.Bx = Bx
 		self.By = By
 		self.nbath.set_B (Bp=self.Bz, Bo = (self.Bx**2+self.By**2)**0.5)
+        
+	def set_cluster_size (self, g=3):
+		self.cluster_size = g
 
 	def set_log_level (self, value):
 		self.log.setLevel (value)
@@ -627,8 +633,7 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 
 	def Hahn_echo_indep_Nspins (self, S1, S0, tau, do_plot = True, name = ''):
 		hahn = self.nbath.Hahn_echo (tau=tau, S1=S1, S0=S0, do_plot = do_plot)
-		if self._auto_save:
-			self._save_sequence (tau=tau, signal=hahn, tag = 'HahnEcho_indep_Nspins', name = name)
+		self._save_sequence (tau=tau, signal=hahn, tag = 'HahnEcho_indep_Nspins', name = name)
 		return hahn
 
 	def dynamical_decoupling_indep_Nspins (self, S1, S0, tau, nr_pulses):
@@ -788,6 +793,8 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 
 		CentralSpinExperiment.generate_bath (self=self, concentration = concentration,
 						 hf_approx = hf_approx, do_plot = do_plot, name = name, excl_save = True)
+
+		self.nbath.plot_spin_bath_info()
 		
 		close_cntr = 0
 
@@ -807,6 +814,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 	
 		#Run group algo for next step
 		self._group_algo()
+		print(self._grp_lst)
 
 		#Creating 2**g * 2**g spin Pauli matrices. For disjoint cluster only
 		self.In_tens_disjoint = [[[] for l in range(len(self._grp_lst[j]))] for j in range(len(self._grp_lst))]
@@ -829,6 +837,9 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		if ((self._auto_save) and (not(excl_save))):
 			self._curr_file = self.create_file (folder = self._work_folder, name = name)
 			self.save_object_to_file (obj = self.nbath, file_name = self._curr_file, group_name = 'nuclear_spin_bath')	
+			print ("File created!")
+		else:
+			print ("File not created!")
 
 	def _Cmn (self):
 		'''
@@ -902,7 +913,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		
 		return Cij_srt, pair_lst_srt
 
-	def _group_algo(self, g=3):
+	def _group_algo(self):
 		'''
 		Returns a list of groups for which we will calculate In.Cnm.Im based on [2] grouping algorithm:
 		
@@ -940,8 +951,8 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		ind = [[] for j in range(self._nr_nucl_spins)]
 		check_lst = []
 		
-		if g==1:
-			self._grp_lst = [[j for j in range(self._nr_nucl_spins)]]#[[j] for j in range(self._nr_nucl_spins)]
+		if self.cluster_size==1:
+			self._grp_lst = [[j for j in range(self._nr_nucl_spins)]]
 		
 		else:
 			for j in range(len(self._grp_lst)):
@@ -955,7 +966,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 					ind[self._grp_lst[j][1]] = [next(index for index, value in enumerate(self._grp_lst) if self._grp_lst[j][1] in value)]
 			
 				#(3)
-				if (ind[self._grp_lst[j][0]] != ind[self._grp_lst[j][1]] and ind.count(ind[self._grp_lst[j][0]])+ind.count(ind[self._grp_lst[j][1]]) <= g):
+				if (ind[self._grp_lst[j][0]] != ind[self._grp_lst[j][1]] and ind.count(ind[self._grp_lst[j][0]])+ind.count(ind[self._grp_lst[j][1]]) <= self.cluster_size):
 					for itemno in range(len(ind)):
 						if ind[itemno] == ind[self._grp_lst[j][0]] or ind[itemno] == ind[self._grp_lst[j][1]]:
 							ind[itemno] = min(ind[self._grp_lst[j][0]],ind[self._grp_lst[j][1]])
@@ -1116,6 +1127,8 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		
 				sig_clus *= np.trace(U0_clus.dot(self._block_rho[j].dot(U1_clus)))
 
+			#print ("H-E: ", t, sig_clus)
+			#sig_clus_lst.append(sig_clus)
 			self.arr_test_clus.append(sig_clus.real)
 
 		if (self._auto_save and (not(excl_save))):
@@ -1130,75 +1143,57 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		return self.arr_test_clus
 
 
-class FullBathDynamics (CentralSpinExperiment):
 
-	def __init__ (self):
-	
-		super()
-		self._store_evol_dict = False
+class FullBathDynamics (CentralSpinExp_cluster):
 
-		self.gam_el = 1.760859 *10**11 #Gyromagnetic ratio rad s-1 T-1
-		self.gam_n = 67.262 *10**6 #rad s-1 T-1
-		self.hbar = 1.05457173*10**(-34)
-		self.mu0 = 4*np.pi*10**(-7)
-		self.ZFS = 2.87*10**9
-		self.msArr=[]
-		self.flipArr = []
+#	def __init__ (self):
+#	
+#		super()
+#		self._store_evol_dict = False
+#
+#		self.gam_el = 1.760859 *10**11 #Gyromagnetic ratio rad s-1 T-1
+#		self.gam_n = 67.262 *10**6 #rad s-1 T-1
+#		self.hbar = 1.05457173*10**(-34)
+#		self.mu0 = 4*np.pi*10**(-7)
+#		self.ZFS = 2.87*10**9
+#		self.msArr=[]
+#		self.flipArr = []
+#
+#		self.prefactor = self.mu0*(self.gam_n**2)/(4*np.pi)*self.hbar**2 /self.hbar/(2*np.pi) #Last /hbar/2pi is to convert from Joule to Hz
+#
+#		# Pauli matrices
+#		self.sx = np.array([[0,1],[1,0]])
+#		self.sy = np.array([[0,-complex(0,1)],[complex(0,1),0]])
+#		self.sz = np.array([[1,0],[0,-1]])
+#		self.In = .5*np.array([self.sx,self.sy,self.sz])
+#		# current density matrix for nuclear spin bath.
+#		# Now you won't keep all the elements but only the diagonal ones
+#		self._curr_rho = []
+#		self._curr_rho_test = []
+#		# "evolution dictionary": stores data for each step
+#		self._evol_dict = {}
+#
+#		self.log = logging.getLogger ('nBath')
+#		logging.basicConfig (level = logging.INFO)
 
-		self.prefactor = self.mu0*(self.gam_n**2)/(4*np.pi)*self.hbar**2 /self.hbar/(2*np.pi) #Last /hbar/2pi is to convert from Joule to Hz
+	def __init__ (self, nr_spins, auto_save=False):
+		CentralSpinExperiment.__init__ (self=self, nr_spins=nr_spins, auto_save = auto_save)
 
-		# Pauli matrices
-		self.sx = np.array([[0,1],[1,0]])
-		self.sy = np.array([[0,-complex(0,1)],[complex(0,1),0]])
-		self.sz = np.array([[1,0],[0,-1]])
-		self.In = .5*np.array([self.sx,self.sy,self.sz])
-		# current density matrix for nuclear spin bath.
-		# Now you won't keep all the elements but only the diagonal ones
-		self._curr_rho = []
-		self._curr_rho_test = []
-		# "evolution dictionary": stores data for each step
-		self._evol_dict = {}
-
-		self.log = logging.getLogger ('nBath')
-		logging.basicConfig (level = logging.INFO)
-
-
-	def generate_bath (self, concentration = .1,
-				hf_approx = False, clus = True, single_exp = False, do_plot = False, Bp=0.001):
+	def generate_bath (self, concentration = .1, hf_approx = False, do_plot = False, name = '', excl_save = False):
 		'''
 		Sets up spin bath and external field
 
 		Input:
-		nr_spins 		[integer]	: number of nuclear spins in simulation
 		concentration 	[float]		: concnetration of nuclei with I>0
 		hf_approx       [boolean]   : high Bz field approximation: neglects Azx and Azy components
 		
 		clus			[boolean]	: apply corrections to HF vector due to secular approximation
 									  in disjoint cluster method c.f. DOI:10.1103/PhysRevB.78.094303
-									  
-		single_exp      [boolean]   : if False, doesn't update the probability distribution and 
-									  can apply the disjoint cluster methods. Otherwise, full dynamics
-									  have to be considered due to the required Overhauser operator.
-		
+									  		
 		'''
 
-
-		# this one has to overload generate_bath, amking it specific to
-		# a sequence of correlated measurements, where we need to plot the 
-		# probability distribution and record its evolution
-		# TO BE DONE!!!! (now I just copy-pasted the old one -CB)
-		self._curr_step = 0
-		self.Ap, self.Ao, self.Azx, self.Azy, self.r , self.pair_lst , self.geom_lst , self.dC_list, self.T2h, self.T2l= \
-				self.nbath.generate_NSpin_distr (conc = concentration, do_sphere=True)
-	
-		self._hf_approx = hf_approx
-		self._clus = clus
-
-		#modified previous code to give necessary Cartesian components of hf vector (not just Ap and Ao)
-		self.nbath.set_spin_bath (self.Ap, self.Ao, self.Azx, self.Azy)
-		# Why do we need to set B hard-coded? Cristian
-		self.Bx, self.By, self.Bz = self.nbath.set_B_Cart (Bx=0, By=0 , Bz=Bp)
-		self.nbath.set_B (Bp=Bp, Bo=0)
+		CentralSpinExperiment.generate_bath (self=self, concentration = concentration,
+						 hf_approx = hf_approx, do_plot = do_plot, name = name, excl_save = True)
 
 		self.Larm = self.nbath.larm_vec (self._hf_approx)
 		self._nr_nucl_spins = int(self.nbath._nr_nucl_spins)
@@ -1219,15 +1214,16 @@ class FullBathDynamics (CentralSpinExperiment):
 		self.HFvec = np.array([[self.Azx[j], self.Azy[j], self.Ap[j]] for j in range(self._nr_nucl_spins)])
 
 		self.In_tens = [[] for j in range(self._nr_nucl_spins)]
+		
+		for j in range(self._nr_nucl_spins):
+			Q1 = np.diag([1 for f in range(2**j)])
+			Q2 = np.diag([1 for f in range(2**(self._nr_nucl_spins-(j+1)))])
+			
+			for k in range(3):
+				self.In_tens[j].append(self.kron_test(self.kron_test(self.In[k],2**j),2**(self._nr_nucl_spins-(j+1)), reverse=True))#append(np.kron(np.kron(Q1,self.In[k]),Q2))
 
-		if not single_exp:
-			for j in range(self._nr_nucl_spins):
-				Q1 = np.diag([1 for f in range(2**j)])
-				Q2 = np.diag([1 for f in range(2**(self._nr_nucl_spins-(j+1)))])
-				
-				for k in range(3):
-					self.In_tens[j].append(self.kron_test(self.kron_test(self.In[k],2**j),2**(self._nr_nucl_spins-(j+1)), reverse=True))#append(np.kron(np.kron(Q1,self.In[k]),Q2))
-	
+		self._curr_rho = np.diag([2**-self._nr_nucl_spins for j in range(2**self._nr_nucl_spins)])
+		
 		#Run group algo for next step
 		self._group_algo()
 
@@ -1241,9 +1237,6 @@ class FullBathDynamics (CentralSpinExperiment):
 				for k in range(3):
 					self.In_tens_disjoint[l][j].append(np.kron(np.kron(Q1,self.In[k]),Q2))
 
-		if not single_exp:
-			self._curr_rho = np.diag([2**-self._nr_nucl_spins for j in range(2**self._nr_nucl_spins)])
-
 		#Create sub matrices based on result of group algo
 		self._block_rho = []
 		for j in range(len(self._grp_lst)):
@@ -1252,27 +1245,124 @@ class FullBathDynamics (CentralSpinExperiment):
 		if do_plot:
 			self.nbath.plot_spin_bath_info()
 
-		if not single_exp:
-			pd = np.real(self.get_probability_density())
+		if ((self._auto_save) and (not(excl_save))):
+			self._curr_file = self.create_file (folder = self._work_folder, name = name)
+			self.save_object_to_file (obj = self.nbath, file_name = self._curr_file, group_name = 'nuclear_spin_bath')	
+			print ("File created!")
+		else:
+			print ("File not created!")
 
-			if not(self._sparse_thr == None):
-				az, p_az = self.get_probability_density()
-				az2 = np.roll(az,-1)
-				if max(az2[:-1]-az[:-1]) > self._sparse_thr:
-					self.log.debug ('Sparse distribution:{0} kHz'.format(max(az2[:-1]-az[:-1])))
-					self.sparse_distribution = True
-				else:
-					self.sparse_distribution = False
-
-			self.values_Az_kHz = pd[0]
-			stat = self.get_overhauser_stat()
-			if self._store_evol_dict:
-				self._evol_dict ['0'] = {
-					'mean_OH': np.real(stat[0]),
-					'std_OH': np.real(stat[1]),
-					'prob_Az': pd[1],
-					'outcome': None,
-				}
+#	def generate_bath (self, concentration = .1,
+#				hf_approx = False, clus = True, single_exp = False, do_plot = False, Bp=0.001):
+#		'''
+#		Sets up spin bath and external field
+#
+#		Input:
+#		nr_spins 		[integer]	: number of nuclear spins in simulation
+#		concentration 	[float]		: concnetration of nuclei with I>0
+#		hf_approx       [boolean]   : high Bz field approximation: neglects Azx and Azy components
+#		
+#		clus			[boolean]	: apply corrections to HF vector due to secular approximation
+#									  in disjoint cluster method c.f. DOI:10.1103/PhysRevB.78.094303
+#									  
+#		single_exp      [boolean]   : if False, doesn't update the probability distribution and 
+#									  can apply the disjoint cluster methods. Otherwise, full dynamics
+#									  have to be considered due to the required Overhauser operator.
+#		
+#		'''
+#
+#
+#		# this one has to overload generate_bath, amking it specific to
+#		# a sequence of correlated measurements, where we need to plot the 
+#		# probability distribution and record its evolution
+#		# TO BE DONE!!!! (now I just copy-pasted the old one -CB)
+#		
+#		self._curr_step = 0
+#		self.Ap, self.Ao, self.Azx, self.Azy, self.r , self.pair_lst , self.geom_lst , self.dC_list, self.T2h, self.T2l= \
+#				self.nbath.generate_NSpin_distr (conc = concentration, do_sphere=True)
+#	
+#		self._hf_approx = hf_approx
+#		self._clus = clus
+#
+#		#modified previous code to give necessary Cartesian components of hf vector (not just Ap and Ao)
+#		self.nbath.set_spin_bath (self.Ap, self.Ao, self.Azx, self.Azy)
+#		# Why do we need to set B hard-coded? Cristian
+#		self.Bx, self.By, self.Bz = self.nbath.set_B_Cart (Bx=0, By=0 , Bz=Bp)
+#		self.nbath.set_B (Bp=Bp, Bo=0)
+#
+#		self.Larm = self.nbath.larm_vec (self._hf_approx)
+#		self._nr_nucl_spins = int(self.nbath._nr_nucl_spins)
+#		self.nbath.plot_spin_bath_info()
+#		
+#		close_cntr = 0
+#
+#		if not(self._A_thr == None):
+#			self.log.debug("Checking hyperfine threshold...")
+#			for j in range(self._nr_nucl_spins):
+#				if np.abs(self.Ap[j]) > self._A_thr:
+#					close_cntr +=1
+#			
+#			self.log.warning ('{0} spins with |A| > {1}MHz.'.format(close_cntr, self._A_thr*1e-6))
+#		self.close_cntr = close_cntr
+#
+#		#hyperfine vector
+#		self.HFvec = np.array([[self.Azx[j], self.Azy[j], self.Ap[j]] for j in range(self._nr_nucl_spins)])
+#
+#		self.In_tens = [[] for j in range(self._nr_nucl_spins)]
+#
+#		if not single_exp:
+#			for j in range(self._nr_nucl_spins):
+#				Q1 = np.diag([1 for f in range(2**j)])
+#				Q2 = np.diag([1 for f in range(2**(self._nr_nucl_spins-(j+1)))])
+#				
+#				for k in range(3):
+#					self.In_tens[j].append(self.kron_test(self.kron_test(self.In[k],2**j),2**(self._nr_nucl_spins-(j+1)), reverse=True))#append(np.kron(np.kron(Q1,self.In[k]),Q2))
+#	
+#		#Run group algo for next step
+#		self._group_algo()
+#
+#		#Creating 2**g * 2**g spin Pauli matrices. For disjoint cluster only
+#		self.In_tens_disjoint = [[[] for l in range(len(self._grp_lst[j]))] for j in range(len(self._grp_lst))]
+#		for l in range(len(self._grp_lst)):
+#			for j in range(len(self._grp_lst[l])):
+#				Q1 = np.eye(2**j)
+#				Q2 = np.eye(2**(len(self._grp_lst[l])-(j+1)))
+#
+#				for k in range(3):
+#					self.In_tens_disjoint[l][j].append(np.kron(np.kron(Q1,self.In[k]),Q2))
+#
+#		if not single_exp:
+#			self._curr_rho = np.diag([2**-self._nr_nucl_spins for j in range(2**self._nr_nucl_spins)])
+#
+#		#Create sub matrices based on result of group algo
+#		self._block_rho = []
+#		for j in range(len(self._grp_lst)):
+#			self._block_rho.append(np.multiply(np.eye(2**len(self._grp_lst[j])),(2**-len(self._grp_lst[j]))))
+#
+#		if do_plot:
+#			self.nbath.plot_spin_bath_info()
+#
+#		if not single_exp:
+#			pd = np.real(self.get_probability_density())
+#
+#			if not(self._sparse_thr == None):
+#				az, p_az = self.get_probability_density()
+#				az2 = np.roll(az,-1)
+#				if max(az2[:-1]-az[:-1]) > self._sparse_thr:
+#					self.log.debug ('Sparse distribution:{0} kHz'.format(max(az2[:-1]-az[:-1])))
+#					self.sparse_distribution = True
+#				else:
+#					self.sparse_distribution = False
+#
+#			self.values_Az_kHz = pd[0]
+#			stat = self.get_overhauser_stat()
+#			if self._store_evol_dict:
+#				self._evol_dict ['0'] = {
+#					'mean_OH': np.real(stat[0]),
+#					'std_OH': np.real(stat[1]),
+#					'prob_Az': pd[1],
+#					'outcome': None,
+#				}
 
 
 	def reset_bath_unpolarized (self, do_plot = True):
@@ -1358,6 +1448,8 @@ class FullBathDynamics (CentralSpinExperiment):
 		
 		U0 = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0])
 		U1 = np.multiply(np.exp(complex(0,1)*phi/2),U_in[1])
+		
+		print(np.array(U1).shape,np.array(self._curr_rho).shape)
 		
 		sig = np.trace(U0.dot((self._curr_rho/np.trace(self._curr_rho)).dot(U1.conj().T)))
 		
