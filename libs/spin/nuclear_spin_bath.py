@@ -564,14 +564,15 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 		self.nbath.set_spin_bath (self.Ap, self.Ao, self.Azx, self.Azy)
 		#self.Larm = self.nbath.larm_vec (self._hf_approx)
 		self._nr_nucl_spins = int(self.nbath._nr_nucl_spins)
-		self.nbath.plot_spin_bath_info()
+		if do_plot:
+			self.nbath.plot_spin_bath_info()
 
 		if ((self._auto_save) and (not(excl_save))):
 			self._curr_file = self.create_file (folder = self._work_folder, name = name)
 			self.save_object_to_file (obj = self.nbath, file_name = self._curr_file, group_name = 'nuclear_spin_bath')
 			print ("File created!")
 		else:
-			print ("File not created!", self._auto_save, excl_save)
+			print ("File not created!")
 
 	def set_thresholds (self, A, sparse):
 		self._A_thr = A
@@ -794,7 +795,8 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		CentralSpinExperiment.generate_bath (self=self, concentration = concentration,
 						 hf_approx = hf_approx, do_plot = do_plot, name = name, excl_save = True)
 
-		self.nbath.plot_spin_bath_info()
+		if do_plot:
+			self.nbath.plot_spin_bath_info()
 		
 		close_cntr = 0
 
@@ -814,7 +816,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 	
 		#Run group algo for next step
 		self._group_algo()
-		print(self._grp_lst)
+		self.log.debug(self._grp_lst)
 
 		#Creating 2**g * 2**g spin Pauli matrices. For disjoint cluster only
 		self.In_tens_disjoint = [[[] for l in range(len(self._grp_lst[j]))] for j in range(len(self._grp_lst))]
