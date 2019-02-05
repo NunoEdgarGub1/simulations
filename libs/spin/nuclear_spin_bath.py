@@ -64,10 +64,10 @@ class NSpinBath ():
 	    logging.basicConfig (level = logging.INFO)
 
 	    self.log.info ("Generating lattice...")
-	    self.Ap0, self.Ao0, self.Azx0, self.Azy0, self.Axx0, self.Ayy0, self.Axy0, self.Ayx0, self.Axz0, self.Ayz0, self.r0, self.theta0, self.phi0, self.x0, self.y0, self.z0 = self._generate_lattice (N=self.nr_spins, a0=self.a0, prefactor = self.prefactor)
+	    self.Ap0, self.Ao0, self.Azx0, self.Azy0, self.Axx0, self.Ayy0, self.Axy0, self.Ayx0, self.Axz0, self.Ayz0, self.r0, self.theta0, self.phi0, self.x0, self.y0, self.z0 = self._generate_diamond_lattice (N=self.nr_spins, a0=self.a0, prefactor = self.prefactor)
 	    self.log.info ("Created lattice.")
 
-	def _generate_lattice (self, N, a0, prefactor):
+	def _generate_diamond_lattice (self, N, a0, prefactor):
 	    pi = np.pi
 	    ##Carbon Lattice Definition
 	    #Rotation matrix to get b along z-axis
@@ -569,9 +569,6 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 		if ((self._auto_save) and (not(excl_save))):
 			self._curr_file = self.create_file (folder = self._work_folder, name = name)
 			self.save_object_to_file (obj = self.nbath, file_name = self._curr_file, group_name = 'nuclear_spin_bath')
-			print ("File created!")
-		else:
-			print ("File not created!", self._auto_save, excl_save)
 
 	def set_thresholds (self, A, sparse):
 		self._A_thr = A
@@ -630,7 +627,8 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 
 	def Hahn_echo_indep_Nspins (self, S1, S0, tau, do_plot = True, name = ''):
 		hahn = self.nbath.Hahn_echo (tau=tau, S1=S1, S0=S0, do_plot = do_plot)
-		self._save_sequence (tau=tau, signal=hahn, tag = 'HahnEcho_indep_Nspins', name = name)
+		if self._auto_save:
+			self._save_sequence (tau=tau, signal=hahn, tag = 'HahnEcho_indep_Nspins', name = name)
 		return hahn
 
 	def dynamical_decoupling_indep_Nspins (self, S1, S0, tau, nr_pulses):
@@ -790,8 +788,6 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 
 		CentralSpinExperiment.generate_bath (self=self, concentration = concentration,
 						 hf_approx = hf_approx, do_plot = do_plot, name = name, excl_save = True)
-
-		self.nbath.plot_spin_bath_info()
 		
 		close_cntr = 0
 
@@ -833,9 +829,6 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		if ((self._auto_save) and (not(excl_save))):
 			self._curr_file = self.create_file (folder = self._work_folder, name = name)
 			self.save_object_to_file (obj = self.nbath, file_name = self._curr_file, group_name = 'nuclear_spin_bath')	
-			print ("File created!")
-		else:
-			print ("File not created!")
 
 	def _Cmn (self):
 		'''
@@ -1123,8 +1116,6 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		
 				sig_clus *= np.trace(U0_clus.dot(self._block_rho[j].dot(U1_clus)))
 
-			#print ("H-E: ", t, sig_clus)
-			#sig_clus_lst.append(sig_clus)
 			self.arr_test_clus.append(sig_clus.real)
 
 		if (self._auto_save and (not(excl_save))):
@@ -1137,7 +1128,6 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 			plt.show()
 
 		return self.arr_test_clus
-
 
 
 class FullBathDynamics (CentralSpinExperiment):
