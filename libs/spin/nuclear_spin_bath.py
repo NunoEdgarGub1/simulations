@@ -200,7 +200,8 @@ class NSpinBath ():
 		
 		
 	    '''
-
+		
+	    self.log.info ("Concentration = %.3f"%conc)
 	    self.log.info ("Generating nuclear spin bath...")
 	    
 	    pi = np.pi
@@ -347,7 +348,7 @@ class NSpinBath ():
 		hf_approx	[boolean]	-high Bz field approximation: neglects Azx and Azy components
 		
 		'''
-	
+			
 		lar_1 = np.zeros((len(self.Ap),3))
 		lar_0 = np.zeros((len(self.Ap),3))
 		
@@ -553,9 +554,10 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 
 		clus = True
 		self._curr_step = 0
+		
 		self.Ap, self.Ao, self.Azx, self.Azy, self.r , self.pair_lst , self.geom_lst , self.dC_list, self.T2h, self.T2l= \
 				self.nbath.generate_NSpin_distr (conc = concentration, do_sphere=True)
-	
+
 		self._hf_approx = hf_approx
 		self._clus = clus
 
@@ -586,6 +588,8 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
         
 	def set_cluster_size (self, g=3):
 		self.cluster_size = g
+		self.log.info ("Max cluster size = %d"%self.cluster_size)
+
 
 	def set_log_level (self, value):
 		self.log.setLevel (value)
@@ -794,6 +798,8 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 
 		CentralSpinExperiment.generate_bath (self=self, concentration = concentration,
 						 hf_approx = hf_approx, do_plot = do_plot, name = name, excl_save = True)
+						 
+		self.Larm = self.nbath.larm_vec (self._hf_approx)
 
 		if do_plot:
 			self.nbath.plot_spin_bath_info()
@@ -1020,6 +1026,16 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		self.log.debug ('nuc-nuc coupling strength', Cmer_arr)
 
 
+	def Ramsey_Hannah(self, tau, phi):
+		sig = 1
+
+		for i in range(len(self._grp_lst)):
+			U_in = [self._U_op_clus(i,0,tau), self._U_op_clus(i, 1, tau)]
+			U0 = np.multiply(np.exp(-complex(0,1)*phi/2), U_in[0])
+			U1 = np.multiply(np.exp(complex(0,1)*phi/2), U_in[1])
+			sig *= np.trace(U0.dot(self._block_rho[i].dot(U1.conj().T)))
+
+		return sig
 			
 			
 	def Hahn_Echo_clus (self, tauarr, phi, tol=1e-6, do_compare=True, do_plot = True):
@@ -1228,21 +1244,21 @@ class FullBathDynamics (CentralSpinExp_cluster):
 		
 		#Run group algo for next step
 		self._group_algo()
-
-		#Creating 2**g * 2**g spin Pauli matrices. For disjoint cluster only
-		self.In_tens_disjoint = [[[] for l in range(len(self._grp_lst[j]))] for j in range(len(self._grp_lst))]
-		for l in range(len(self._grp_lst)):
-			for j in range(len(self._grp_lst[l])):
-				Q1 = np.eye(2**j)
-				Q2 = np.eye(2**(len(self._grp_lst[l])-(j+1)))
-
-				for k in range(3):
-					self.In_tens_disjoint[l][j].append(np.kron(np.kron(Q1,self.In[k]),Q2))
-
-		#Create sub matrices based on result of group algo
-		self._block_rho = []
-		for j in range(len(self._grp_lst)):
-			self._block_rho.append(np.multiply(np.eye(2**len(self._grp_lst[j])),(2**-len(self._grp_lst[j]))))
+#
+#		#Creating 2**g * 2**g spin Pauli matrices. For disjoint cluster only
+#		self.In_tens_disjoint = [[[] for l in range(len(self._grp_lst[j]))] for j in range(len(self._grp_lst))]
+#		for l in range(len(self._grp_lst)):
+#			for j in range(len(self._grp_lst[l])):
+#				Q1 = np.eye(2**j)
+#				Q2 = np.eye(2**(len(self._grp_lst[l])-(j+1)))
+#
+#				for k in range(3):
+#					self.In_tens_disjoint[l][j].append(np.kron(np.kron(Q1,self.In[k]),Q2))
+#
+#		#Create sub matrices based on result of group algo
+#		self._block_rho = []
+#		for j in range(len(self._grp_lst)):
+#			self._block_rho.append(np.multiply(np.eye(2**len(self._grp_lst[j])),(2**-len(self._grp_lst[j]))))
 
 		if do_plot:
 			self.nbath.plot_spin_bath_info()
