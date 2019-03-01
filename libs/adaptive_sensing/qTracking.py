@@ -96,6 +96,11 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
     def set_bath_validity_conditions (self, A=None, sparse=None):
         self._A_thr = A
         self._sparse_thr = sparse
+	
+    def set_magnetic_field (self, Bz, Bx, By):
+        self.Bz = Bz
+        self.Bx = Bx
+        self.By = By
 
     def _check_bath_validity (self):
         self.log.debug ("large A ctr: "+str(self.nbath.close_cntr)
@@ -104,11 +109,10 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.log.debug ("Valid bath? "+str(condition))
         return condition
 
-    def generate_spin_bath (self, eng_bath_cluster, nr_spins, concentration, store_evol_dict = False):
+    def generate_spin_bath (self, nr_spins, concentration, cluster_size, Bx, By, Bz, store_evol_dict = False):
         '''
         Generates a nuclear spin bath
 
-        eng_bath_cluster     [array]:    for unstructured bath, set to np.zeros(nr_spins)
         nr_spins    [int]:      number of nuclear spins in the bath
         concentration [float]: concentration of spins in the lattice
         store_evol_dict [bool]: store all steps of bath evolution in a dictionary?
@@ -116,13 +120,18 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         '''
         
         valid_bath = False
-        self.nbath = NSpin.FullBathDynamics()
+        self.nbath = NSpin.FullBathDynamics(nr_spins = nr_spins)
+		
         self.nbath.set_thresholds (A=self._A_thr, sparse=self._sparse_thr)
-        
+        self.nbath.set_workfolder (r'/Users/dalescerri/Documents/GitHub/simulations/scripts/adaptive_sensing/Results/delete')
+        self.nbath.set_magnetic_field (Bz=Bz, Bx=Bx, By=By)
+        self.nbath.set_cluster_size (g=cluster_size)
+		
         while not(valid_bath):
 
-            self.nbath.generate (eng_bath_cluster = eng_bath_cluster, nr_spins=nr_spins, 
-                concentration = concentration, do_plot = False, eng_bath=False)
+#            self.nbath.generate (eng_bath_cluster = eng_bath_cluster, nr_spins=nr_spins,
+#                concentration = concentration, do_plot = False, eng_bath=False)
+            self.nbath.generate_bath (concentration = concentration)
             valid_bath = self._check_bath_validity()
 
         if not(store_evol_dict):
@@ -221,7 +230,7 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         return norm, error
         
 
-    def plot_hyperfine_distr(self, tau, theta, T2track = False, T2est = 1e-3):
+    def plot_hyperfine_distr(self, tau, theta, T2track = False, T2est = 1e-3, initial=False):
         
         #T2echo = self.nbath.T2echo
         T2est = 1e-3#self.nbath.T2echo
@@ -243,20 +252,20 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
         self.cmax.append(self.beta[np.argmax(p)]*1e-3)
         self.FWHM_lst.append(self.FWHM())		
         
-        fig = plt.figure(figsize = (12,6))
+        fig = plt.figure(figsize = (12,5))
         p0 = 0.5-0.5*np.cos(2*np.pi*self.beta*tau+theta)
         p1 = 0.5+0.5*np.cos(2*np.pi*self.beta*tau+theta)
-        #plt.fill_between (self.beta*1e-3, 0, max(p*self.norm)*p0/max(p0), color='magenta', alpha = 0.1)
-        #plt.fill_between (self.beta*1e-3, 0, max(p*self.norm)*p1/max(p1), color='cyan', alpha = 0.1)
-        plt.fill_between (self.beta*1e-3, 0, p0/max(p0), color='magenta', alpha = 0.1)
-        plt.fill_between (self.beta*1e-3, 0, p1/max(p1), color='cyan', alpha = 0.1)
+        if not initial:
+            plt.fill_between (self.beta*1e-3, 0, p0/max(p0), color='magenta', alpha = 0.1)
+            plt.fill_between (self.beta*1e-3, 0, p1/max(p1), color='cyan', alpha = 0.1)
         tarr = np.linspace(min(self.beta)*1e-3,max(self.beta)*1e-3,1000)
         T2star = 5*(self.nbath._op_sd(self.over_op[2]).real)**-1
         T2inv = T2star**-1 *1e-3
         plt.plot (az2, p_az2/max(p_az2) , '^', color='k', label = 'spin-bath')
         plt.plot (az2, p_az2/max(p_az2) , ':', color='k')
 
-        outcome = self.outcomes_list[-1]
+        if not initial:
+            outcome = self.outcomes_list[-1]
         curr_t2star = int(self.T2starlist[-1]*1e6)
         curr_tau = tau*1e6
         curr_phase = int(theta*180/3.14)
@@ -267,13 +276,17 @@ class TimeSequenceQ (adptvTrack.TimeSequence_overhead):
 #            p = np.convolve(p,T2gauss,'same')
         #plt.plot (self.beta*1e-3, p*self.norm , color='green', linewidth = 2, label = 'classical')
         plt.plot (self.beta*1e-3, p/max(p) , color='green', linewidth = 2, label = 'classical')
-        plt.title ("tau = " +str(curr_tau)+ " us, phase = "+str(curr_phase)+" deg --> outcome: "+str(outcome)+" -- T2* = "+str(curr_t2star)+ " us -- free evo: "+str(self.fv) , fontsize = 18)
-        plt.xlabel (' hyperfine (kHz)', fontsize=18)
+        #plt.title ("tau = " +str(curr_tau)+ " us, phase = "+str(curr_phase)+" deg --> outcome: "+str(outcome)+" -- T2* = "+str(curr_t2star)+ " us -- free evo: "+str(self.fv) , fontsize = 18)
+        plt.title ("Hyperfine distribution for G=3 F=2", fontsize=25)
+        plt.xlabel (' A$_\mathrm{Z}$ (kHz)', fontsize=25)
+        plt.ylabel (' P(A$_\mathrm{Z}$) ', fontsize=25)
+        plt.tick_params (labelsize=15)
         fwhm = self.FWHM()
         plt.xlim((max(-1000, m*1e-3-15*fwhm), min (1000, m*1e-3+15*fwhm)))
         plt.xlim(-1000, 1000)
+        plt.tight_layout()
         if self._save_plots:
-            plt.savefig(os.path.join(self.folder+'/', 'rep_%.04d_%.04d.png'%(self.curr_rep, self.step)))
+            plt.savefig(os.path.join(self.folder+'/', 'rep_%.04d_%.04d.pdf'%(self.curr_rep, self.step)))
         if self._show_plots:
             plt.show()
         plt.close("all")
@@ -622,6 +635,10 @@ class BathNarrowing (TimeSequenceQ):
 
         i = 0
         k = 0
+		
+		
+        if ((self._show_plots) or (self._save_plots)):
+            self.plot_hyperfine_distr(tau = 0, theta = 0, T2track = False, T2est = 0, initial=True)
 
         while ((k<=self.K+1) and (i<max_nr_steps) and (sparsity < .5*max(p_az))):
 

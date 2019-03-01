@@ -57,9 +57,15 @@ class ExpStatistics (DO.DataObjectHDF5):
         self.G = G
         self.K = N-1
 
-    def set_bath_params (self, nr_spins=7, concentration=0.01):
+    def set_bath_params (self, nr_spins=7, concentration=0.01, cluster_size=3):
         self.nr_spins = nr_spins
         self.conc = concentration
+        self.cluster_size = cluster_size
+	
+    def set_magnetic_field (self, Bz, Bx, By):
+        self.Bz = Bz
+        self.Bx = Bx
+        self.By = By
 
     def save_bath_evolution (self, value):
         self._save_bath_evol = value
@@ -109,8 +115,9 @@ class ExpStatistics (DO.DataObjectHDF5):
     def generate_bath (self):
         exp = qtrack.BathNarrowing (time_interval=0, overhead = 0, folder=self.folder)
         exp.set_bath_validity_conditions (A=self._A_thr, sparse=self._sparse_thr)
-        exp.generate_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
-                    concentration=self.conc, store_evol_dict = self._save_bath_evol)
+        exp.generate_spin_bath (nr_spins=self.nr_spins,
+                    concentration=self.conc, cluster_size=self.cluster_size, Bx = self.Bx, By = self.By, Bz = self.Bz,
+					store_evol_dict = self._save_bath_evol)
         return exp.nbath
 
     def _generate_new_experiment (self, folder, nBath = None):
@@ -120,14 +127,16 @@ class ExpStatistics (DO.DataObjectHDF5):
         exp.set_bath_validity_conditions (A=self._A_thr, sparse=self._sparse_thr)
         exp._save_plots = self._save_plots
         if (nBath == None):
-            exp.generate_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
-                    concentration=self.conc, store_evol_dict = self._save_bath_evol)
+            exp.generate_spin_bath (nr_spins=self.nr_spins,
+                    concentration=self.conc, cluster_size=self.cluster_size, Bx = self.Bx, By = self.By, Bz = self.Bz,
+					store_evol_dict = self._save_bath_evol)
         else:
             a = exp.load_bath (nBath)
             if not(a):
                 self.log.warning ("Generate a new bath")
-                exp.generate_spin_bath (cluster=np.zeros(self.nr_spins), nr_spins=self.nr_spins,
-                    concentration=self.conc, store_evol_dict = self._save_bath_evol)
+                exp.generate_spin_bath (nr_spins=self.nr_spins,
+                    concentration=self.conc, cluster_size=self.cluster_size, Bx = self.Bx, By = self.By, Bz = self.Bz,
+					store_evol_dict = self._save_bath_evol)
         exp.reset()
         exp.set_msmnt_params (tau0 = self.tau0, T2 = exp.T2star, 
                 G=self.G, F=self.F, N=self.N)
@@ -173,10 +182,13 @@ class ExpStatistics (DO.DataObjectHDF5):
             exp.initialize()
 
             if do_save:
-                grp_nbath = f.create_group ('nbath_%d'%(i+1))
-                self.save_object_all_vars_to_file (obj = exp.nbath, f = grp_nbath)
-                self.save_object_params_list_to_file (obj = exp.nbath, f = grp_nbath,
-                 params_list= ['Ao', 'Ap', 'Azx', 'Azy', 'values_Az_kHz', 'r_ij', 'theta_ij'])
+                print('run',i)
+                grp_name = 'nbath_%d'%(i+1)
+                grp_nbath = f.create_group (grp_name)
+                print(grp_nbath)
+                self.save_object_all_vars_to_file (obj = exp.nbath, file_name = name)
+                self.save_object_params_list_to_file (obj = exp.nbath, file_name = name,
+                params_list= ['Ao', 'Ap', 'Azx', 'Azy', 'values_Az_kHz', 'r_ij', 'theta_ij'])
 
             try:
                 exp.alpha = self.alpha
@@ -196,8 +208,8 @@ class ExpStatistics (DO.DataObjectHDF5):
             if do_save:
                 rep_nr = str(i).zfill(len(str(self.nr_reps)))
                 grp = f.create_group('rep_'+rep_nr)
-                self.save_object_all_vars_to_file (obj = exp, f = grp)
-                self.save_object_params_list_to_file (obj = exp, f = grp, 
+                self.save_object_all_vars_to_file (obj = exp, file_name = name)
+                self.save_object_params_list_to_file (obj = exp, file_name = name,
                         params_list= ['BayesianMean','QuantumMean','BayesianMax','QuantumMax','T2starlist', 'outcomes_list', 'tau_list', 'phase_list'])
 
         print ("Simulation completed.")
