@@ -783,7 +783,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 	def __init__ (self, nr_spins, auto_save=False):
 		CentralSpinExperiment.__init__ (self=self, nr_spins=nr_spins, auto_save = auto_save)
 
-	def generate_bath (self, concentration = .1, hf_approx = False, do_plot = False, name = '', excl_save = False):
+	def generate_bath (self, concentration = .1, hf_approx = False, do_plot = False, name = '', excl_save = False, single_exp = True):
 		'''
 		Sets up spin bath and external field
 
@@ -819,7 +819,15 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		self.HFvec = np.array([[self.Azx[j], self.Azy[j], self.Ap[j]] for j in range(self._nr_nucl_spins)])
 
 		self.In_tens = [[] for j in range(self._nr_nucl_spins)]
-	
+		
+		if not single_exp:
+			for j in range(self._nr_nucl_spins):
+				Q1 = np.diag([1 for f in range(2**j)])
+				Q2 = np.diag([1 for f in range(2**(self._nr_nucl_spins-(j+1)))])
+				
+				for k in range(3):
+					self.In_tens[j].append(self.kron_test(self.kron_test(self.In[k],2**j),2**(self._nr_nucl_spins-(j+1)), reverse=True))#append(np.kron(np.kron(Q1,self.In[k]),Q2))
+
 		#Run group algo for next step
 		self._group_algo()
 		self.log.debug(self._grp_lst)
@@ -1038,7 +1046,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		return sig
 			
 			
-	def Hahn_Echo_clus (self, tauarr, phi, tol=1e-6, do_compare=True, do_plot = True):
+	def Hahn_Echo_clus (self, tauarr, phi, tol=1e-4, do_compare=False, do_plot = True):
 		'''
 		Caclulates signal for spin echo with disjoint clusters [2]
 
@@ -1060,6 +1068,8 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 
 		'''
 		
+		self.Larm = self.nbath.larm_vec (self._hf_approx)
+		
 		self.arr_test = []
 		self.arr_test_clus = []
 		maxsigntauarr = []
@@ -1067,98 +1077,99 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		
 		print('Group list', self._grp_lst, self._ind_arr_unsrt)
 		
-		Hahn_an = self.nbath.Hahn_echo(tauarr)
-		peaktopeak = max([tauarr[s] for s in range(len(Hahn_an)) if (Hahn_an[s] >= 1-tol and s%5==0)])
+		# Creates finer time array for analytical signal
+		tau_ind_spins = np.linspace(0,max(tauarr),len(tauarr)*100)
+		
+		# Calculate analytical signal (i.e. Hahn Echo without nuclear-nuclear interactions)
+		self.Hahn_an = self.nbath.Hahn_echo(tau_ind_spins)
 
-		signallist = [n*peaktopeak for n in range(20)]
+		# Select points that are close to 1 (maxima) within some tolerance tol to calculate the full signal at these points only
+		# Really primitive, to be optimised
+		newtauarr = [tau_ind_spins[s] for s in range(len(self.Hahn_an)) if (self.Hahn_an[s] >= 1-tol)]
+		
+		# Show maxima positions
+		plt.figure (figsize=(30,10))
+		for t in newtauarr:
+			plt.axvline (t*1e6)
+		plt.axis ([min(tauarr*1e6), max(tauarr*1e6), -0.05, 1.05])
+		plt.xlabel ('time (us)', fontsize=30)
+		plt.tick_params (labelsize=25)
+		plt.title ('Position of (some) peaks', fontsize=30)
+		plt.show()
 
-		newtauarr = []
-		for signal in signallist[:1]:
-			newtauarr.append(np.linspace(signal,signal+.5*.1*peaktopeak,5).tolist())
-		
-		for signal in signallist[1:]:
-			newtauarr.append(np.linspace(signal-.5*.1*peaktopeak,signal+.5*.1*peaktopeak,5).tolist())
-		
-		for sublist in newtauarr:
-		
-			sig_clus_lst = []
-		
-			for t in sublist:
-		
-				print(count/(len(newtauarr)*len(sublist)) * 100,'%')
-				count+=1
+		for t in newtauarr:
 			
-				if do_compare:
-				
-					U_in = [self._U_op_int(0, t), self._U_op_int(1, t)]
-					
-					U0 = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0]).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in[1]))
-					U1 = (np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0]).conj().T).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in[1]).conj().T)
-
-					sig = np.trace(U0.dot(self._curr_rho.dot(U1))).real
-					self.arr_test.append(sig)
-				
-				sig_clus = 1
-				
-				for j in range(len(self._grp_lst)):
-					U_in_clus = [self._U_op_clus(j, 0, t), self._U_op_clus(j, 1, t)]
-					
-					U0_clus = np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]))
-					U1_clus = (np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).conj().T).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]).conj().T)
-				
-					sig_clus *= np.trace(U0_clus.dot(self._block_rho[j].dot(U1_clus)))
+			percent_done = int(count/(len(newtauarr)*1) * 100)
+			if percent_done%5==0:
+				print(percent_done,'%')
 		
-				sig_clus_lst.append(sig_clus)
-
-			self.arr_test_clus.append(max(sig_clus_lst).real)
-			maxsigntauarr.append(sublist[sig_clus_lst.index(max(sig_clus_lst))])
-			print(self.arr_test_clus)
-
-		#popt,pcov = curve_fit(self.gaus,np.array(maxsigntauarr),np.array(self.arr_test_clus))
-		
-		#self.T2echo = abs(popt[0])
-		#print ("T2 - Hahn echo: ", self.T2echo)
-		
-	def Hahn_echo (self, tau, phi=0, do_plot = True, name = '', excl_save = False):
-		'''
-		Calculates signal for spin echo with disjoint clusters [2]
-
-		Input: 
-		tauarr  [array]		: time array for spin echo
-		phi     [radians]	: rotation angle of the spin readout basis
-		'''
-
-		self.Larm = self.nbath.larm_vec (self._hf_approx)
-		self.arr_test = []
-		self.arr_test_clus = []
-		sig_clus_lst = []
-		
-		for t in tau:
-				
+			count+=1
 			sig_clus = 1
-		
+			
+			# Hannah: add your spin echo function here instead of loop#############
 			for j in range(len(self._grp_lst)):
 				U_in_clus = [self._U_op_clus(j, 0, t), self._U_op_clus(j, 1, t)]
-			
+				
 				U0_clus = np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]))
 				U1_clus = (np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).conj().T).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]).conj().T)
-		
+			
 				sig_clus *= np.trace(U0_clus.dot(self._block_rho[j].dot(U1_clus)))
+			#######################################################################
 
-			#print ("H-E: ", t, sig_clus)
-			#sig_clus_lst.append(sig_clus)
 			self.arr_test_clus.append(sig_clus.real)
 
-		if (self._auto_save and (not(excl_save))):
-			self._save_sequence (tau = tau, signal = self.arr_test_clus, 
-							tag = 'HahnEcho_cluster', name = name)
-
+		# Plot analytical curve and full signal at maxima
 		if do_plot:
-			plt.figure()
-			plt.plot (tau*1e6, self.arr_test_clus)
+			plt.figure (figsize=(30,10))
+			plt.plot (tau_ind_spins*1e6, self.Hahn_an, 'Red', alpha = .1)
+			plt.plot (tau_ind_spins*1e6, self.Hahn_an, 'o', color ='Red', alpha = .1)
+			plt.plot (np.array(newtauarr)*1e6, self.arr_test_clus, 'RoyalBlue',lw = 5)
+			plt.xlabel ('time (us)', fontsize=30)
+			plt.axis ([min(tauarr*1e6), max(tauarr*1e6), -0.05, 1.05])
+			plt.tick_params (labelsize=25)
+			plt.title ('Hahn echo', fontsize=30)
 			plt.show()
-
-		return self.arr_test_clus
+		
+#	def Hahn_echo_delete (self, tau, phi=0, do_plot = True, name = '', excl_save = False):
+#		'''
+#		Calculates signal for spin echo with disjoint clusters [2]
+#
+#		Input: 
+#		tauarr  [array]		: time array for spin echo
+#		phi     [radians]	: rotation angle of the spin readout basis
+#		'''
+#
+#		self.Larm = self.nbath.larm_vec (self._hf_approx)
+#		self.arr_test = []
+#		self.arr_test_clus = []
+#		sig_clus_lst = []
+#		
+#		for t in tau:
+#				
+#			sig_clus = 1
+#		
+#			for j in range(len(self._grp_lst)):
+#				U_in_clus = [self._U_op_clus(j, 0, t), self._U_op_clus(j, 1, t)]
+#			
+#				U0_clus = np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]))
+#				U1_clus = (np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).conj().T).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]).conj().T)
+#		
+#				sig_clus *= np.trace(U0_clus.dot(self._block_rho[j].dot(U1_clus)))
+#
+#			#print ("H-E: ", t, sig_clus)
+#			#sig_clus_lst.append(sig_clus)
+#			self.arr_test_clus.append(sig_clus.real)
+#
+#		if (self._auto_save and (not(excl_save))):
+#			self._save_sequence (tau = tau, signal = self.arr_test_clus, 
+#							tag = 'HahnEcho_cluster', name = name)
+#
+#		if do_plot:
+#			plt.figure()
+#			plt.plot (tau*1e6, self.arr_test_clus)
+#			plt.show()
+#
+#		return self.arr_test_clus
 
 
 
@@ -1438,7 +1449,7 @@ class FullBathDynamics (CentralSpinExp_cluster):
 		plt.legend(fontsize=15)
 		plt.title ('Hahn echo')
 		plt.show()
-	
+
 	
 	def gaus(self,x,sigma):
 		return np.exp(-x**2/(2*sigma**2))
