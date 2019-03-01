@@ -1078,7 +1078,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		print('Group list', self._grp_lst, self._ind_arr_unsrt)
 		
 		# Creates finer time array for analytical signal
-		tau_ind_spins = np.linspace(0,max(tauarr),len(tauarr)*100)
+		tau_ind_spins = np.linspace(0,max(tauarr),len(tauarr)*1000)
 		
 		# Calculate analytical signal (i.e. Hahn Echo without nuclear-nuclear interactions)
 		self.Hahn_an = self.nbath.Hahn_echo(tau_ind_spins)
@@ -1086,6 +1086,10 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		# Select points that are close to 1 (maxima) within some tolerance tol to calculate the full signal at these points only
 		# Really primitive, to be optimised
 		newtauarr = [tau_ind_spins[s] for s in range(len(self.Hahn_an)) if (self.Hahn_an[s] >= 1-tol)]
+		
+		if len(newtauarr) <= 5 or np.mean(np.diff(newtauarr)) < .1*np.max(np.diff(newtauarr)):
+			print('Few peaks detected, set manual time array')
+			newtauarr = tauarr
 		
 		# Show maxima positions
 		plt.figure (figsize=(30,10))
