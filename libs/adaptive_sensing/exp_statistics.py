@@ -62,6 +62,9 @@ class ExpStatistics (DO.DataObjectHDF5):
         self.conc = concentration
         self.cluster_size = cluster_size
 	
+    def set_hahn_tauarr (self, hahn_tauarr):
+        self.hahn_tauarr = hahn_tauarr
+	
     def set_magnetic_field (self, Bz, Bx, By):
         self.Bz = Bz
         self.Bx = Bx
@@ -112,29 +115,30 @@ class ExpStatistics (DO.DataObjectHDF5):
         self._A_thr = A
         self._sparse_thr = sparse
 
-    def generate_bath (self):
+    def generate_bath (self, folder):
         exp = qtrack.BathNarrowing (time_interval=0, overhead = 0, folder=self.folder)
         exp.set_bath_validity_conditions (A=self._A_thr, sparse=self._sparse_thr)
-        exp.generate_spin_bath (nr_spins=self.nr_spins,
+        exp.generate_spin_bath (folder=folder, hahn_tauarr = self.hahn_tauarr, nr_spins=self.nr_spins,
                     concentration=self.conc, cluster_size=self.cluster_size, Bx = self.Bx, By = self.By, Bz = self.Bz,
 					store_evol_dict = self._save_bath_evol)
+        print(self.folder)
         return exp.nbath
 
-    def _generate_new_experiment (self, folder, nBath = None):
+    def _generate_new_experiment (self, hahn_tauarr, folder, nBath = None):
 
         exp = qtrack.BathNarrowing (time_interval=0, overhead = 0, folder=folder)
         exp.set_log_level (self._log_level)
         exp.set_bath_validity_conditions (A=self._A_thr, sparse=self._sparse_thr)
         exp._save_plots = self._save_plots
         if (nBath == None):
-            exp.generate_spin_bath (nr_spins=self.nr_spins,
+            exp.generate_spin_bath (folder = folder, hahn_tauarr = self.hahn_tauarr, nr_spins=self.nr_spins,
                     concentration=self.conc, cluster_size=self.cluster_size, Bx = self.Bx, By = self.By, Bz = self.Bz,
 					store_evol_dict = self._save_bath_evol)
         else:
             a = exp.load_bath (nBath)
             if not(a):
                 self.log.warning ("Generate a new bath")
-                exp.generate_spin_bath (nr_spins=self.nr_spins,
+                exp.generate_spin_bath (folder = folder, hahn_tauarr = self.hahn_tauarr, nr_spins=self.nr_spins,
                     concentration=self.conc, cluster_size=self.cluster_size, Bx = self.Bx, By = self.By, Bz = self.Bz,
 					store_evol_dict = self._save_bath_evol)
         exp.reset()
@@ -177,7 +181,7 @@ class ExpStatistics (DO.DataObjectHDF5):
                     f.close()
                     f, newpath, name = self.__generate_file (title = '_'+funct_name+'_'+string_id+'_'+'batch_%d'%batch_no)
 
-            exp = self._generate_new_experiment (folder = newpath, nBath = self.generate_bath())
+            exp = self._generate_new_experiment (hahn_tauarr = np.linspace(0,2e-2,10), folder = newpath, nBath = self.generate_bath(newpath))
             exp.reset()
             exp.initialize()
 

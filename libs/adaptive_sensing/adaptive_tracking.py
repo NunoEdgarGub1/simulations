@@ -99,14 +99,15 @@ class TimeSequence ():
 			y_old = y_old/np.sum(y_old)
 			m_old = max(y_old)
 		
-		if (free_evo):
-			#T2gauss = np.exp(-(self.beta  * np.pi**-1 * T2_est**-1)**2)#np.fft.ifftshift(np.abs(np.fft.ifft(np.exp(-(self.beta * T2_est)**2))))
-			#T2gauss = np.fft.ifftshift(np.abs(np.fft.ifft(np.exp(-(self.beta * T2_est)**2))))
-			print('CONVOLVED', T2_est)
-			#self.p_k = self.p_k*T2gauss
-			
-			#self.p_k = self.conv_circ(self.p_k, np.exp(-(self.beta * tf**-1)**2))
-			self.p_k = self.conv_circ(self.p_k, np.exp(-(self.beta * T2_est)**2))
+		if free_evo:
+			if m_n==1:
+				#T2gauss = np.exp(-(self.beta  * np.pi**-1 * T2_est**-1)**2)#np.fft.ifftshift(np.abs(np.fft.ifft(np.exp(-(self.beta * T2_est)**2))))
+				#T2gauss = np.fft.ifftshift(np.abs(np.fft.ifft(np.exp(-(self.beta * T2_est)**2))))
+				print('CONVOLVED', T2_est)
+				#self.p_k = self.p_k*T2gauss
+				
+				#self.p_k = self.conv_circ(self.p_k, np.exp(-(self.beta * tf**-1)**2))
+				self.p_k = self.conv_circ(self.p_k, np.exp(-(self.beta * T2_est)**2))
 
 
 		else:
@@ -609,6 +610,7 @@ class TimeSequence_overhead (TimeSequence):
 
 
 	def simulate(self, track, do_save = False, do_plot = False, kappa = None, do_debug=False):
+	
 		self.k_array = self.K-np.arange(self.K+1)
 		self.init_apriori ()
 

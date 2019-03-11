@@ -34,6 +34,7 @@ import numba
 import os, time
 import matplotlib as mpl
 from matplotlib import pyplot as plt
+from scipy.interpolate import interp1d
 from matplotlib.colors import ListedColormap
 from scipy.sparse import csr_matrix
 from mpl_toolkits.mplot3d import Axes3D
@@ -59,7 +60,8 @@ class NSpinBath ():
 	    self.ZFS = 2.87*10**9
 	    self.nr_spins = nr_spins
 
-	    self.prefactor = self.mu0*self.gam_el*self.gam_n/(4*np.pi)*self.hbar**2 /self.hbar/(2*np.pi) #Last /hbar/2pi is to convert from Joule to Hz
+	    self.prefactor = (self.mu0*self.gam_el*self.gam_n/(4*np.pi))*self.hbar**2 /self.hbar/(2*np.pi) #Last /hbar/2pi is to convert from Joule to Hz
+	    print(self.prefactor)
 	    self.log = logging.getLogger ('nBath')
 	    logging.basicConfig (level = logging.INFO)
 
@@ -426,6 +428,7 @@ class NSpinBath ():
 
 		for i in np.arange(self._nr_nucl_spins):
 			# !!!!!! attention: is this /(2pi) correct???
+			# Dale: yes since gam_n is in units of rad s-1 T-1 and not Hz T-1...
 			th_0 = self.gam_n*self.h_0[i]*tau/(2*np.pi)
 			th_1 = self.gam_n*self.h_1[i]*tau/(2*np.pi)
 			a1 = np.sin(self.phi_01[i])**2
@@ -437,14 +440,14 @@ class NSpinBath ():
 		for i in np.arange(self._nr_nucl_spins):
 			self.L_hahn = self.L_hahn * self.L[i, :]
 
-		if do_plot:
-			plt.figure (figsize=(30,10))
-			plt.plot (tau*1e6, self.L_hahn, 'RoyalBlue')
-			plt.plot (tau*1e6, self.L_hahn, 'o')
-			plt.xlabel ('time (us)', fontsize=18)
-			plt.axis ([min(tau*1e6), max(tau*1e6), -0.05, 1.05])
-			plt.title ('Hahn echo')
-			plt.show()
+#		if do_plot:
+#			plt.figure (figsize=(30,10))
+#			plt.plot (tau*1e6, self.L_hahn, 'RoyalBlue')
+#			plt.plot (tau*1e6, self.L_hahn, 'o')
+#			plt.xlabel ('time (us)', fontsize=18)
+#			#plt.axis ([min(tau*1e6), max(tau*1e6), -0.05, 1.05])
+#			plt.title ('Hahn echo')
+#			plt.show()
 
 		return self.L_hahn
 
@@ -509,7 +512,7 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 		self.msArr=[]
 		self.flipArr = []
 
-		self.prefactor = self.mu0*(self.gam_n**2)/(4*np.pi)*self.hbar**2 /self.hbar/(2*np.pi) #Last /hbar/2pi is to convert from Joule to Hz
+		self.prefactor = (self.mu0*(self.gam_n**2)/(4*np.pi))*self.hbar**2 /self.hbar/(2*np.pi) #Last /hbar/2pi is to convert from Joule to Hz
 
 		self.nbath = NSpinBath (nr_spins = self.nr_spins)
 
@@ -1033,6 +1036,8 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		self.log.debug ('grouped', self._grp_lst)
 		self.log.debug ('nuc-nuc coupling strength', Cmer_arr)
 
+	def gaus(self,x,sigma):
+		return np.exp(-(2*x/sigma)**3)
 
 	def Ramsey_Hannah(self, tau, phi):
 		sig = 1
@@ -1046,7 +1051,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		return sig
 			
 			
-	def Hahn_Echo_clus (self, tauarr, phi, tol=1e-4, do_compare=False, do_plot = True):
+	def Hahn_Echo_clus (self, tauarr, phi, tol=1e-5, sep = 1e-2, batches = 1, do_compare=False, do_plot = True):
 		'''
 		Caclulates signal for spin echo with disjoint clusters [2]
 
@@ -1078,7 +1083,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		print('Group list', self._grp_lst, self._ind_arr_unsrt)
 		
 		# Creates finer time array for analytical signal
-		tau_ind_spins = np.linspace(0,max(tauarr),len(tauarr)*1000)
+		tau_ind_spins = np.linspace(min(tauarr),max(tauarr),len(tauarr)*1e4)
 		
 		# Calculate analytical signal (i.e. Hahn Echo without nuclear-nuclear interactions)
 		self.Hahn_an = self.nbath.Hahn_echo(tau_ind_spins)
@@ -1087,132 +1092,112 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		# Really primitive, to be optimised
 		newtauarr = [tau_ind_spins[s] for s in range(len(self.Hahn_an)) if (self.Hahn_an[s] >= 1-tol)]
 		
-		if len(newtauarr) <= 5 or np.mean(np.diff(newtauarr)) < .1*np.max(np.diff(newtauarr)):
+		peakpos = [0]+[i for i in range(len(np.diff(newtauarr))) if (np.diff(newtauarr)[i]>=.5*np.max(np.diff(newtauarr)))]
+		newnewtauarr = []
+		
+		for j in peakpos:
+			if peakpos.index(j)%2==0:
+				newnewtauarr.append(newtauarr[int(np.mean([j,j+1]))])
+		
+		print(peakpos)
+		
+		if len(newtauarr) <= 5 or (np.max(np.diff(newtauarr)) < .1*np.max(np.diff(newtauarr))):
 			print('Few peaks detected, set manual time array')
-			newtauarr = tauarr
+			newnewtauarr = tauarr
+
+		#newtauarr = np.linspace(min(tauarr),max(tauarr),len(tauarr)*100)
+		#newnewtauarr = newtauarr
 		
 		# Show maxima positions
 		plt.figure (figsize=(30,10))
-		for t in newtauarr:
-			plt.axvline (t*1e6)
-		plt.axis ([min(tauarr*1e6), max(tauarr*1e6), -0.05, 1.05])
+		for t in newnewtauarr:
+			plt.axvline (t*1e6, color = 'red')
+		#plt.axis ([min(tauarr*1e6), max(tauarr*1e6), -0.05, 1.05])
 		plt.xlabel ('time (us)', fontsize=30)
 		plt.tick_params (labelsize=25)
 		plt.title ('Position of (some) peaks', fontsize=30)
 		plt.show()
 
-		for t in newtauarr:
-			
-			percent_done = int(count/(len(newtauarr)*1) * 100)
-			if percent_done%5==0:
-				print(percent_done,'%')
-		
-			count+=1
-			sig_clus = 1
-			
-			# Hannah: add your spin echo function here instead of loop#############
-			for j in range(len(self._grp_lst)):
-				U_in_clus = [self._U_op_clus(j, 0, t), self._U_op_clus(j, 1, t)]
+		for batch in range(batches):
+			arr_test_clus_batch = []
+			for t in newnewtauarr:
 				
-				U0_clus = np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]))
-				U1_clus = (np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).conj().T).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]).conj().T)
-			
-				sig_clus *= np.trace(U0_clus.dot(self._block_rho[j].dot(U1_clus)))
-			#######################################################################
+				t+=batch*sep
+				
+				percent_done = int(count/(len(newnewtauarr)*batches) * 100)
+				if percent_done%10==0:
+					print(percent_done,'%')
 
-			self.arr_test_clus.append(sig_clus.real)
+				count+=1
+				sig_clus = 1
+				
+				# Hannah: add your spin echo function here instead of loop#############
+				for j in range(len(self._grp_lst)):
+					U_in_clus = [self._U_op_clus(j, 0, t), self._U_op_clus(j, 1, t)]
+					
+					U0_clus = np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]))
+					U1_clus = (np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).conj().T).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]).conj().T)
+				
+					sig_clus *= np.trace(U0_clus.dot(self._block_rho[j].dot(U1_clus)))
+				#######################################################################
+
+				arr_test_clus_batch.append(sig_clus.real)
+				self.arr_test_clus.append(sig_clus.real)
+				#if batch>0 : newnewtauarr = np.append(newnewtauarr,t)
+
+		maxima_x = [0,]
+		maxima_y = [self.arr_test_clus[0],]
+
+		env_pts = np.zeros(np.shape(self.arr_test_clus))
+
+		for k in range(1,len(self.arr_test_clus)-1):
+			if (np.sign(self.arr_test_clus[k]-self.arr_test_clus[k-1])==1) and (np.sign(self.arr_test_clus[k]-self.arr_test_clus[k+1])==1):
+				maxima_x.append(k)
+				maxima_y.append(self.arr_test_clus[k])
+
+		#Append the last value of (s) to the interpolating values. This forces the model to use the same ending point for both the upper and lower envelope models.
+		maxima_x.append(len(self.arr_test_clus)-1)
+		maxima_y.append(self.arr_test_clus[-1])
+
+		#Fit suitable models to the data. Here I am using cubic splines, similarly to the MATLAB example given in the question.
+
+		maxima_interp = interp1d(maxima_x,maxima_y, kind = 'cubic',bounds_error = False, fill_value=0.0)
+
+		#Evaluate each model over the domain of 
+		for k in range(0,len(self.arr_test_clus)):
+			env_pts[k] = maxima_interp(k)
+
+		popt,pcov = curve_fit(self.gaus,np.array(newnewtauarr),np.array(self.arr_test_clus))
+		T2echo_bad = abs(popt[0])
+
+		popt2,pcov2 = curve_fit(self.gaus,np.array(newnewtauarr),env_pts)
+		T2echo = abs(popt2[0])
 
 		# Plot analytical curve and full signal at maxima
 		if do_plot:
 			plt.figure (figsize=(30,10))
 			plt.plot (tau_ind_spins*1e6, self.Hahn_an, 'Red', alpha = .1)
 			plt.plot (tau_ind_spins*1e6, self.Hahn_an, 'o', color ='Red', alpha = .1)
-			plt.plot (np.array(newtauarr)*1e6, self.arr_test_clus, 'RoyalBlue',lw = 5)
-			plt.xlabel ('time (us)', fontsize=30)
-			plt.axis ([min(tauarr*1e6), max(tauarr*1e6), -0.05, 1.05])
+			plt.plot (np.array(newnewtauarr)*1e6, self.arr_test_clus, 'RoyalBlue',lw = 5)
+			plt.plot (np.array(newnewtauarr)*1e6, self.gaus(np.array(newnewtauarr),T2echo), 'Green',lw = 5, label = "opt T$_2$ = %.d ms"%(T2echo*1e3))
+			plt.plot (np.array(newnewtauarr)*1e6, self.gaus(np.array(newnewtauarr),T2echo_bad), 'Green',lw = 5, ls='dashed', label = "T$_2$ = %.d ms"%(T2echo_bad*1e3))
+			plt.xlabel (r'time ($\mu$s)', fontsize=30)
 			plt.tick_params (labelsize=25)
+			plt.legend(fontsize = 25)
+			plt.grid(True)
 			plt.title ('Hahn echo', fontsize=30)
+			plt.savefig(os.path.join(self._work_folder+'/', 'T2.png'))
 			plt.show()
-		
-#	def Hahn_echo_delete (self, tau, phi=0, do_plot = True, name = '', excl_save = False):
-#		'''
-#		Calculates signal for spin echo with disjoint clusters [2]
-#
-#		Input: 
-#		tauarr  [array]		: time array for spin echo
-#		phi     [radians]	: rotation angle of the spin readout basis
-#		'''
-#
-#		self.Larm = self.nbath.larm_vec (self._hf_approx)
-#		self.arr_test = []
-#		self.arr_test_clus = []
-#		sig_clus_lst = []
-#		
-#		for t in tau:
-#				
-#			sig_clus = 1
-#		
-#			for j in range(len(self._grp_lst)):
-#				U_in_clus = [self._U_op_clus(j, 0, t), self._U_op_clus(j, 1, t)]
-#			
-#				U0_clus = np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]))
-#				U1_clus = (np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).conj().T).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]).conj().T)
-#		
-#				sig_clus *= np.trace(U0_clus.dot(self._block_rho[j].dot(U1_clus)))
-#
-#			#print ("H-E: ", t, sig_clus)
-#			#sig_clus_lst.append(sig_clus)
-#			self.arr_test_clus.append(sig_clus.real)
-#
-#		if (self._auto_save and (not(excl_save))):
-#			self._save_sequence (tau = tau, signal = self.arr_test_clus, 
-#							tag = 'HahnEcho_cluster', name = name)
-#
-#		if do_plot:
-#			plt.figure()
-#			plt.plot (tau*1e6, self.arr_test_clus)
-#			plt.show()
-#
-#		return self.arr_test_clus
 
+		return T2echo
 
 
 class FullBathDynamics (CentralSpinExp_cluster):
 
-#	def __init__ (self):
-#	
-#		super()
-#		self._store_evol_dict = False
-#
-#		self.gam_el = 1.760859 *10**11 #Gyromagnetic ratio rad s-1 T-1
-#		self.gam_n = 67.262 *10**6 #rad s-1 T-1
-#		self.hbar = 1.05457173*10**(-34)
-#		self.mu0 = 4*np.pi*10**(-7)
-#		self.ZFS = 2.87*10**9
-#		self.msArr=[]
-#		self.flipArr = []
-#
-#		self.prefactor = self.mu0*(self.gam_n**2)/(4*np.pi)*self.hbar**2 /self.hbar/(2*np.pi) #Last /hbar/2pi is to convert from Joule to Hz
-#
-#		# Pauli matrices
-#		self.sx = np.array([[0,1],[1,0]])
-#		self.sy = np.array([[0,-complex(0,1)],[complex(0,1),0]])
-#		self.sz = np.array([[1,0],[0,-1]])
-#		self.In = .5*np.array([self.sx,self.sy,self.sz])
-#		# current density matrix for nuclear spin bath.
-#		# Now you won't keep all the elements but only the diagonal ones
-#		self._curr_rho = []
-#		self._curr_rho_test = []
-#		# "evolution dictionary": stores data for each step
-#		self._evol_dict = {}
-#
-#		self.log = logging.getLogger ('nBath')
-#		logging.basicConfig (level = logging.INFO)
-
 	def __init__ (self, nr_spins, auto_save=False):
 		CentralSpinExperiment.__init__ (self=self, nr_spins=nr_spins, auto_save = auto_save)
 
-	def generate_bath (self, concentration = .1, hf_approx = False, do_plot = False, name = '', excl_save = False):
+	def generate_bath (self, concentration = .1, hahn_tauarr = np.linspace(0,2e-2,10), hf_approx = False, do_plot = False, name = '', excl_save = False, do_hahn = True):
 		'''
 		Sets up spin bath and external field
 
@@ -1256,24 +1241,24 @@ class FullBathDynamics (CentralSpinExp_cluster):
 				self.In_tens[j].append(self.kron_test(self.kron_test(self.In[k],2**j),2**(self._nr_nucl_spins-(j+1)), reverse=True))#append(np.kron(np.kron(Q1,self.In[k]),Q2))
 
 		self._curr_rho = np.diag([2**-self._nr_nucl_spins for j in range(2**self._nr_nucl_spins)])
-		
+				
 		#Run group algo for next step
 		self._group_algo()
-#
-#		#Creating 2**g * 2**g spin Pauli matrices. For disjoint cluster only
-#		self.In_tens_disjoint = [[[] for l in range(len(self._grp_lst[j]))] for j in range(len(self._grp_lst))]
-#		for l in range(len(self._grp_lst)):
-#			for j in range(len(self._grp_lst[l])):
-#				Q1 = np.eye(2**j)
-#				Q2 = np.eye(2**(len(self._grp_lst[l])-(j+1)))
-#
-#				for k in range(3):
-#					self.In_tens_disjoint[l][j].append(np.kron(np.kron(Q1,self.In[k]),Q2))
-#
-#		#Create sub matrices based on result of group algo
-#		self._block_rho = []
-#		for j in range(len(self._grp_lst)):
-#			self._block_rho.append(np.multiply(np.eye(2**len(self._grp_lst[j])),(2**-len(self._grp_lst[j]))))
+
+		#Creating 2**g * 2**g spin Pauli matrices. For disjoint cluster only
+		self.In_tens_disjoint = [[[] for l in range(len(self._grp_lst[j]))] for j in range(len(self._grp_lst))]
+		for l in range(len(self._grp_lst)):
+			for j in range(len(self._grp_lst[l])):
+				Q1 = np.eye(2**j)
+				Q2 = np.eye(2**(len(self._grp_lst[l])-(j+1)))
+
+				for k in range(3):
+					self.In_tens_disjoint[l][j].append(np.kron(np.kron(Q1,self.In[k]),Q2))
+
+		#Create sub matrices based on result of group algo
+		self._block_rho = []
+		for j in range(len(self._grp_lst)):
+			self._block_rho.append(np.multiply(np.eye(2**len(self._grp_lst[j])),(2**-len(self._grp_lst[j]))))
 
 		if do_plot:
 			self.nbath.plot_spin_bath_info()
@@ -1284,6 +1269,20 @@ class FullBathDynamics (CentralSpinExp_cluster):
 			print ("File created!")
 		else:
 			print ("File not created!")
+
+		pd = np.real(self.get_probability_density())
+
+		if not(self._sparse_thr == None):
+			az, p_az = self.get_probability_density()
+			az2 = np.roll(az,-1)
+			if max(az2[:-1]-az[:-1]) > self._sparse_thr:
+				self.log.debug ('Sparse distribution:{0} kHz'.format(max(az2[:-1]-az[:-1])))
+				self.sparse_distribution = True
+			else:
+				self.sparse_distribution = False
+
+		if (not self.sparse_distribution) and self.close_cntr==0 and do_hahn:
+			self.T2echo = self.Hahn_Echo_clus (hahn_tauarr,0)
 
 #	def generate_bath (self, concentration = .1,
 #				hf_approx = False, clus = True, single_exp = False, do_plot = False, Bp=0.001):
@@ -1453,10 +1452,6 @@ class FullBathDynamics (CentralSpinExp_cluster):
 		plt.legend(fontsize=15)
 		plt.title ('Hahn echo')
 		plt.show()
-
-	
-	def gaus(self,x,sigma):
-		return np.exp(-x**2/(2*sigma**2))
 		
 
 	def Ramsey (self, tau,  phi, flip_prob = 0, t_read = 0):
