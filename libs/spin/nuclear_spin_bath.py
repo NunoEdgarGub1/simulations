@@ -364,8 +364,6 @@ class NSpinBath ():
 				lar_1[f] = (self.gam_n/(2*np.pi))*np.array([self.Bx,self.By,self.Bz])+np.array([self.Azx[f],self.Azy[f],self.Ap[f]])
 				lar_0[f] = (self.gam_n/(2*np.pi))*np.array([self.Bx,self.By,self.Bz])
 	
-
-		self.log.debug ('Larmor frequency:', (self.gam_n/(2*np.pi) *self.Bz + self.Ap.mean())**-1)
 		return lar_0, lar_1
 
 	def _set_pars (self, tau):
@@ -420,7 +418,7 @@ class NSpinBath ():
 
 
 
-	def Hahn_echo (self, tau, S1=1, S0=0, do_plot = True):
+	def Hahn_echo (self, tau, S1=1, S0=0, do_plot = False):
 
 		print ("Hahn echo - magnetic field: ", self.Bp)
 
@@ -440,14 +438,14 @@ class NSpinBath ():
 		for i in np.arange(self._nr_nucl_spins):
 			self.L_hahn = self.L_hahn * self.L[i, :]
 
-#		if do_plot:
-#			plt.figure (figsize=(30,10))
-#			plt.plot (tau*1e6, self.L_hahn, 'RoyalBlue')
-#			plt.plot (tau*1e6, self.L_hahn, 'o')
-#			plt.xlabel ('time (us)', fontsize=18)
-#			#plt.axis ([min(tau*1e6), max(tau*1e6), -0.05, 1.05])
-#			plt.title ('Hahn echo')
-#			plt.show()
+		if do_plot:
+			plt.figure (figsize=(30,10))
+			plt.plot (tau*1e6, self.L_hahn, 'RoyalBlue')
+			plt.plot (tau*1e6, self.L_hahn, 'o')
+			plt.xlabel ('time (us)', fontsize=18)
+			#plt.axis ([min(tau*1e6), max(tau*1e6), -0.05, 1.05])
+			plt.title ('Hahn echo')
+			plt.show()
 
 		return self.L_hahn
 
@@ -567,7 +565,6 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 		#modified previous code to give necessary Cartesian components of hf vector 
 		#(not just Ap and Ao)
 		self.nbath.set_spin_bath (self.Ap, self.Ao, self.Azx, self.Azy)
-		#self.Larm = self.nbath.larm_vec (self._hf_approx)
 		self._nr_nucl_spins = int(self.nbath._nr_nucl_spins)
 		if do_plot:
 			self.nbath.plot_spin_bath_info()
@@ -599,9 +596,6 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 
 	def deactivate_evol_dict (self):
 		self._store_evol_dict = False
-
-	def gaussian(self, x, mu, sig):
-		return 1./(sqrt(2.*pi)*sig)*np.exp(-np.power((x - mu)/sig, 2.)/2)
 
 	def print_nuclear_spins (self):
 
@@ -758,7 +752,7 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 		)
 
 
-		return Hms + Hc #+ (self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**len(self._grp_lst[group]))
+		return Hms + Hc #+ (self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**self._nr_nucl_spins)
 
 	def _U_op_int(self, ms, tau):
 		'''
@@ -1051,7 +1045,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		return sig
 			
 			
-	def Hahn_Echo_clus (self, tauarr, phi, tol=1e-5, sep = 1e-2, batches = 1, do_compare=False, do_plot = True):
+	def Hahn_Echo_clus (self, tauarr, phi, tol=1e-5, sep = 1e-2, batches = 1, do_compare=False, do_plot = False, do_save=True):
 		'''
 		Caclulates signal for spin echo with disjoint clusters [2]
 
@@ -1073,10 +1067,8 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 
 		'''
 		
-		self.Larm = self.nbath.larm_vec (self._hf_approx)
-		
-		self.arr_test = []
-		self.arr_test_clus = []
+		arr_test = []
+		arr_test_clus = []
 		maxsigntauarr = []
 		count=0
 		
@@ -1086,11 +1078,11 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		tau_ind_spins = np.linspace(min(tauarr),max(tauarr),len(tauarr)*1e4)
 		
 		# Calculate analytical signal (i.e. Hahn Echo without nuclear-nuclear interactions)
-		self.Hahn_an = self.nbath.Hahn_echo(tau_ind_spins)
+		Hahn_an = self.nbath.Hahn_echo(tau_ind_spins)
 
 		# Select points that are close to 1 (maxima) within some tolerance tol to calculate the full signal at these points only
 		# Really primitive, to be optimised
-		newtauarr = [tau_ind_spins[s] for s in range(len(self.Hahn_an)) if (self.Hahn_an[s] >= 1-tol)]
+		newtauarr = [tau_ind_spins[s] for s in range(len(Hahn_an)) if (Hahn_an[s] >= 1-tol)]
 		
 		peakpos = [0]+[i for i in range(len(np.diff(newtauarr))) if (np.diff(newtauarr)[i]>=.5*np.max(np.diff(newtauarr)))]
 		newnewtauarr = []
@@ -1098,25 +1090,20 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		for j in peakpos:
 			if peakpos.index(j)%2==0:
 				newnewtauarr.append(newtauarr[int(np.mean([j,j+1]))])
-		
-		print(peakpos)
-		
+	
 		if len(newtauarr) <= 5 or (np.max(np.diff(newtauarr)) < .1*np.max(np.diff(newtauarr))):
 			print('Few peaks detected, set manual time array')
 			newnewtauarr = tauarr
-
-		#newtauarr = np.linspace(min(tauarr),max(tauarr),len(tauarr)*100)
-		#newnewtauarr = newtauarr
 		
-		# Show maxima positions
-		plt.figure (figsize=(30,10))
-		for t in newnewtauarr:
-			plt.axvline (t*1e6, color = 'red')
-		#plt.axis ([min(tauarr*1e6), max(tauarr*1e6), -0.05, 1.05])
-		plt.xlabel ('time (us)', fontsize=30)
-		plt.tick_params (labelsize=25)
-		plt.title ('Position of (some) peaks', fontsize=30)
-		plt.show()
+		if do_plot:
+			plt.figure (figsize=(30,10))
+			for t in newnewtauarr:
+				plt.axvline (t*1e6, color = 'red')
+			plt.axis ([min(tauarr*1e6), max(tauarr*1e6), -0.05, 1.05])
+			plt.xlabel ('time (us)', fontsize=30)
+			plt.tick_params (labelsize=25)
+			plt.title ('Position of (some) peaks', fontsize=30)
+			plt.show()
 
 		for batch in range(batches):
 			arr_test_clus_batch = []
@@ -1131,7 +1118,6 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 				count+=1
 				sig_clus = 1
 				
-				# Hannah: add your spin echo function here instead of loop#############
 				for j in range(len(self._grp_lst)):
 					U_in_clus = [self._U_op_clus(j, 0, t), self._U_op_clus(j, 1, t)]
 					
@@ -1139,62 +1125,68 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 					U1_clus = (np.multiply(np.exp(-complex(0,1)*phi/2),U_in_clus[0]).conj().T).dot(np.multiply(np.exp(complex(0,1)*phi/2),U_in_clus[1]).conj().T)
 				
 					sig_clus *= np.trace(U0_clus.dot(self._block_rho[j].dot(U1_clus)))
-				#######################################################################
 
 				arr_test_clus_batch.append(sig_clus.real)
-				self.arr_test_clus.append(sig_clus.real)
-				#if batch>0 : newnewtauarr = np.append(newnewtauarr,t)
+				arr_test_clus.append(sig_clus.real)
 
 		maxima_x = [0,]
-		maxima_y = [self.arr_test_clus[0],]
+		maxima_y = [arr_test_clus[0],]
 
-		env_pts = np.zeros(np.shape(self.arr_test_clus))
+		env_pts = np.zeros(np.shape(arr_test_clus))
 
-		for k in range(1,len(self.arr_test_clus)-1):
-			if (np.sign(self.arr_test_clus[k]-self.arr_test_clus[k-1])==1) and (np.sign(self.arr_test_clus[k]-self.arr_test_clus[k+1])==1):
+		for k in range(1,len(arr_test_clus)-1):
+			if (np.sign(arr_test_clus[k]-arr_test_clus[k-1])==1) and (np.sign(arr_test_clus[k]-arr_test_clus[k+1])==1):
 				maxima_x.append(k)
-				maxima_y.append(self.arr_test_clus[k])
+				maxima_y.append(arr_test_clus[k])
 
 		#Append the last value of (s) to the interpolating values. This forces the model to use the same ending point for both the upper and lower envelope models.
-		maxima_x.append(len(self.arr_test_clus)-1)
-		maxima_y.append(self.arr_test_clus[-1])
+		maxima_x.append(len(arr_test_clus)-1)
+		maxima_y.append(arr_test_clus[-1])
 
-		#Fit suitable models to the data. Here I am using cubic splines, similarly to the MATLAB example given in the question.
+		if do_save:
+			self._save_sequence (tau=tau_ind_spins, signal=Hahn_an, tag = 'HahnEcho_indep_Nspins', name = '')
+			self._save_sequence (tau=np.array(newnewtauarr), signal=arr_test_clus, tag = 'HahnEcho_maxcluster_%d'%self.cluster_size, name = '')
 
-		maxima_interp = interp1d(maxima_x,maxima_y, kind = 'cubic',bounds_error = False, fill_value=0.0)
+		try:
+			maxima_interp = interp1d(maxima_x,maxima_y, kind = 'cubic',bounds_error = False, fill_value=0.0)
 
-		#Evaluate each model over the domain of 
-		for k in range(0,len(self.arr_test_clus)):
-			env_pts[k] = maxima_interp(k)
+			#Evaluate each model over the domain of
+			for k in range(0,len(arr_test_clus)):
+				env_pts[k] = maxima_interp(k)
 
-		popt,pcov = curve_fit(self.gaus,np.array(newnewtauarr),np.array(self.arr_test_clus))
-		T2echo_bad = abs(popt[0])
+			popt2,pcov2 = curve_fit(self.gaus,np.array(newnewtauarr),env_pts)
+			T2echo = abs(popt2[0])
 
-		popt2,pcov2 = curve_fit(self.gaus,np.array(newnewtauarr),env_pts)
-		T2echo = abs(popt2[0])
+		except:
+			print("Hahn signal too sparse for interpolation!")
+			popt,pcov = curve_fit(self.gaus,np.array(newnewtauarr),np.array(arr_test_clus))
+			T2echo = abs(popt[0])
 
 		# Plot analytical curve and full signal at maxima
+		plt.figure (figsize=(30,10))
+		plt.plot (tau_ind_spins*1e6, Hahn_an, 'Red', alpha = .1)
+		plt.plot (tau_ind_spins*1e6, Hahn_an, 'o', color ='Red', alpha = .1)
+		plt.plot (np.array(newnewtauarr)*1e6, arr_test_clus, 'RoyalBlue',lw = 5)
+		plt.plot (np.array(newnewtauarr)*1e6, self.gaus(np.array(newnewtauarr),T2echo), 'Green',lw = 5, label = "opt T$_2$ = %.d ms"%(T2echo*1e3))
+		plt.xlabel (r'time ($\mu$s)', fontsize=30)
+		plt.tick_params (labelsize=25)
+		plt.legend(fontsize = 25)
+		plt.grid(True)
+		plt.title ('Hahn echo', fontsize=30)
+		if do_save:
+			plt.savefig(os.path.join(self._work_folder+'/', 'T2_'+time.strftime ('%Y%m%d_%H%M%S')+'.png'))
 		if do_plot:
-			plt.figure (figsize=(30,10))
-			plt.plot (tau_ind_spins*1e6, self.Hahn_an, 'Red', alpha = .1)
-			plt.plot (tau_ind_spins*1e6, self.Hahn_an, 'o', color ='Red', alpha = .1)
-			plt.plot (np.array(newnewtauarr)*1e6, self.arr_test_clus, 'RoyalBlue',lw = 5)
-			plt.plot (np.array(newnewtauarr)*1e6, self.gaus(np.array(newnewtauarr),T2echo), 'Green',lw = 5, label = "opt T$_2$ = %.d ms"%(T2echo*1e3))
-			plt.plot (np.array(newnewtauarr)*1e6, self.gaus(np.array(newnewtauarr),T2echo_bad), 'Green',lw = 5, ls='dashed', label = "T$_2$ = %.d ms"%(T2echo_bad*1e3))
-			plt.xlabel (r'time ($\mu$s)', fontsize=30)
-			plt.tick_params (labelsize=25)
-			plt.legend(fontsize = 25)
-			plt.grid(True)
-			plt.title ('Hahn echo', fontsize=30)
-			plt.savefig(os.path.join(self._work_folder+'/', 'T2.png'))
 			plt.show()
+
+		if do_save:
+			self._save_sequence (tau=np.array(newnewtauarr), signal=self.gaus(np.array(newnewtauarr),T2echo), tag = 'HahnEcho_maxcluster_%d_fit'%self.cluster_size, name = '')
 
 		return T2echo
 
 
 class FullBathDynamics (CentralSpinExp_cluster):
 
-	def __init__ (self, nr_spins, auto_save=False):
+	def __init__ (self, nr_spins, auto_save=True):
 		CentralSpinExperiment.__init__ (self=self, nr_spins=nr_spins, auto_save = auto_save)
 
 	def generate_bath (self, concentration = .1, hahn_tauarr = np.linspace(0,2e-2,10), hf_approx = False, do_plot = False, name = '', excl_save = False, do_hahn = True):
@@ -1214,8 +1206,9 @@ class FullBathDynamics (CentralSpinExp_cluster):
 						 hf_approx = hf_approx, do_plot = do_plot, name = name, excl_save = True)
 
 		self.Larm = self.nbath.larm_vec (self._hf_approx)
+		print(self.Larm)
 		self._nr_nucl_spins = int(self.nbath._nr_nucl_spins)
-		self.nbath.plot_spin_bath_info()
+		#self.nbath.plot_spin_bath_info()
 		
 		close_cntr = 0
 
@@ -1263,13 +1256,6 @@ class FullBathDynamics (CentralSpinExp_cluster):
 		if do_plot:
 			self.nbath.plot_spin_bath_info()
 
-		if ((self._auto_save) and (not(excl_save))):
-			self._curr_file = self.create_file (folder = self._work_folder, name = name)
-			self.save_object_to_file (obj = self.nbath, file_name = self._curr_file, group_name = 'nuclear_spin_bath')	
-			print ("File created!")
-		else:
-			print ("File not created!")
-
 		pd = np.real(self.get_probability_density())
 
 		if not(self._sparse_thr == None):
@@ -1281,120 +1267,26 @@ class FullBathDynamics (CentralSpinExp_cluster):
 			else:
 				self.sparse_distribution = False
 
-		if (not self.sparse_distribution) and self.close_cntr==0 and do_hahn:
+		if ((self._auto_save) and (not(excl_save)) and (not(self.sparse_distribution)) and self.close_cntr==0):
+			self._curr_file = self.create_file (folder = self._work_folder, name = name)
+			self.save_object_to_file (obj = self.nbath, file_name = self._curr_file, group_name = 'nuclear_spin_bath')	
+			print ("File created!")
+		else:
+			print ("File not created!")
+			print (self._auto_save, not(excl_save), not(self.sparse_distribution), self.close_cntr==0)
+
+		if (not(self.sparse_distribution)) and self.close_cntr==0 and do_hahn:
 			self.T2echo = self.Hahn_Echo_clus (hahn_tauarr,0)
 
-#	def generate_bath (self, concentration = .1,
-#				hf_approx = False, clus = True, single_exp = False, do_plot = False, Bp=0.001):
-#		'''
-#		Sets up spin bath and external field
-#
-#		Input:
-#		nr_spins 		[integer]	: number of nuclear spins in simulation
-#		concentration 	[float]		: concnetration of nuclei with I>0
-#		hf_approx       [boolean]   : high Bz field approximation: neglects Azx and Azy components
-#		
-#		clus			[boolean]	: apply corrections to HF vector due to secular approximation
-#									  in disjoint cluster method c.f. DOI:10.1103/PhysRevB.78.094303
-#									  
-#		single_exp      [boolean]   : if False, doesn't update the probability distribution and 
-#									  can apply the disjoint cluster methods. Otherwise, full dynamics
-#									  have to be considered due to the required Overhauser operator.
-#		
-#		'''
-#
-#
-#		# this one has to overload generate_bath, amking it specific to
-#		# a sequence of correlated measurements, where we need to plot the 
-#		# probability distribution and record its evolution
-#		# TO BE DONE!!!! (now I just copy-pasted the old one -CB)
-#		
-#		self._curr_step = 0
-#		self.Ap, self.Ao, self.Azx, self.Azy, self.r , self.pair_lst , self.geom_lst , self.dC_list, self.T2h, self.T2l= \
-#				self.nbath.generate_NSpin_distr (conc = concentration, do_sphere=True)
-#	
-#		self._hf_approx = hf_approx
-#		self._clus = clus
-#
-#		#modified previous code to give necessary Cartesian components of hf vector (not just Ap and Ao)
-#		self.nbath.set_spin_bath (self.Ap, self.Ao, self.Azx, self.Azy)
-#		# Why do we need to set B hard-coded? Cristian
-#		self.Bx, self.By, self.Bz = self.nbath.set_B_Cart (Bx=0, By=0 , Bz=Bp)
-#		self.nbath.set_B (Bp=Bp, Bo=0)
-#
-#		self.Larm = self.nbath.larm_vec (self._hf_approx)
-#		self._nr_nucl_spins = int(self.nbath._nr_nucl_spins)
-#		self.nbath.plot_spin_bath_info()
-#		
-#		close_cntr = 0
-#
-#		if not(self._A_thr == None):
-#			self.log.debug("Checking hyperfine threshold...")
-#			for j in range(self._nr_nucl_spins):
-#				if np.abs(self.Ap[j]) > self._A_thr:
-#					close_cntr +=1
-#			
-#			self.log.warning ('{0} spins with |A| > {1}MHz.'.format(close_cntr, self._A_thr*1e-6))
-#		self.close_cntr = close_cntr
-#
-#		#hyperfine vector
-#		self.HFvec = np.array([[self.Azx[j], self.Azy[j], self.Ap[j]] for j in range(self._nr_nucl_spins)])
-#
-#		self.In_tens = [[] for j in range(self._nr_nucl_spins)]
-#
-#		if not single_exp:
-#			for j in range(self._nr_nucl_spins):
-#				Q1 = np.diag([1 for f in range(2**j)])
-#				Q2 = np.diag([1 for f in range(2**(self._nr_nucl_spins-(j+1)))])
-#				
-#				for k in range(3):
-#					self.In_tens[j].append(self.kron_test(self.kron_test(self.In[k],2**j),2**(self._nr_nucl_spins-(j+1)), reverse=True))#append(np.kron(np.kron(Q1,self.In[k]),Q2))
-#	
-#		#Run group algo for next step
-#		self._group_algo()
-#
-#		#Creating 2**g * 2**g spin Pauli matrices. For disjoint cluster only
-#		self.In_tens_disjoint = [[[] for l in range(len(self._grp_lst[j]))] for j in range(len(self._grp_lst))]
-#		for l in range(len(self._grp_lst)):
-#			for j in range(len(self._grp_lst[l])):
-#				Q1 = np.eye(2**j)
-#				Q2 = np.eye(2**(len(self._grp_lst[l])-(j+1)))
-#
-#				for k in range(3):
-#					self.In_tens_disjoint[l][j].append(np.kron(np.kron(Q1,self.In[k]),Q2))
-#
-#		if not single_exp:
-#			self._curr_rho = np.diag([2**-self._nr_nucl_spins for j in range(2**self._nr_nucl_spins)])
-#
-#		#Create sub matrices based on result of group algo
-#		self._block_rho = []
-#		for j in range(len(self._grp_lst)):
-#			self._block_rho.append(np.multiply(np.eye(2**len(self._grp_lst[j])),(2**-len(self._grp_lst[j]))))
-#
-#		if do_plot:
-#			self.nbath.plot_spin_bath_info()
-#
-#		if not single_exp:
-#			pd = np.real(self.get_probability_density())
-#
-#			if not(self._sparse_thr == None):
-#				az, p_az = self.get_probability_density()
-#				az2 = np.roll(az,-1)
-#				if max(az2[:-1]-az[:-1]) > self._sparse_thr:
-#					self.log.debug ('Sparse distribution:{0} kHz'.format(max(az2[:-1]-az[:-1])))
-#					self.sparse_distribution = True
-#				else:
-#					self.sparse_distribution = False
-#
-#			self.values_Az_kHz = pd[0]
-#			stat = self.get_overhauser_stat()
-#			if self._store_evol_dict:
-#				self._evol_dict ['0'] = {
-#					'mean_OH': np.real(stat[0]),
-#					'std_OH': np.real(stat[1]),
-#					'prob_Az': pd[1],
-#					'outcome': None,
-#				}
+		self.values_Az_kHz = pd[0]
+		stat = self.get_overhauser_stat()
+		if self._store_evol_dict:
+			self._evol_dict ['0'] = {
+				'mean_OH': np.real(stat[0]),
+				'std_OH': np.real(stat[1]),
+				'prob_Az': pd[1],
+				'outcome': None,
+			}
 
 
 	def reset_bath_unpolarized (self, do_plot = True):
@@ -1427,8 +1319,8 @@ class FullBathDynamics (CentralSpinExp_cluster):
 		'''
 		
 		self.hahn_sig = []
-		self.arr_test_clus = []
-		self.arr_test_clus2 = []
+		arr_test_clus = []
+		arr_test_clus2 = []
 		count = 0
 		
 		for t in tauarr:
@@ -1617,10 +1509,30 @@ class FullBathDynamics (CentralSpinExp_cluster):
 		'''
 
 		self._over_op = []
+		B = (self.gam_n/(2*np.pi))*np.array([self.Bx,self.By,self.Bz])
 		
 		for j in range(3):
 			self._over_op.append(sum(self.HFvec[k][j]*self.In_tens[k][j] for k in range(self._nr_nucl_spins)))
+		
+		return self._over_op
+		
+	def _overhauser_op_test(self):
+		
+		'''
+		Creates Overhauser operator for updating probability distribution.
+		Does not admit clustering due to sum over different clusters having different dimensions
+		
+		Output:
+		self._over_op  [list] :  list of Overhauser operator Cartesian components
+		
+		'''
 
+		self._over_op = []
+		B = (self.gam_n/(2*np.pi))*np.array([self.Bx,self.By,self.Bz])
+		
+		for j in range(3):
+			self._over_op.append(sum((B[j]+self.HFvec[k][j])*self.In_tens[k][j] for k in range(self._nr_nucl_spins)))
+		
 		return self._over_op
 
 

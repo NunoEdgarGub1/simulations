@@ -162,15 +162,6 @@ class ExpStatistics (DO.DataObjectHDF5):
             batch_no=0
             f, newpath, name = self.__generate_file (title = '_'+funct_name+'_'+string_id+'_'+'batch_%d'%batch_no)
 
-#        exp = self._generate_new_experiment (folder = newpath, nBath = nBath)
-
-#        if do_save:
-#            grp_nbath = f.create_group ('nbath')
-#            self.save_object_all_vars_to_file (obj = exp.nbath, f = grp_nbath)
-#            self.save_object_params_list_to_file (obj = exp.nbath, f = grp_nbath, 
-#                    params_list= ['Ao', 'Ap', 'Azx', 'Azy', 'values_Az_kHz', 'r_ij', 'theta_ij'])
-
-
         for i in range(self.nr_reps):
 
             print ("Repetition nr: ", i+1)
@@ -178,7 +169,6 @@ class ExpStatistics (DO.DataObjectHDF5):
             if i%batch_length == 0 and i>0:
                 if do_save:
                     batch_no+=1
-                    f.close()
                     f, newpath, name = self.__generate_file (title = '_'+funct_name+'_'+string_id+'_'+'batch_%d'%batch_no)
 
             exp = self._generate_new_experiment (hahn_tauarr = np.linspace(0,2e-2,10), folder = newpath, nBath = self.generate_bath(newpath))
@@ -188,10 +178,8 @@ class ExpStatistics (DO.DataObjectHDF5):
             if do_save:
                 print('run',i)
                 grp_name = 'nbath_%d'%(i+1)
-                grp_nbath = f.create_group (grp_name)
-                print(grp_nbath)
-                self.save_object_all_vars_to_file (obj = exp.nbath, file_name = name)
-                self.save_object_params_list_to_file (obj = exp.nbath, file_name = name,
+                self.save_object_all_vars_to_file (obj = exp.nbath, file_name = name, group_name = grp_name)
+                self.save_object_params_list_to_file (obj = exp.nbath, file_name = name, group_name = grp_name,
                 params_list= ['Ao', 'Ap', 'Azx', 'Azy', 'values_Az_kHz', 'r_ij', 'theta_ij'])
 
             try:
@@ -211,11 +199,13 @@ class ExpStatistics (DO.DataObjectHDF5):
 
             if do_save:
                 rep_nr = str(i).zfill(len(str(self.nr_reps)))
-                grp = f.create_group('rep_'+rep_nr)
-                self.save_object_all_vars_to_file (obj = exp, file_name = name)
-                self.save_object_params_list_to_file (obj = exp, file_name = name,
-                        params_list= ['BayesianMean','QuantumMean','BayesianMax','QuantumMax','T2starlist', 'outcomes_list', 'tau_list', 'phase_list'])
+                grp_name ='rep_'+rep_nr
+                self.save_object_all_vars_to_file (obj = exp, file_name = name, group_name = grp_name)
+                self.save_object_params_list_to_file (obj = exp, file_name = name, group_name = grp_name,
+                        params_list= ['BayesianMean','BayesianSTD','QuantumMean','QuantumSTD',
+						'BayesianMax','QuantumMax','T2starlist', 'outcomes_list', 'tau_list', 'phase_list'])
 
+        f.close()
         print ("Simulation completed.")
 
         self.total_steps = max_steps

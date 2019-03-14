@@ -45,6 +45,7 @@ class TimeSequence ():
 		self.F = F
 		self.G = G
 		self.K = N-1
+		self.conv = False
 
 		# Quantities required for computation (ex: discretization space)
 		self.points = 2**(self.N+1)+3
@@ -92,25 +93,32 @@ class TimeSequence ():
 
 		do_plot [bool]		DEBUG: plot probability distribution before and after Bayesian update
 		'''
-
-		print("N", self.N)
+		
 		if do_plot:
 			y_old, b_mean = self.return_p_fB()
 			y_old = y_old/np.sum(y_old)
 			m_old = max(y_old)
 		
 		if free_evo:
-			if m_n==1:
-				#T2gauss = np.exp(-(self.beta  * np.pi**-1 * T2_est**-1)**2)#np.fft.ifftshift(np.abs(np.fft.ifft(np.exp(-(self.beta * T2_est)**2))))
-				#T2gauss = np.fft.ifftshift(np.abs(np.fft.ifft(np.exp(-(self.beta * T2_est)**2))))
-				print('CONVOLVED', T2_est)
-				#self.p_k = self.p_k*T2gauss
+			if m_n==0:
+			
+				df = self.beta[-1]-self.beta[-2]
+				tau_arr = np.linspace(0,tf,self.discr_steps)
 				
-				#self.p_k = self.conv_circ(self.p_k, np.exp(-(self.beta * tf**-1)**2))
-				self.p_k = self.conv_circ(self.p_k, np.exp(-(self.beta * T2_est)**2))
-
+				Hahn = np.exp(-(2*tau_arr/T2_est)**3)
+				Hahn_FT = np.fft.fft(Hahn)
+				
+				Hahn_kspace = np.fft.fftshift(np.fft.fft(Hahn_FT, self.discr_steps))
+			
+				p = np.copy(self.p_k)
+				p *= Hahn_kspace
+				p = (p/np.sum(np.abs(p)**2)**0.5)
+				self.p_k = p/(2*np.pi*np.real(p[self.points]))
+				print('CONVOLVED', T2_est)
+				self.conv = True
 
 		else:
+			self.conv = False
 			p_old = np.copy(self.p_k)
 	#		p0 = p_old*((1-m_n)-((-1)**m_n)*(self.fid0+1.-self.fid1)/2.)
 	#		p1 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(1j*(phase_n))*np.roll(p_old, shift = -t_n))
@@ -121,10 +129,6 @@ class TimeSequence ():
 			p = p0+p1+p2
 			p = (p/np.sum(np.abs(p)**2)**0.5)
 			p = p/(2*np.pi*np.real(p[self.points]))
-	#		if T2_track:
-	#			T2gauss = np.fft.ifftshift(np.abs(np.fft.ifft(np.exp(-(self.beta*1e-3 * T2_est)**2)))**2)
-	#			print('CONVOLVED', T2_est)
-	#			p = p*T2gauss
 			self.p_k = np.copy (p)
 
 			if do_plot:
@@ -171,13 +175,9 @@ class TimeSequence ():
 		m 		[float]		average value of probability distribution
 		'''
 
+		############## Shouldn't this be ifft???
 		y = np.fft.fftshift(np.abs(np.fft.fft(self.p_k, self.discr_steps))**2)
 		
-#		if free_evo:
-#			T2gauss = np.exp(-(self.beta*.00001*T2_est)**2)
-#			y = np.convolve(y,T2gauss,'same')
-#			plt.plot(self.beta*1e-3,y)
-#			plt.show()
 		p_fB = y/np.sum(np.abs(y))
 		m = np.sum(self.beta*p_fB)
 		return p_fB, m
