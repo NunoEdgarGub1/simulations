@@ -1163,16 +1163,17 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 			T2echo = abs(popt[0])
 
 		# Plot analytical curve and full signal at maxima
-		plt.figure (figsize=(30,10))
-		plt.plot (tau_ind_spins*1e6, Hahn_an, 'Red', alpha = .1)
-		plt.plot (tau_ind_spins*1e6, Hahn_an, 'o', color ='Red', alpha = .1)
-		plt.plot (np.array(newnewtauarr)*1e6, arr_test_clus, 'RoyalBlue',lw = 5)
-		plt.plot (np.array(newnewtauarr)*1e6, self.gaus(np.array(newnewtauarr),T2echo), 'Green',lw = 5, label = "opt T$_2$ = %.d ms"%(T2echo*1e3))
-		plt.xlabel (r'time ($\mu$s)', fontsize=30)
-		plt.tick_params (labelsize=25)
-		plt.legend(fontsize = 25)
-		plt.grid(True)
-		plt.title ('Hahn echo', fontsize=30)
+		if do_save or do_plot:
+			plt.figure (figsize=(30,10))
+			plt.plot (tau_ind_spins*1e6, Hahn_an, 'Red', alpha = .1)
+			plt.plot (tau_ind_spins*1e6, Hahn_an, 'o', color ='Red', alpha = .1)
+			plt.plot (np.array(newnewtauarr)*1e6, arr_test_clus, 'RoyalBlue',lw = 5)
+			plt.plot (np.array(newnewtauarr)*1e6, self.gaus(np.array(newnewtauarr),T2echo), 'Green',lw = 5, label = "opt T$_2$ = %.d ms"%(T2echo*1e3))
+			plt.xlabel (r'time ($\mu$s)', fontsize=30)
+			plt.tick_params (labelsize=25)
+			plt.legend(fontsize = 25)
+			plt.grid(True)
+			plt.title ('Hahn echo', fontsize=30)
 		if do_save:
 			plt.savefig(os.path.join(self._work_folder+'/', 'T2_'+time.strftime ('%Y%m%d_%H%M%S')+'.png'))
 		if do_plot:
