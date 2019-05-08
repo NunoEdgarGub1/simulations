@@ -585,7 +585,8 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 		self.Bx = Bx
 		self.By = By
 		self.nbath.set_B (Bp=self.Bz, Bo = (self.Bx**2+self.By**2)**0.5)
-        
+		print ("B = ", self.Bx, self.By, self.Bz)
+
 	def set_cluster_size (self, g=3):
 		self.cluster_size = g
 		self.log.info ("Max cluster size = %d"%self.cluster_size)
