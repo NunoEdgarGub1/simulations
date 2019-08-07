@@ -81,8 +81,25 @@ class TimeSequence ():
 		conv = np.real(np.fft.ifft( np.fft.fft(signal1)*np.fft.fft(signal2) ))
     
 		return np.roll(conv,int(len(conv)/2))
+	
+	def bayesian_diffuse(self, T2_est = 1e-3, tf = 1e-3):
 
-	def bayesian_update(self, m_n, phase_n, t_n, T2_track = False, T2_est = 1e-3, tf = 1e-3, repetition = None, do_plot=False, free_evo=False):
+		df = self.beta[-1]-self.beta[-2]
+		tau_arr = np.linspace(0,tf,self.discr_steps)
+		
+		Hahn = np.exp(-(2*tau_arr/T2_est)**3)
+		Hahn_FT = np.fft.fft(Hahn)
+		
+		Hahn_kspace = np.fft.fftshift(np.fft.fft(Hahn_FT, self.discr_steps))
+	
+		p = np.copy(self.p_k)
+		p *= Hahn_kspace
+		p = (p/np.sum(np.abs(p)**2)**0.5)
+		self.p_k = p/(2*np.pi*np.real(p[self.points]))
+		print('CONVOLVED', T2_est)
+		self.conv = True
+	
+	def bayesian_update(self, m_n, phase_n, t_n, T2_track = False, T2_est = 1e-3, tf = 1e-3, repetition = None, do_plot=False, free_evo=False, c_sig = False):
 
 		'''
 		Performs the Bayesian update in Fourier space
@@ -101,31 +118,22 @@ class TimeSequence ():
 		
 		if free_evo:
 			if m_n==0:
-			
-				df = self.beta[-1]-self.beta[-2]
-				tau_arr = np.linspace(0,tf,self.discr_steps)
-				
-				Hahn = np.exp(-(2*tau_arr/T2_est)**3)
-				Hahn_FT = np.fft.fft(Hahn)
-				
-				Hahn_kspace = np.fft.fftshift(np.fft.fft(Hahn_FT, self.discr_steps))
-			
-				p = np.copy(self.p_k)
-				p *= Hahn_kspace
-				p = (p/np.sum(np.abs(p)**2)**0.5)
-				self.p_k = p/(2*np.pi*np.real(p[self.points]))
-				print('CONVOLVED', T2_est)
-				self.conv = True
+				self.bayesian_diffuse(T2_est = T2_est, tf = tf)
 
 		else:
 			self.conv = False
 			p_old = np.copy(self.p_k)
-	#		p0 = p_old*((1-m_n)-((-1)**m_n)*(self.fid0+1.-self.fid1)/2.)
-	#		p1 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(1j*(phase_n))*np.roll(p_old, shift = -t_n))
-	#		p2 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(-1j*(phase_n))*np.roll(p_old, shift = +t_n))
-			p0 = p_old*.5*(1 + ((-1)**m_n)*(self.fid0-self.fid1))
-			p1 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(1j*(np.pi+phase_n))*np.roll(p_old, shift = -t_n))
-			p2 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(-1j*(np.pi+phase_n))*np.roll(p_old, shift = +t_n))
+			
+			if c_sig:
+				p0 = p_old*((1-m_n)-((-1)**m_n)*(self.fid0+1.-self.fid1)/2.)
+				p1 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(1j*(phase_n))*np.roll(p_old, shift = -t_n))
+				p2 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(-1j*(phase_n))*np.roll(p_old, shift = +t_n))
+			
+			else:
+				p0 = p_old*.5*(1 + ((-1)**m_n)*(self.fid0-self.fid1))
+				p1 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(1j*(np.pi+phase_n))*np.roll(p_old, shift = -t_n))
+				p2 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(-1j*(np.pi+phase_n))*np.roll(p_old, shift = +t_n))
+			
 			p = p0+p1+p2
 			p = (p/np.sum(np.abs(p)**2)**0.5)
 			p = p/(2*np.pi*np.real(p[self.points]))
