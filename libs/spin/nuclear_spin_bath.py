@@ -25,6 +25,7 @@ import scipy.linalg as lin
 import scipy.spatial.distance as dst
 import scipy.signal as sg
 import numpy.random as ran
+import numpy.linalg as nplin
 import time as time
 import random as rand
 import tabulate as tb
@@ -37,6 +38,7 @@ from matplotlib import pyplot as plt
 from scipy.interpolate import interp1d
 from matplotlib.colors import ListedColormap
 from scipy.sparse import csr_matrix
+from scipy.signal import find_peaks
 from mpl_toolkits.mplot3d import Axes3D
 from tools import data_object as DO
 from importlib import reload
@@ -399,19 +401,28 @@ class NSpinBath ():
 		plt.title ('Free induction decay', fontsize = 15)
 		plt.show()
 
-	def __set_h_vector(self, tau, S1 = 1., S0 = 0.):
-		print ("Bp = ", self.Bp)
+	def __set_h_vector(self, tau, S1 = 1., S0 = 0., RL_test = False, RL_Ap = [], RL_Ao = []):
+		#print ("Bp = ", self.Bp)
+		
+		if RL_test == False:
+			Ap = self.Ap
+			Ao = self.Ao
+		
+		else:
+			Ap = RL_Ap
+			Ao = RL_Ao
+		
 		self.L = np.zeros ((self._nr_nucl_spins, len(tau)))
 		self.L_hahn = np.ones (len(tau)) 
 		self.L = np.zeros ((self._nr_nucl_spins, len(tau)))
 		self.L_dd = np.ones (len(tau)) 
 		self._set_pars (tau=tau)
 
-		self.hp_1 = self.Bp*np.ones (self._nr_nucl_spins) + S1*self.Ap/self.gam_n
-		self.ho_1 = self.Bo*np.ones (self._nr_nucl_spins) + S1*self.Ao/self.gam_n
+		self.hp_1 = self.Bp*np.ones (self._nr_nucl_spins) + S1*Ap/self.gam_n
+		self.ho_1 = self.Bo*np.ones (self._nr_nucl_spins) + S1*Ao/self.gam_n
 		self.h_1 = (self.hp_1**2+self.ho_1**2)**0.5
-		self.hp_0= self.Bp*np.ones (self._nr_nucl_spins) + S0*self.Ap/self.gam_n
-		self.ho_0 = self.Bo*np.ones (self._nr_nucl_spins) + S0*self.Ao/self.gam_n
+		self.hp_0= self.Bp*np.ones (self._nr_nucl_spins) + S0*Ap/self.gam_n
+		self.ho_0 = self.Bo*np.ones (self._nr_nucl_spins) + S0*Ao/self.gam_n
 		self.h_0 = (self.hp_0**2+self.ho_0**2)**0.5
 
 		self.phi_01 = np.arccos((self.hp_0*self.hp_1 + self.ho_0*self.ho_1)/(self.h_0*self.h_1))
@@ -449,18 +460,23 @@ class NSpinBath ():
 
 		return self.L_hahn
 
-	def dynamical_decoupling (self, nr_pulses, tau, S1=1, S0=0, do_plot = True):
+	def dynamical_decoupling (self, nr_pulses, tau, S1=1, S0=0, RL_test = False, RL_Ap = [], RL_Ao = [], errors = True, do_plot = True):
 
 		self.N = nr_pulses
-		self.__set_h_vector (tau=tau, S1=S1, S0=S0)
+		self.__set_h_vector (tau=tau, S1=S1, S0=S0, RL_test = RL_test, RL_Ap = RL_Ap, RL_Ao = RL_Ao)
 		k = int(self.N/2)
 
-		#plt.figure (figsize=(50,10))
+		peaks = [self.gam_n*self.hp_1[i]/(2*np.pi) for i in np.arange(self._nr_nucl_spins)]
+		
 
 		for i in np.arange(self._nr_nucl_spins):
-			th_0 = self.gam_n*self.h_0[i]*tau
-			th_1 = self.gam_n*self.h_1[i]*tau
+			th_0 = self.gam_n*self.h_0[i]*tau/(2*np.pi)
+			th_1 = self.gam_n*self.h_1[i]*tau/(2*np.pi)
 			alpha = np.arctan ((np.sin(th_0/2.)*np.sin(th_1/2.)*np.sin(self.phi_01[i]))/(np.cos(th_0/2.)*np.cos(th_1/2.) - np.sin(th_0/2.)*np.sin(th_1/2.)*np.cos(self.phi_01[i])))
+			
+			#a1_1 = (np.cos(th_1/2.)*np.cos(th_0/2.) - np.sin(th_1/2.)*np.sin(th_0/2.)*np.cos(self.phi_01[i]))**2
+			#a1_2 = (1-np.tan(alpha)**2)*(np.cos(th_1/2.)**2 * np.sin(th_0/2.)**2 + np.cos(th_0/2.)**2 * np.sin(th_1/2.)**2 +2*np.cos(th_0/2.) * np.sin(th_1/2.) * np.cos(th_1/2.) * np.sin(th_0/2.) * np.cos(self.phi_01[i]))
+			#theta = 2*np.arccos(a1_1-a1_2)
 			theta = 2*np.arccos (np.cos(th_0)*np.cos(th_1) - np.sin(th_0)*np.sin(th_1)*np.cos(self.phi_01[i]))
 
 			if np.mod (self.N, 2) == 0:
@@ -475,15 +491,39 @@ class NSpinBath ():
 
 		for i in np.arange(self._nr_nucl_spins):
 			self.L_dd = self.L_dd * self.L[i, :]
+		
+#		plt.figure (figsize=(10,5))
+#		timestep = tau[1]-tau[0]
+#		freq = np.fft.fftshift(np.fft.fftfreq(self.L_dd.size, d=timestep))
+#		DDfft = np.fft.fftshift(np.abs(np.fft.fft(1-(np.ones(len(self.L_dd))+self.L_dd)/2))**2)
+#		#DDfft -= np.array([max(DDfft) if x == np.argmax(DDfft) else 0 for x in range(len(DDfft))])
+#		plt.plot(freq,DDfft,lw=3, color='Red')
+#		#plt.plot(freq,DDfft,marker='o',markersize=5, color='blue')
+#		plt.yscale('log')
+#		plt.xscale('log')
+#		plt.xlim(0,.04*1e10)
+#		plt.grid(True, which="both")
+#		plt.tight_layout()
+#		#plt.savefig("/Users/dalescerri/Downloads/DD/DDFFT_random_%d"%self._nr_nucl_spins)
+#		plt.show()
+#		
+#		plt.figure (figsize=(10,5))
+#		plt.plot(tau*1e6,(np.ones(len(self.L_dd))+self.L_dd)/2,lw=3, color='Blue')
+#		plt.xlim(tau[0]*1e6,tau[-1]*1e6)
+#		plt.grid(True, which="both")
+#		plt.tight_layout()
+#		#plt.savefig("/Users/dalescerri/Downloads/DD/DD_random_%d"%self._nr_nucl_spins)
+#		plt.show()
 
 		if do_plot:
 			plt.figure (figsize=(50,10))
-			plt.plot (tau*1e6, self.L_dd, 'RoyalBlue')
-			plt.plot (tau*1e6, self.L_dd, 'o')
+			plt.plot (tau*1e6, (np.ones(len(self.L_dd))+self.L_dd)/2, 'RoyalBlue')
+			plt.plot (tau*1e6, (np.ones(len(self.L_dd))+self.L_dd)/2, 'o')
+			plt.ylim (0,1)
 			plt.title ('Dynamical Decoupling  -  S0 = '+str(S0)+', S1 = '+str(S1), fontsize=25)
 			plt.show()
 
-		return self.L_dd
+		return (np.ones(len(self.L_dd))+self.L_dd)/2
 
 class CentralSpinExperiment (DO.DataObjectHDF5):
     
@@ -558,7 +598,7 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 		
 		self.Ap, self.Ao, self.Azx, self.Azy, self.r , self.pair_lst , self.geom_lst , self.dC_list, self.T2h, self.T2l= \
 				self.nbath.generate_NSpin_distr (conc = concentration, do_sphere=True)
-
+		
 		self._hf_approx = hf_approx
 		self._clus = clus
 
@@ -576,6 +616,8 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 		else:
 			print ("File not created!")
 
+		self.print_nuclear_spins()
+
 	def set_thresholds (self, A, sparse):
 		self._A_thr = A
 		self._sparse_thr = sparse
@@ -590,7 +632,9 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 	def set_cluster_size (self, g=3):
 		self.cluster_size = g
 		self.log.info ("Max cluster size = %d"%self.cluster_size)
-
+	
+	def set_inter (self, inter=True):
+		self.inter = inter
 
 	def set_log_level (self, value):
 		self.log.setLevel (value)
@@ -602,10 +646,13 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 
 		T = [['', 'Ap (kHz)', 'Ao (kHz)', 'r (A)'], ['------', '------', '------', '------']]
 
-		for i in np.arange(self._nr_nucl_spins):
+		for i in range(self._nr_nucl_spins):
 			T.append ([i, int(self.Ap[i]*1e-2)/10, int(self.Ao[i]*1e-2)/10, int(self.r[i]*1e11)/10])
 
 		print(tb.tabulate(T, stralign='center'))
+		
+	def return_nuclear_spins(self):
+		return np.concatenate((self.Ap,self.Ao))
 
 	def kron_test(self, mat, N, reverse=False):
 		'''
@@ -639,8 +686,8 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 		self._save_sequence (tau=tau, signal=hahn, tag = 'HahnEcho_indep_Nspins', name = name)
 		return hahn
 
-	def dynamical_decoupling_indep_Nspins (self, S1, S0, tau, nr_pulses):
-		self.nbath.dynamical_decoupling (tau=tau, S1=S1, S0=S0, nr_pulses=nr_pulses)
+	def dynamical_decoupling_indep_Nspins (self, S1, S0, tau, nr_pulses, RL_test = False, RL_Ap = [], RL_Ao = []):
+		return self.nbath.dynamical_decoupling (tau=tau, S1=S1, S0=S0, RL_test = RL_test, RL_Ap = RL_Ap, RL_Ao = RL_Ao, nr_pulses=nr_pulses, do_plot=False)
 
 	def _nCr(self, n, k):
 		k = min(k, n-k)
@@ -740,20 +787,28 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 		
 		dCmn = [self._dCmn(ms, pair[index][0], pair[index][1]) for index in range(len(pair_ind))]
 		
-		Hms = sum(sum(np.multiply(self.Larm[ms][j][h],self.In_tens[j][h]) for j in range(self._nr_nucl_spins)) for h in range(3))
+		if self.inter:
 		
-		Hc = (sum(sum(sum(np.asarray(csr_matrix.todense(Cmn[index][cartm][cartn]*csr_matrix(self.In_tens[pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens[pair_enum[index][1]][cartn]))))
-		for cartn in [0,1,2])
-		for cartm in [0,1,2])
-		for index in range(self._nCr(self._nr_nucl_spins,2)))
-		+ sum(sum(sum(np.asarray(csr_matrix.todense(dCmn[index][cartm][cartn]*csr_matrix(self.In_tens[pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens[pair_enum[index][1]][cartn]))))
-		for cartn in [0,1,2])
-		for cartm in [0,1,2])
-		for index in range(self._nCr(self._nr_nucl_spins,2)))
-		)
+			Hms = sum(sum(np.multiply(self.Larm[ms][j][h],self.In_tens[j][h]) for j in range(self._nr_nucl_spins)) for h in range(3))
+			
+			Hc = (sum(sum(sum(np.asarray(csr_matrix.todense(Cmn[index][cartm][cartn]*csr_matrix(self.In_tens[pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens[pair_enum[index][1]][cartn]))))
+			for cartn in [0,1,2])
+			for cartm in [0,1,2])
+			for index in range(self._nCr(self._nr_nucl_spins,2)))
+			+ sum(sum(sum(np.asarray(csr_matrix.todense(dCmn[index][cartm][cartn]*csr_matrix(self.In_tens[pair_enum[index][0]][cartm]).dot(csr_matrix(self.In_tens[pair_enum[index][1]][cartn]))))
+			for cartn in [0,1,2])
+			for cartm in [0,1,2])
+			for index in range(self._nCr(self._nr_nucl_spins,2)))
+			)
 
 
-		return Hms + Hc #+ (self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**self._nr_nucl_spins)
+			return Hms + Hc #+ (self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**self._nr_nucl_spins)
+
+		else:
+		
+			Hms = [sum(np.multiply(self.Larm[ms][j][k],self.In[k]) for k in range(3)) for j in range(self._nr_nucl_spins)]
+
+			return np.array(Hms)
 
 	def _U_op_int(self, ms, tau):
 		'''
@@ -770,9 +825,13 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 		
 		H = self._H_op_int(ms)
 		
-		U = lin.expm(-np.multiply(complex(0,1)*tau,H))
+		if self.inter:
+			U = lin.expm(-np.multiply(complex(0,1)*tau,H))
 		
-		return U
+		else:
+			U = [lin.expm(-np.multiply(complex(0,1)*tau,h)) for h in H]
+		
+		return np.array(U)
 
 
 
@@ -1011,7 +1070,6 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 			else:
 				self._ind_arr[j].append(-1)
 
-		#print(self._ind_arr)
 		self._ind_arr_unsrt = [[] for j in range(len(self._sorted_pairs_test))]
 		
 		for j in range(len(self._sorted_pairs_test)):
@@ -1208,7 +1266,7 @@ class FullBathDynamics (CentralSpinExp_cluster):
 						 hf_approx = hf_approx, do_plot = do_plot, name = name, excl_save = True)
 
 		self.Larm = self.nbath.larm_vec (self._hf_approx)
-		print(self.Larm)
+		print('Set Larm')
 		self._nr_nucl_spins = int(self.nbath._nr_nucl_spins)
 		#self.nbath.plot_spin_bath_info()
 		
@@ -1225,70 +1283,76 @@ class FullBathDynamics (CentralSpinExp_cluster):
 
 		#hyperfine vector
 		self.HFvec = np.array([[self.Azx[j], self.Azy[j], self.Ap[j]] for j in range(self._nr_nucl_spins)])
-
-		self.In_tens = [[] for j in range(self._nr_nucl_spins)]
 		
-		for j in range(self._nr_nucl_spins):
-			Q1 = np.diag([1 for f in range(2**j)])
-			Q2 = np.diag([1 for f in range(2**(self._nr_nucl_spins-(j+1)))])
+		if self.inter:
+			self.In_tens = [[] for j in range(self._nr_nucl_spins)]
 			
-			for k in range(3):
-				self.In_tens[j].append(self.kron_test(self.kron_test(self.In[k],2**j),2**(self._nr_nucl_spins-(j+1)), reverse=True))#append(np.kron(np.kron(Q1,self.In[k]),Q2))
-
-		self._curr_rho = np.diag([2**-self._nr_nucl_spins for j in range(2**self._nr_nucl_spins)])
+			for j in range(self._nr_nucl_spins):
+				Q1 = np.diag([1 for f in range(2**j)])
+				Q2 = np.diag([1 for f in range(2**(self._nr_nucl_spins-(j+1)))])
 				
-		#Run group algo for next step
-		self._group_algo()
-
-		#Creating 2**g * 2**g spin Pauli matrices. For disjoint cluster only
-		self.In_tens_disjoint = [[[] for l in range(len(self._grp_lst[j]))] for j in range(len(self._grp_lst))]
-		for l in range(len(self._grp_lst)):
-			for j in range(len(self._grp_lst[l])):
-				Q1 = np.eye(2**j)
-				Q2 = np.eye(2**(len(self._grp_lst[l])-(j+1)))
-
 				for k in range(3):
-					self.In_tens_disjoint[l][j].append(np.kron(np.kron(Q1,self.In[k]),Q2))
+					self.In_tens[j].append(self.kron_test(self.kron_test(self.In[k],2**j),2**(self._nr_nucl_spins-(j+1)), reverse=True))#append(np.kron(np.kron(Q1,self.In[k]),Q2))
 
-		#Create sub matrices based on result of group algo
-		self._block_rho = []
-		for j in range(len(self._grp_lst)):
-			self._block_rho.append(np.multiply(np.eye(2**len(self._grp_lst[j])),(2**-len(self._grp_lst[j]))))
+			self._curr_rho = np.diag([2**-self._nr_nucl_spins for j in range(2**self._nr_nucl_spins)])
+					
+			#Run group algo for next step
+			self._group_algo()
 
-		if do_plot:
-			self.nbath.plot_spin_bath_info()
+			#Creating 2**g * 2**g spin Pauli matrices. For disjoint cluster only
+			self.In_tens_disjoint = [[[] for l in range(len(self._grp_lst[j]))] for j in range(len(self._grp_lst))]
+			for l in range(len(self._grp_lst)):
+				for j in range(len(self._grp_lst[l])):
+					Q1 = np.eye(2**j)
+					Q2 = np.eye(2**(len(self._grp_lst[l])-(j+1)))
 
-		pd = np.real(self.get_probability_density())
+					for k in range(3):
+						self.In_tens_disjoint[l][j].append(np.kron(np.kron(Q1,self.In[k]),Q2))
 
-		if not(self._sparse_thr == None):
-			az, p_az = self.get_probability_density()
-			az2 = np.roll(az,-1)
-			if max(az2[:-1]-az[:-1]) > self._sparse_thr:
-				self.log.debug ('Sparse distribution:{0} kHz'.format(max(az2[:-1]-az[:-1])))
-				self.sparse_distribution = True
+			#Create sub matrices based on result of group algo
+			self._block_rho = []
+			for j in range(len(self._grp_lst)):
+				self._block_rho.append(np.multiply(np.eye(2**len(self._grp_lst[j])),(2**-len(self._grp_lst[j]))))
+
+			if do_plot:
+				self.nbath.plot_spin_bath_info()
+
+			pd = np.real(self.get_probability_density())
+
+			if not(self._sparse_thr == None):
+				az, p_az = self.get_probability_density()
+				az2 = np.roll(az,-1)
+				if max(az2[:-1]-az[:-1]) > self._sparse_thr:
+					self.log.debug ('Sparse distribution:{0} kHz'.format(max(az2[:-1]-az[:-1])))
+					self.sparse_distribution = True
+				else:
+					self.sparse_distribution = False
+
+			if ((self._auto_save) and (not(excl_save)) and (not(self.sparse_distribution)) and self.close_cntr==0):
+				self._curr_file = self.create_file (folder = self._work_folder, name = name)
+				self.save_object_to_file (obj = self.nbath, file_name = self._curr_file, group_name = 'nuclear_spin_bath')	
+				print ("File created!")
 			else:
-				self.sparse_distribution = False
+				print ("File not created!")
+				print (self._auto_save, not(excl_save), not(self.sparse_distribution), self.close_cntr==0)
 
-		if ((self._auto_save) and (not(excl_save)) and (not(self.sparse_distribution)) and self.close_cntr==0):
-			self._curr_file = self.create_file (folder = self._work_folder, name = name)
-			self.save_object_to_file (obj = self.nbath, file_name = self._curr_file, group_name = 'nuclear_spin_bath')	
-			print ("File created!")
-		else:
-			print ("File not created!")
-			print (self._auto_save, not(excl_save), not(self.sparse_distribution), self.close_cntr==0)
+			if (not(self.sparse_distribution)) and self.close_cntr==0 and do_hahn:
+				self.T2echo = self.Hahn_Echo_clus (hahn_tauarr,0)
+				print("T2",self.T2echo)
+			
+			else:
+				self.T2echo = 5e-3
 
-		if (not(self.sparse_distribution)) and self.close_cntr==0 and do_hahn:
-			self.T2echo = self.Hahn_Echo_clus (hahn_tauarr,0)
-
-		self.values_Az_kHz = pd[0]
-		stat = self.get_overhauser_stat()
-		if self._store_evol_dict:
-			self._evol_dict ['0'] = {
-				'mean_OH': np.real(stat[0]),
-				'std_OH': np.real(stat[1]),
-				'prob_Az': pd[1],
-				'outcome': None,
-			}
+			self.values_Az_kHz = pd[0]
+			stat = self.get_overhauser_stat()
+			if self._store_evol_dict:
+				self._evol_dict ['0'] = {
+					'mean_OH': np.real(stat[0]),
+					'std_OH': np.real(stat[1]),
+					'prob_Az': pd[1],
+					'outcome': None,
+				}
+		print('generated bath')
 
 
 	def reset_bath_unpolarized (self, do_plot = True):
@@ -1371,7 +1435,6 @@ class FullBathDynamics (CentralSpinExp_cluster):
 		U0 = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0])
 		U1 = np.multiply(np.exp(complex(0,1)*phi/2),U_in[1])
 		
-		print(np.array(U1).shape,np.array(self._curr_rho).shape)
 		
 		sig = np.trace(U0.dot((self._curr_rho/np.trace(self._curr_rho)).dot(U1.conj().T)))
 		
@@ -1474,6 +1537,193 @@ class FullBathDynamics (CentralSpinExp_cluster):
 				'outcome': ms,
 			}
 
+	def dynamical_decoupling_errors (self, tauarr, nr_pulses = 8, nr_errors = 1, rate = .1, t_error = 1e-6):
+		'''
+		Caclulates signal for spin echo
+
+		Input: 
+		tauarr  [array]		: time array for spin echo
+		phi  [radians]		: Rotation angle of the spin readout basis
+
+		'''
+		
+		self.hahn_sig = []
+		arr_test_clus = []
+		arr_test_clus2 = []
+		count = 0
+		sig = 1
+		sig_noerr = 1
+		DD_signal = []
+		DD_signal_noerr = []
+		
+		errorlist = rand.sample(range(nr_pulses), nr_errors)#ran.choice([0, 1], size=nr_pulses, p=[.9, .1])
+		t_errorlist = [ran.choice([1, -1], size=len(tauarr), p=[rate/2, rate/2]) for j in range(len(errorlist))]
+		
+		for t in tauarr:
+		
+			print(count/len(tauarr) *100,'%')
+			count+=1
+			
+			U0_noerr = self._U_op_int(0, t)
+			U1_noerr = self._U_op_int(1, t)
+			
+			for s in range(self._nr_nucl_spins):
+			
+				U0tilde = np.eye(2)
+				U1tilde = np.eye(2)
+				
+				U0tilde_noerr = np.eye(2)
+				U1tilde_noerr = np.eye(2)
+				
+				U0tilde_noerr = U0_noerr[s].dot(U1_noerr[s]).dot(U0_noerr[s]).dot(U1_noerr[s]).dot(U0_noerr[s]).dot(U1_noerr[s]).dot(U0_noerr[s]).dot(U1_noerr[s])
+				U1tilde_noerr = U1_noerr[s].dot(U0_noerr[s]).dot(U1_noerr[s]).dot(U0_noerr[s]).dot(U1_noerr[s]).dot(U0_noerr[s]).dot(U1_noerr[s]).dot(U0_noerr[s])
+				U0tilde_noerr = nplin.matrix_power(U0tilde_noerr, nr_pulses)
+				U1tilde_noerr = nplin.matrix_power(U1tilde_noerr, nr_pulses)
+				
+				sig_noerr *= .5*np.trace(U1tilde_noerr.dot(U0tilde_noerr.conj().T))
+
+			
+				for j in range(nr_pulses):
+				
+					if j in errorlist:#errorlist[j]!=0:
+						#print('Error')
+						U0 = self._U_op_int(0, t+t_errorlist[errorlist.index(j)][tauarr.tolist().index(t)]*t_error)
+						U1 = self._U_op_int(1, t+t_errorlist[errorlist.index(j)][tauarr.tolist().index(t)]*t_error)
+					
+					else:
+						U0 = np.copy(U0_noerr)
+						U1 = np.copy(U1_noerr)
+
+					U0tilde = U0tilde.dot(U0[s].dot(U1[s]).dot(U0[s]).dot(U1[s]).dot(U0[s]).dot(U1[s]).dot(U0[s]).dot(U1[s]))
+					U1tilde = U1tilde.dot(U1[s].dot(U0[s]).dot(U1[s]).dot(U0[s]).dot(U1[s]).dot(U0[s]).dot(U1[s]).dot(U0[s]))
+					
+				sig *= .5*np.trace(U1tilde.dot(U0tilde.conj().T))
+				
+			DD_signal_noerr.append(sig_noerr.real)
+			DD_signal.append(sig.real)
+	
+#		plt.figure (figsize=(10,5))
+#		plt.plot (tauarr, DD_signal_noerr, 'Red', label='Error free')
+#		plt.plot (tauarr, DD_signal, 'Blue', label='With errors')
+#		plt.legend(fontsize=15)
+#		plt.title ('DD signal')
+#		plt.show()
+
+		return DD_signal_noerr, DD_signal
+
+
+	def dynamical_decoupling_errors_test (self, tauarr, nr_pulses = 4, nr_errors = 10, t_error = 1e-6):
+		'''
+		Caclulates signal for spin echo
+
+		Input: 
+		tauarr  [array]		: time array for spin echo
+		phi  [radians]		: Rotation angle of the spin readout basis
+
+		'''
+		
+		self.hahn_sig = []
+		arr_test_clus = []
+		arr_test_clus2 = []
+		count = 0
+		DD_signal = []
+		DD_signal_error = []
+		
+		#print('start analytical DD')
+		#anal_DD = self.nbath.dynamical_decoupling (S1=1, S0=0, nr_pulses=2*nr_pulses, tau= tauarr)
+
+		errorlist = ran.choice([0, 1], size=nr_pulses, p=[2/3, 1/3])
+		t_errorlist = ran.choice([0, 1, -1], size=len(tauarr), p=[2/3, 1/6, 1/6])
+		U0 = [self._U_op_int(0, 2*t) for t in tauarr]
+		U1 = [self._U_op_int(1, 2*t) for t in tauarr]
+		U0s = [self._U_op_int(0, t) for t in tauarr]
+		U1s = [self._U_op_int(1, t) for t in tauarr]
+		
+		for t in range(len(tauarr)):
+		
+			sig = 1
+
+			for s in range(self._nr_nucl_spins):
+
+				U0tilde = U0[t][s].dot(U1[t][s]).dot(U0[t][s]).dot(U1[t][s]).dot(U0[t][s]).dot(U1[t][s]).dot(U0[t][s]).dot(U1[t][s])
+				U1tilde = U1[t][s].dot(U0[t][s]).dot(U1[t][s]).dot(U0[t][s]).dot(U1[t][s]).dot(U0[t][s]).dot(U1[t][s]).dot(U0[t][s])
+			
+				U0tilde = nplin.matrix_power(U0tilde,nr_pulses)
+				U1tilde = nplin.matrix_power(U1tilde,nr_pulses)
+
+				sig *= .5*np.trace(U1tilde.dot(U0tilde.conj().T))
+
+			DD_signal.append((1+sig)/2)
+
+			DDfft = np.fft.fftshift(np.abs(np.fft.fft(DD_signal))**2)
+			DDfft -= np.array([max(DDfft) if x == np.argmax(DDfft) else 0 for x in range(len(DDfft))])
+			if t==0:
+				distribDDfft = np.ones(len(DDfft))
+			else:
+				distribDDfft = np.ones(len(DDfft))
+			plt.plot(DDfft)
+			#plt.ylim(0,5000)
+			plt.show()
+			plt.plot(DD_signal)
+			plt.show()
+
+#		peaks, _ = find_peaks(1-np.array(DD_signal), height=.25)
+#		
+#		terrorlist = np.array([tauarr[rand.sample(range(len(tauarr)), nr_errors)] for j in range(nr_pulses)])#tauarr[peaks]
+#		pran = [ran.choice(range(8), size=1, p=.125*np.ones(8))[0] for j in range(nr_pulses)]
+#		
+#		count = 0
+#		
+#		for t in range(len(tauarr)):
+#
+#			sig = 1
+#
+#			for s in range(self._nr_nucl_spins):
+#			
+#				U0tilde = np.eye(2)
+#				U1tilde = np.eye(2)
+#			
+#				for j in range(nr_pulses):
+#			
+#					if tauarr[t] in terrorlist[j] :
+#						
+#						U0e = [np.multiply((pran[j]==k),self._U_op_int(0, 2*(tauarr[t]+t_error)))+np.multiply((pran[j]!=k),U0[t]) for k in range(8)]
+#						U1e = [np.multiply((pran[j]==k),self._U_op_int(1, 2*(tauarr[t]+t_error)))+np.multiply((pran[j]!=k),U1[t]) for k in range(8)]
+#						U0es = [np.multiply((pran[j]==k),self._U_op_int(0, tauarr[t]+t_error))+np.multiply((pran[j]!=k),U0s[t]) for k in range(8)]
+#						U1es = [np.multiply((pran[j]==k),self._U_op_int(1, tauarr[t]+t_error))+np.multiply((pran[j]!=k),U1s[t]) for k in range(8)]
+#					
+#						#U0ene = U0[t]
+#						#U1ene = U1[t]
+#						#U0esne = U0s[t]
+#						#U1ezne = U1s[t]
+#					
+#						U0tilde = U0tilde.dot(U0e[0][s].dot(U1e[1][s]).dot(U0e[2][s]).dot(U1e[3][s]).dot(U0e[4][s]).dot(U1e[5][s]).dot(U0e[6][s]).dot(U1e[7][s]))
+#						U1tilde = U1tilde.dot(U1e[0][s].dot(U0e[1][s]).dot(U1e[2][s]).dot(U0e[3][s]).dot(U1e[4][s]).dot(U0e[5][s]).dot(U1e[6][s]).dot(U0e[7][s]))
+#						
+#					else:
+#					
+#						U0e = U0[t]
+#						U1e = U1[t]
+#						U0es = U0s[t]
+#						U1es = U1s[t]
+#							
+#						U0tilde = U0tilde.dot(U0e[s].dot(U1e[s]).dot(U0e[s]).dot(U1e[s]).dot(U0e[s]).dot(U1e[s]).dot(U0e[s]).dot(U1e[s]))
+#						U1tilde = U1tilde.dot(U1e[s].dot(U0e[s]).dot(U1e[s]).dot(U0e[s]).dot(U1e[s]).dot(U0e[s]).dot(U1e[s]).dot(U0e[s]))
+#
+#				sig *= .5*np.trace(U1tilde.dot(U0tilde.conj().T))
+#
+#			DD_signal_error.append((1+sig)/2)
+
+		
+		
+		plt.figure (figsize=(10,5))
+		plt.plot (tauarr*1e6, DD_signal, color = 'Blue', label='No errors')
+		plt.title ('DD signal')
+		plt.show()
+
+		return DD_signal #, DD_signal_error, terrorlist
+
+		
 	def _op_sd(self, Op):
 		'''
 		Calculates the standard deviation of operator Op with density matric rho
