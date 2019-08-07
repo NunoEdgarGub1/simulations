@@ -43,10 +43,11 @@ class ExpStatistics (DO.DataObjectHDF5):
         self._log_level = value
         self.log.setLevel (self._log_level)
 
-    def set_sim_params (self, nr_reps, overhead=0):
+    def set_sim_params (self, nr_reps, overhead=0, do_hahn = True):
         self.nr_reps = nr_reps
         self.overhead = overhead
         self._called_modules = []
+        self.do_hahn = do_hahn
 
     def set_msmnt_params (self, F=5, G=1, N=8, tau0=20e-9, fid0=1., fid1=0.):
         self.N = N
@@ -69,6 +70,9 @@ class ExpStatistics (DO.DataObjectHDF5):
         self.Bz = Bz
         self.Bx = Bx
         self.By = By
+	
+    def set_inter (self, inter=True):
+        self.inter = inter
 
     def save_bath_evolution (self, value):
         self._save_bath_evol = value
@@ -118,9 +122,9 @@ class ExpStatistics (DO.DataObjectHDF5):
     def generate_bath (self, folder):
         exp = qtrack.BathNarrowing (time_interval=0, overhead = 0, folder=self.folder)
         exp.set_bath_validity_conditions (A=self._A_thr, sparse=self._sparse_thr)
-        exp.generate_spin_bath (folder=folder, hahn_tauarr = self.hahn_tauarr, nr_spins=self.nr_spins,
+        exp.generate_spin_bath (folder=folder, do_hahn = self.do_hahn, hahn_tauarr = self.hahn_tauarr, nr_spins=self.nr_spins,
                     concentration=self.conc, cluster_size=self.cluster_size, Bx = self.Bx, By = self.By, Bz = self.Bz,
-					store_evol_dict = self._save_bath_evol)
+					inter = self.inter, store_evol_dict = self._save_bath_evol)
         print(self.folder)
         return exp.nbath
 
@@ -131,7 +135,7 @@ class ExpStatistics (DO.DataObjectHDF5):
         exp.set_bath_validity_conditions (A=self._A_thr, sparse=self._sparse_thr)
         exp._save_plots = self._save_plots
         if (nBath == None):
-            exp.generate_spin_bath (folder = folder, hahn_tauarr = self.hahn_tauarr, nr_spins=self.nr_spins,
+            exp.generate_spin_bath (folder = folder, do_hahn = self.do_hahn, hahn_tauarr = self.hahn_tauarr, nr_spins=self.nr_spins,
                     concentration=self.conc, cluster_size=self.cluster_size, Bx = self.Bx, By = self.By, Bz = self.Bz,
 					store_evol_dict = self._save_bath_evol)
         else:
@@ -151,11 +155,11 @@ class ExpStatistics (DO.DataObjectHDF5):
                 do_save = self._save_plots, do_save_analysis = self._save_analysis)
         return exp
 
-    def simulate (self, funct_name, max_steps, batch_length = 5, string_id = '',
+    def simulate (self, funct_name, max_steps, nr_seqs, batch_length = 5, string_id = '',
                 do_save = False):
 
         self._called_modules.append('simulate')
-        self.results = np.zeros((self.nr_reps, max_steps))
+        self.results = np.zeros((self.nr_reps, nr_seqs*max_steps))
         newpath = self.folder
 		
         if do_save:
@@ -189,13 +193,13 @@ class ExpStatistics (DO.DataObjectHDF5):
                 pass
                 
             exp.curr_rep = i
-            a = getattr(exp, funct_name) (max_nr_steps=max_steps)
+            a = getattr(exp, funct_name) (max_nr_steps=max_steps, nr_narrow_seqs=nr_seqs)
             l = len (exp.T2starlist)
-            if (l<=max_steps):              
+            if (l<=nr_seqs*max_steps):              
                 self.results [i, :l] = (exp.T2starlist[:l]/exp.T2starlist[0])
-                self.results [i, l:max_steps] = (exp.T2starlist[-1]/exp.T2starlist[0])*np.ones(max_steps-l)
+                self.results [i, l:nr_seqs*max_steps] = (exp.T2starlist[-1]/exp.T2starlist[0])*np.ones(nr_seqs*max_steps-l)
             else:
-                self.results [i, :max_steps] = (exp.T2starlist[:max_steps]/exp.T2starlist[0])
+                self.results [i, :nr_seqs*max_steps] = (exp.T2starlist[:nr_seqs*max_steps]/exp.T2starlist[0])
 
             if do_save:
                 rep_nr = str(i).zfill(len(str(self.nr_reps)))
@@ -203,12 +207,12 @@ class ExpStatistics (DO.DataObjectHDF5):
                 self.save_object_all_vars_to_file (obj = exp, file_name = name, group_name = grp_name)
                 self.save_object_params_list_to_file (obj = exp, file_name = name, group_name = grp_name,
                         params_list= ['BayesianMean','BayesianSTD','QuantumMean','QuantumSTD',
-						'BayesianMax','QuantumMax','T2starlist', 'outcomes_list', 'tau_list', 'phase_list'])
+						'BayesianMax','QuantumMax','T2starlist','conv_step','outcomes_list', 'tau_list', 'phase_list'])
 
         f.close()
         print ("Simulation completed.")
 
-        self.total_steps = max_steps
+        self.total_steps = nr_seqs*max_steps
         self.newpath = newpath
 
     def analysis (self, nr_bins=100):
