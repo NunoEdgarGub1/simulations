@@ -142,7 +142,6 @@ for rep in range(reps):
         plt.title(title, fontsize=20)
         plt.plot(fHz*10**(-6), P, label = "adaptive tracking protocol")
         plt.plot(fHz*10**(-6), P_G, label = "from gaussian approximation")
-        plt.plot(fHz*10**(-6), Hahn_FT)
         plt.xlabel("Larmor frequency (MHz)",fontsize=22)
         plt.ylabel("Probability density", fontsize=22)
         plt.legend(loc='upper center', ncol=2, fontsize = 14)
