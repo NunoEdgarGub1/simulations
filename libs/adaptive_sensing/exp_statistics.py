@@ -156,7 +156,7 @@ class ExpStatistics (DO.DataObjectHDF5):
         return exp
 
     def simulate (self, funct_name, max_steps, nr_seqs, batch_length = 5, string_id = '',
-                do_save = False):
+                same_bath = False, do_save = False):
 
         self._called_modules.append('simulate')
         self.results = np.zeros((self.nr_reps, nr_seqs*max_steps))
@@ -175,7 +175,9 @@ class ExpStatistics (DO.DataObjectHDF5):
                     batch_no+=1
                     f, newpath, name = self.__generate_file (title = '_'+funct_name+'_'+string_id+'_'+'batch_%d'%batch_no)
 
-            exp = self._generate_new_experiment (hahn_tauarr = np.linspace(0,2e-2,10), folder = newpath, nBath = self.generate_bath(newpath))
+            if not same_bath or i==0:
+            	exp = self._generate_new_experiment (hahn_tauarr = np.linspace(0,2e-2,10), folder = newpath, nBath = self.generate_bath(newpath))
+            
             exp.reset()
             exp.initialize()
 
