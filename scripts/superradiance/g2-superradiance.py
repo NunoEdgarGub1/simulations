@@ -39,7 +39,7 @@ sigM2[0,1] = np.sqrt(G); sigM2[0,2] = np.sqrt(G);
 yi = np.zeros((4,4), dtype = np.complex_)
 yi[0,0] = 1.0
 
-sys = masterEquation(yi, H, sigM1, sigM2, dt = 1e-2, n=5e2)
+sys = masterEquation(yi, H, sigM1+sigM2, dt = 1e-2, n=5e2)
     
 #sys.get_steady_state()
 #sys.trajectory(atol = 1e-8, rtol=1e-7)

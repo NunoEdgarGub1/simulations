@@ -38,7 +38,7 @@ from matplotlib import pyplot as plt
 from scipy.interpolate import interp1d
 from matplotlib.colors import ListedColormap
 from scipy.sparse import csr_matrix
-from scipy.signal import find_peaks
+#from scipy.signal import find_peaks
 from mpl_toolkits.mplot3d import Axes3D
 from tools import data_object as DO
 from importlib import reload
@@ -1092,7 +1092,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 	def gaus(self,x,sigma):
 		return np.exp(-(2*x/sigma)**3)
 
-	def Ramsey_Hannah(self, tau, phi):
+	def Ramsey (self, tau, phi=0):
 		sig = 1
 
 		for i in range(len(self._grp_lst)):
@@ -1104,7 +1104,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		return sig
 			
 			
-	def Hahn_Echo_clus (self, tauarr, phi, tol=1e-5, sep = 1e-2, batches = 1, do_compare=False, do_plot = False, do_save=True):
+	def Hahn_Echo_clus (self, tauarr, phi=0, tol=1e-5, sep = 1e-2, batches = 1, do_compare=False, do_plot = False, do_save=True):
 		'''
 		Caclulates signal for spin echo with disjoint clusters [2]
 

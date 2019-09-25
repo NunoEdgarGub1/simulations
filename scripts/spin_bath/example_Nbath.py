@@ -8,7 +8,7 @@ reload (NBath)
 # creates the diamond lattice and sets the nr of nuclear spins to be created
 exp = NBath.CentralSpinExp_cluster (nr_spins = 35, auto_save = True)
 # sets folder where data will be saved
-exp.set_workfolder (r'C:\Users\cristian\Research\Work-Data')
+exp.set_workfolder (r'C:/Users/cristian/Research/')
 
 # sets maximum size clusters 
 # cluster = group of NVs treated with full density matrix
@@ -32,12 +32,14 @@ exp.set_thresholds (A = 500e3, sparse = 10)
 # HAHN ECHO
 # we have two functions for Hahn echo, one that neglects all interactions betweeen 
 # nuclear spins (independent nuclear spins), the other uses the cluster approach
-tau_max= .05e-3
-ind = exp.dynamical_decoupling_indep_Nspins (S1=1, S0=0, nr_pulses=8, tau= np.linspace (15e-6, tau_max, 10000))
+tau_max= .16e-3
+tau = 1e-9*np.linspace (0, 200, 10)
+y = exp.Hahn_Echo_clus (tauarr = tau)
+#ind = exp.dynamical_decoupling_indep_Nspins (S1=1, S0=0, nr_pulses=32, tau= np.linspace (10e-6, tau_max, 10000))
 #clus = exp.Hahn_echo (tau = np.linspace (0, tau_max, nr_points_hahn), phi = 0, do_plot = False)
 
 plt.figure (figsize = (15,8))
-plt.plot (1e6*np.linspace (0, tau_max, 10000), ind, color = 'crimson')
+plt.plot (y*1e9, y, color = 'crimson')
 plt.xlabel ('tau (us)', fontsize = 15)
 plt.ylabel ('probability |0>', fontsize = 15)
 plt.show()
