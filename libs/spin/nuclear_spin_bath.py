@@ -1102,6 +1102,33 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 			sig *= np.trace(U0.dot(self._block_rho[i].dot(U1.conj().T)))
 
 		return sig
+
+	def Ramsey_clus (self, tau, phi=0):
+		'''
+		Performs a single Ramsey experiment:
+		(1) Calculates tr(U1* U0 rho_block) for each dum density matrix
+		(2) Multiplies results to get probability of getting ms=0 or 1
+		(3) updates the sub density matrices depending on the measurement outcome in (2), and constructs new density matrix
+
+		Input: 
+		tau  [s]					: free evolution time
+		phi  [radians]				: Rotation angle of the spin readout basis
+
+		Output: outcome {0/1} of Ramsey experiment
+		'''
+		
+		sig = 1 #seed value for total sig
+		
+		#calculate Prod(tr(U1* U0 rho_block))
+		for j in range(len(self._grp_lst)):
+			U_in = [self._U_op_clus(j, 0, tau), self._U_op_clus(j, 1, tau)]
+			
+			U0 = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0])
+			U1 = np.multiply(np.exp(complex(0,1)*phi/2),U_in[1])
+			
+			sig *= np.trace(U0.dot((self._block_rho[j]/np.trace(self._block_rho[j])).dot(U1.conj().T)))
+		
+		return sig
 			
 			
 	def Hahn_Echo_clus (self, tauarr, phi=0, tol=1e-5, sep = 1e-2, batches = 1, do_compare=False, do_plot = False, do_save=True):
