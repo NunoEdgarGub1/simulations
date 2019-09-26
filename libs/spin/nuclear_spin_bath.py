@@ -380,7 +380,7 @@ class NSpinBath ():
 
 
 
-	def FID (self, tau):
+	def Ramsey (self, tau):
 
 		self.L = np.zeros ((self._nr_nucl_spins, len(tau)))
 		self.L_fid = np.ones (len(tau)) 
@@ -395,11 +395,13 @@ class NSpinBath ():
 		for i in np.arange(self._nr_nucl_spins):
 			self.L_fid = self.L_fid * self.L[i, :]
 
-		plt.figure (figsize = (20,5))
-		plt.plot (tau*1e6, self.L_fid, linewidth =2, color = 'RoyalBlue')
-		plt.xlabel ('free evolution time [us]', fontsize = 15)
-		plt.title ('Free induction decay', fontsize = 15)
-		plt.show()
+		#plt.figure (figsize = (20,5))
+		#plt.plot (tau*1e6, self.L_fid, linewidth =2, color = 'RoyalBlue')
+		#plt.xlabel ('free evolution time [us]', fontsize = 15)
+		#plt.title ('Free induction decay', fontsize = 15)
+		#plt.show()
+
+		return self.L_fid
 
 	def __set_h_vector(self, tau, S1 = 1., S0 = 0., RL_test = False, RL_Ap = [], RL_Ao = []):
 		#print ("Bp = ", self.Bp)
@@ -677,8 +679,8 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 
 		return prod
 
-	def FID_indep_Nspins (self, tau):
-		self.nbath.FID (tau=tau)
+	def Ramsey_indep_Nspins (self, tau):
+		return self.nbath.Ramsey (tau=tau)
 
 
 	def Hahn_echo_indep_Nspins (self, S1, S0, tau, do_plot = True, name = ''):
