@@ -38,7 +38,7 @@ from matplotlib import pyplot as plt
 from scipy.interpolate import interp1d
 from matplotlib.colors import ListedColormap
 from scipy.sparse import csr_matrix
-from scipy.signal import find_peaks
+#from scipy.signal import find_peaks
 from mpl_toolkits.mplot3d import Axes3D
 from tools import data_object as DO
 from importlib import reload
@@ -380,7 +380,7 @@ class NSpinBath ():
 
 
 
-	def FID (self, tau):
+	def Ramsey (self, tau):
 
 		self.L = np.zeros ((self._nr_nucl_spins, len(tau)))
 		self.L_fid = np.ones (len(tau)) 
@@ -395,11 +395,13 @@ class NSpinBath ():
 		for i in np.arange(self._nr_nucl_spins):
 			self.L_fid = self.L_fid * self.L[i, :]
 
-		plt.figure (figsize = (20,5))
-		plt.plot (tau*1e6, self.L_fid, linewidth =2, color = 'RoyalBlue')
-		plt.xlabel ('free evolution time [us]', fontsize = 15)
-		plt.title ('Free induction decay', fontsize = 15)
-		plt.show()
+		#plt.figure (figsize = (20,5))
+		#plt.plot (tau*1e6, self.L_fid, linewidth =2, color = 'RoyalBlue')
+		#plt.xlabel ('free evolution time [us]', fontsize = 15)
+		#plt.title ('Free induction decay', fontsize = 15)
+		#plt.show()
+
+		return self.L_fid
 
 	def __set_h_vector(self, tau, S1 = 1., S0 = 0., RL_test = False, RL_Ap = [], RL_Ao = []):
 		#print ("Bp = ", self.Bp)
@@ -677,8 +679,8 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 
 		return prod
 
-	def FID_indep_Nspins (self, tau):
-		self.nbath.FID (tau=tau)
+	def Ramsey_indep_Nspins (self, tau):
+		return self.nbath.Ramsey (tau=tau)
 
 
 	def Hahn_echo_indep_Nspins (self, S1, S0, tau, do_plot = True, name = ''):
@@ -1092,7 +1094,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 	def gaus(self,x,sigma):
 		return np.exp(-(2*x/sigma)**3)
 
-	def Ramsey_Hannah(self, tau, phi):
+	def Ramsey (self, tau, phi=0):
 		sig = 1
 
 		for i in range(len(self._grp_lst)):
@@ -1102,9 +1104,36 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 			sig *= np.trace(U0.dot(self._block_rho[i].dot(U1.conj().T)))
 
 		return sig
+
+	def Ramsey_clus (self, tau, phi=0):
+		'''
+		Performs a single Ramsey experiment:
+		(1) Calculates tr(U1* U0 rho_block) for each dum density matrix
+		(2) Multiplies results to get probability of getting ms=0 or 1
+		(3) updates the sub density matrices depending on the measurement outcome in (2), and constructs new density matrix
+
+		Input: 
+		tau  [s]					: free evolution time
+		phi  [radians]				: Rotation angle of the spin readout basis
+
+		Output: outcome {0/1} of Ramsey experiment
+		'''
+		
+		sig = 1 #seed value for total sig
+		
+		#calculate Prod(tr(U1* U0 rho_block))
+		for j in range(len(self._grp_lst)):
+			U_in = [self._U_op_clus(j, 0, tau), self._U_op_clus(j, 1, tau)]
+			
+			U0 = np.multiply(np.exp(-complex(0,1)*phi/2),U_in[0])
+			U1 = np.multiply(np.exp(complex(0,1)*phi/2),U_in[1])
+			
+			sig *= np.trace(U0.dot((self._block_rho[j]/np.trace(self._block_rho[j])).dot(U1.conj().T)))
+		
+		return sig
 			
 			
-	def Hahn_Echo_clus (self, tauarr, phi, tol=1e-5, sep = 1e-2, batches = 1, do_compare=False, do_plot = False, do_save=True):
+	def Hahn_Echo_clus (self, tauarr, phi=0, tol=1e-5, sep = 1e-2, batches = 1, do_compare=False, do_plot = False, do_save=True):
 		'''
 		Caclulates signal for spin echo with disjoint clusters [2]
 
