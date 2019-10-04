@@ -8,12 +8,12 @@ Created on Sat Jun 29 22:44:31 2019
 Basis
 
 |0> = |00>
-|1> = |01>
-|2> = |10>
+|1> = |10>
+|2> = |01>
 |3> = |11>
 """
 
-from masterEquation_v1 import masterEquation
+from masterEquation_v1 import masterEquation, tensor
 import numpy as np
 import pylab as pl
 import scipy.constants as const
@@ -21,29 +21,37 @@ pl.ioff()
 
 hbar = const.hbar / const.elementary_charge * 1e15 # ueV.ns
 
-G = 1.5
-D = 0.5
-Om = 0.1*G
-    
-H = np.zeros((4,4), dtype = np.complex_)
-H[0,0] = 0.0;     H[0,1] = Om/2.0;  H[0,2] = Om/2.0;  H[0,3] = 0.0;
-H[1,0] = Om/2.0;  H[1,1] = D;       H[1,2] = 0.0;     H[1,3] = Om/2.0;
-H[2,0] = Om/2.0;  H[2,1] = 0.0;     H[2,2] = D;       H[2,3] = Om/2.0;
-H[3,0] = 0.0;     H[3,1] = Om/2.0;  H[3,2] = Om/2.0;  H[3,3] = 2.0*D;
+G1 = 1.5
+D1 = 0.0
+Om1 = 0.1*G1
+G2 = G1
+D2 = -D1
+Om2 = Om1
 
-sigM1 = np.zeros((4,4), dtype = np.complex_)
-sigM2 = np.zeros((4,4), dtype = np.complex_)
-sigM1[1,3] = np.sqrt(G); sigM1[2,3] = np.sqrt(G); 
-sigM2[0,1] = np.sqrt(G); sigM2[0,2] = np.sqrt(G); 
+H1 = np.zeros((2,2), dtype = np.complex_)
+H1[0,0] = -D1/2.0;  H1[0,1] = Om1/2.0;
+H1[1,0] = Om1/2.0;  H1[1,1] = D1/2.0;
+
+H2 = np.zeros((2,2), dtype = np.complex_)
+H2[0,0] = -D2/2.0;  H2[0,1] = Om2/2.0;
+H2[1,0] = Om2/2.0;  H2[1,1] = D2/2.0;
+
+H = tensor(H1, np.eye(2, dtype = np.complex_)) + tensor(np.eye(2, dtype = np.complex_), H2)
+
+sigM = np.zeros((2,2), dtype = np.complex_)
+sigM[0,1] = 1.0
+sigM1 = tensor(np.sqrt(G1)*sigM, np.eye(2, dtype=np.complex_))
+sigM2 = tensor(np.eye(2, dtype=np.complex_), np.sqrt(G2)*sigM)
+print(np.real(sigM1), "\n\n", np.real(sigM2))
     
 yi = np.zeros((4,4), dtype = np.complex_)
 yi[0,0] = 1.0
 
-sys = masterEquation(yi, H, sigM1, sigM2, dt = 1e-2, n=5e2)
+sys = masterEquation(yi, H, np.sqrt(G1)*sigM1, np.sqrt(G2)*sigM2, dt = 1e-2, n=5e2)
     
 #sys.get_steady_state()
 #sys.trajectory(atol = 1e-8, rtol=1e-7)
-sys.g2Func(sigM1, sigM2, atol = 1e-9, rtol=1e-9)
+sys.g2Func(np.sqrt(G1)*sigM1, np.sqrt(G2)*sigM2, atol = 1e-9, rtol=1e-9)
 
 pl.figure(1, figsize = (6,5))
 pl.rc('font', **{'family': 'sans', 'serif': ['Computer Modern']})

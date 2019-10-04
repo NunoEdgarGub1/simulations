@@ -87,6 +87,8 @@ class masterEquation:
         Number of points to be calculated
     **par dt : float
         Time resolution of the density matrix trajectory
+    **par rates : numpy array
+        Matrix containing the 
     """
     def __init__(self, yi, H, *sigmas, **par):
         self.H = H
@@ -100,6 +102,10 @@ class masterEquation:
         self.steady = np.array([], dtype = np.complex_)
         self.g1 = np.zeros(self.n, dtype = np.complex_)
         self.g2 = np.zeros(self.n, dtype = np.float)
+        if not len(par['rates']):
+            self.rates = np.ones((len(sigmas), len(sigmas)))
+        else:
+            self.rates = par['rates']
 
     def _ME(self, t, yt):
         """
@@ -118,8 +124,13 @@ class masterEquation:
             Haux = self.H
         yt = yt.reshape(Haux.shape)
         L = np.zeros(Haux.shape, dtype = np.complex_) # Lindblad term
-        for sigma in self.sigmas:
-            L += np.dot(np.dot(sigma, yt), adj(sigma))-0.5*(np.dot(np.dot(adj(sigma), sigma), yt)+np.dot(yt, np.dot(adj(sigma), sigma)))
+        n, m = (-1,-1)
+        for sig1 in self.sigmas:
+            n += 1
+            m = -1
+            for sig2 in self.sigmas:
+                m += 1
+                L += self.rates[n,m]*(np.dot(np.dot(sig1, yt), adj(sig2))-0.5*(np.dot(np.dot(adj(sig2), sig1), yt)+np.dot(yt, np.dot(adj(sig2), sig1))))
         dydx = -1j*(np.dot(Haux, yt) - np.dot(yt, Haux)) + L # Master equation
         return np.ravel(dydx)
     
@@ -138,8 +149,13 @@ class masterEquation:
         yt = np.array(sy.symbols('y0:{}'.format(Haux.shape[0]**2))) # symbolic density matrix
         yt = yt.reshape(Haux.shape) # in a matrix form
         L = sy.zeros(yt.shape[0],yt.shape[1]) # Lindblad term
-        for sigma in self.sigmas:
-            L += np.dot(np.dot(sigma, yt), adj(sigma))-0.5*(np.dot(np.dot(adj(sigma), sigma), yt)+np.dot(yt, np.dot(adj(sigma), sigma)))
+        n, m = (-1,-1)
+        for sig1 in self.sigmas:
+            n += 1
+            m = -1
+            for sig2 in self.sigmas:
+                m += 1
+                L += self.rates[n,m]*(np.dot(np.dot(sig1, yt), adj(sig2))-0.5*(np.dot(np.dot(adj(sig2), sig1), yt)+np.dot(yt, np.dot(adj(sig2), sig1))))
         dydx = -1j*(np.dot(Haux, yt) - np.dot(yt, Haux)) + L # Master equation
         dydx[0] = np.trace(yt) # Sum of probabilities must be 1
         dydx = np.ravel(dydx)
@@ -154,6 +170,7 @@ class masterEquation:
         try:
             self.steady = np.linalg.solve(A, B)
         except:
+            print("\nWarning (singular matrix): using np.linalg.lstsq.\n")
             self.steady, residual, rank, singular = np.linalg.lstsq(A, B, rcond=None)
         self.steady = self.steady.reshape(Haux.shape)
         return self.steady
@@ -172,7 +189,7 @@ class masterEquation:
         res = solve_ivp(self._ME, (self.time[0], self.time[-1]), np.ravel(self.y), method='RK45', t_eval=self.time, rtol = rtol, atol = atol)
         self.time = res['t']
         self.rho  = res['y'].reshape((self.H.shape[0], self.H.shape[1], len(self.time)))
-#            self.steady = self.rho[:,:,-1]
+        self.steady = self.rho[:,:,-1]
         return self.rho
 
     def g1Func(self, *sigmas, atol=1e-7, rtol=1e-4):
@@ -242,16 +259,29 @@ class masterEquation:
         """
         if len(self.steady)==0:
             self.get_steady_state()
-        for sig in sigmas:
+        q, k, n, m = (-1, -1, -1, -1)
+        for sig1 in sigmas:
+            q += 1
+            k = -1
+            n = -1
+            m = -1
             for sig2 in sigmas:
-                yi = np.dot(np.dot(sig, self.steady), adj(sig))
-                self.y = yi
-                i=0
-                res = solve_ivp(self._ME, (self.time[0], self.time[-1]), np.ravel(self.y), method='RK45', t_eval=self.time, rtol = rtol, atol = atol)
-                yaux = res['y'].reshape((yi.shape[0], yi.shape[1], len(self.time)))
-                while i < self.n:
-                    self.g2[i] += np.real(np.trace(np.dot(yaux[:,:,i], np.dot(adj(sig2), sig2))))
-                    i+=1
+                k += 1
+                n = -1
+                m = -1
+                for sig3 in sigmas:
+                    n += 1
+                    m = -1
+                    for sig4 in sigmas:
+                        m += 1
+                        yi = self.rates[q,k]*np.dot(np.dot(sig1, self.steady), adj(sig2))
+                        self.y = yi
+                        res = solve_ivp(self._ME, (self.time[0], self.time[-1]), np.ravel(self.y), method='RK45', t_eval=self.time, rtol = rtol, atol = atol)
+                        yaux = res['y'].reshape((yi.shape[0], yi.shape[1], len(self.time)))
+                        i=0
+                        while i < self.n:
+                            self.g2[i] += np.real(self.rates[n,m]*np.trace(np.dot(yaux[:,:,i], np.dot(adj(sig3), sig4))))
+                            i+=1
         self.g2 /= self.g2[-1] # Normalization by hand. Fix it!
         self.time = np.append(-self.time[::-1], self.time[1:])
         self.g2 = np.append(self.g2[::-1], self.g2[1:])
