@@ -8,12 +8,6 @@ Created on Fri Jun 28 23:43:52 2019
 To do list:
     1. The second-ordem correlation function g2Func is normalized "by hand".
     Need to write the proper normalization factor.
-    
-    2. The second-ordem correlation function g2FuncTime is unnormalized.
-    Need to write the proper normalization factor.
-
-    3. Write functions to reproduce the two-photon interference experiments
-    based on the Hong-Ou-Mandel effect for continuous and pulsed excitation.
 """
 
 import numpy as np
@@ -208,15 +202,20 @@ class masterEquation:
         """
         if len(self.steady)==0:
             self.get_steady_state()
-        for sig in sigmas:
-            yi = np.dot(sig, self.steady)
-            self.y = yi
-            i=0
-            res = solve_ivp(self._ME, (self.time[0], self.time[-1]), np.ravel(self.y), method='RK45', t_eval=self.time, rtol = rtol, atol = atol)
-            yaux = res['y'].reshape((yi.shape[0], yi.shape[1], len(self.time)))
-            while i < self.n:
-                self.g1[i] += np.trace(np.dot(yaux[:,:,i], adj(sig)))
-                i+=1
+        n, m = (-1,-1)
+        for sig1 in self.sigmas:
+            n += 1
+            m = -1
+            for sig2 in self.sigmas:
+                m += 1
+                yi = np.dot(sig1, self.steady)
+                self.y = yi
+                i=0
+                res = solve_ivp(self._ME, (self.time[0], self.time[-1]), np.ravel(self.y), method='RK45', t_eval=self.time, rtol = rtol, atol = atol)
+                yaux = res['y'].reshape((yi.shape[0], yi.shape[1], len(self.time)))
+                while i < self.n:
+                    self.g1[i] += self.rates[n,m]*np.trace(np.dot(yaux[:,:,i], adj(sig2)))
+                    i+=1
         return self.g1
     
     def powerSpectrum(self, *sigmas, atol=1e-7, rtol=1e-4):
@@ -286,37 +285,3 @@ class masterEquation:
         self.time = np.append(-self.time[::-1], self.time[1:])
         self.g2 = np.append(self.g2[::-1], self.g2[1:])
         return self.time, self.g2
-    
-    def g2FuncTime(self, *sigmas, atol=1e-8, rtol=1e-6):
-        """
-        This function returns the unnormalized second-order correlation function
-        from the master equation by averaging over time instead of using the
-        steady-state solution. This is useful when the Hamiltonian is time-dependent.
-        
-        Parameters
-        -----------
-        *sigmas : List of complex numpy arrays
-            Operator(s) describing the radiative decay(s).
-        atol : Float
-            Absolute tolerance of the Runge-Kutta method in the scipy.integrate.solve_ivp function.
-        rtol : Float
-            Relative tolerance of the Runge-Kutta method in the scipy.integrate.solve_ivp function.
-        """
-        self.trajectory(atol=atol, rtol=rtol)
-        k=0
-        while k < self.n:
-            for sig in sigmas:
-                for sig2 in sigmas:
-                    yi = np.zeros(self.steady.shape)
-                    yi = np.dot(np.dot(sig, self.rho[:,:,k]), adj(sig))
-                    self.y = yi
-                    i=0
-                    res = solve_ivp(self._ME, (self.time[0], self.time[-1]), np.ravel(self.y), method='RK45', t_eval=self.time, rtol = rtol, atol = atol)
-                    yaux = res['y'].reshape((yi.shape[0], yi.shape[1], len(self.time)))
-                    while i < self.n:
-                        self.g2[i] += np.real(np.trace(np.dot(yaux[:,:,i], np.dot(adj(sig2), sig2))))
-                        i+=1
-            k+=1
-        self.time = np.append(-self.time[::-1], self.time[1:])
-        self.g2 = np.append(self.g2[::-1], self.g2[1:])
-        return self.g2
