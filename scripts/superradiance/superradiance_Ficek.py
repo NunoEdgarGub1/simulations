@@ -107,7 +107,7 @@ sigP2 = adj(sigM2)
 Hs = QDs.Lambda()*pl.dot(sigP1, sigM2)+pl.conj(QDs.Lambda())*pl.dot(sigP2, sigM1)
 Hl = -0.5j*(Om1*sigP1 + Om2*sigP2) + 0.5j*(pl.conj(Om1)*sigM1 + pl.conj(Om2)*sigM2)
 H = Hs + Hl
-H[1,1] = (w2-wl); H[3,3] = (w2-wl)
+H[1,1] = (w2-wl); H[2.2] = (w1-wl); H[3,3] = (w1+w2-2*wl)
 
 ################# Master equation #################
 yi = pl.zeros((4,4), dtype = pl.complex_)
