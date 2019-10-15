@@ -176,7 +176,8 @@ class ExpStatistics (DO.DataObjectHDF5):
                     f, newpath, name = self.__generate_file (title = '_'+funct_name+'_'+string_id+'_'+'batch_%d'%batch_no)
 
             if not same_bath or i==0:
-            	exp = self._generate_new_experiment (hahn_tauarr = np.linspace(0,2e-2,10), folder = newpath, nBath = self.generate_bath(newpath))
+                print('exp_statistics.py - Generated Bath')
+                exp = self._generate_new_experiment (hahn_tauarr = self.hahn_tauarr, folder = newpath, nBath = self.generate_bath(newpath))
             
             exp.reset()
             exp.initialize()
@@ -209,7 +210,7 @@ class ExpStatistics (DO.DataObjectHDF5):
                 self.save_object_all_vars_to_file (obj = exp, file_name = name, group_name = grp_name)
                 self.save_object_params_list_to_file (obj = exp, file_name = name, group_name = grp_name,
                         params_list= ['BayesianMean','BayesianSTD','QuantumMean','QuantumSTD',
-						'BayesianMax','QuantumMax','T2starlist','conv_step','outcomes_list', 'tau_list', 'phase_list'])
+						'BayesianMax','QuantumMax','T2starlist','T2starlist_holevo','T2star_decay','conv_step','outcomes_list', 'tau_list', 'phase_list'])
 
         f.close()
         print ("Simulation completed.")
