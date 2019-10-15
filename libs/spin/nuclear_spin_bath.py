@@ -1163,8 +1163,9 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		print('Group list', self._grp_lst, self._ind_arr_unsrt)
 		
 		# Creates finer time array for analytical signal
-		tau_ind_spins = np.linspace(min(tauarr),max(tauarr),len(tauarr)*1e4)
+		tau_ind_spins = np.linspace(tauarr[0],tauarr[-1],len(tauarr)*1e2)
 		
+		print('Calculating full Hahn')
 		# Calculate analytical signal (i.e. Hahn Echo without nuclear-nuclear interactions)
 		Hahn_an = self.nbath.Hahn_echo(tau_ind_spins)
 
@@ -1175,6 +1176,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		peakpos = [0]+[i for i in range(len(np.diff(newtauarr))) if (np.diff(newtauarr)[i]>=.5*np.max(np.diff(newtauarr)))]
 		newnewtauarr = []
 		
+		print('Start fit')
 		for j in peakpos:
 			if peakpos.index(j)%2==0:
 				newnewtauarr.append(newtauarr[int(np.mean([j,j+1]))])
@@ -1182,16 +1184,6 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		if len(newtauarr) <= 5 or (np.max(np.diff(newtauarr)) < .1*np.max(np.diff(newtauarr))):
 			print('Few peaks detected, set manual time array')
 			newnewtauarr = tauarr
-		
-		if do_plot:
-			plt.figure (figsize=(30,10))
-			for t in newnewtauarr:
-				plt.axvline (t*1e6, color = 'red')
-			plt.axis ([min(tauarr*1e6), max(tauarr*1e6), -0.05, 1.05])
-			plt.xlabel ('time (us)', fontsize=30)
-			plt.tick_params (labelsize=25)
-			plt.title ('Position of (some) peaks', fontsize=30)
-			plt.show()
 
 		for batch in range(batches):
 			arr_test_clus_batch = []
@@ -1199,7 +1191,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 				
 				t+=batch*sep
 				
-				percent_done = int(count/(len(newnewtauarr)*batches) * 100)
+				percent_done = int(count/(len(newnewtauarr)*batches) * 10)
 				if percent_done%10==0:
 					print(percent_done,'%')
 
@@ -1253,11 +1245,11 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		# Plot analytical curve and full signal at maxima
 		if do_save or do_plot:
 			plt.figure (figsize=(30,10))
-			plt.plot (tau_ind_spins*1e6, Hahn_an, 'Red', alpha = .1)
-			plt.plot (tau_ind_spins*1e6, Hahn_an, 'o', color ='Red', alpha = .1)
-			plt.plot (np.array(newnewtauarr)*1e6, arr_test_clus, 'RoyalBlue',lw = 5)
-			plt.plot (np.array(newnewtauarr)*1e6, self.gaus(np.array(newnewtauarr),T2echo), 'Green',lw = 5, label = "opt T$_2$ = %.d ms"%(T2echo*1e3))
-			plt.xlabel (r'time ($\mu$s)', fontsize=30)
+			plt.plot (tau_ind_spins*1e3, Hahn_an, 'Red', alpha = .1)
+			plt.plot (tau_ind_spins*1e3, Hahn_an, 'o', color ='Red', alpha = .1)
+			plt.plot (np.array(newnewtauarr)*1e3, arr_test_clus, 'RoyalBlue',lw = 5)
+			plt.plot (np.array(newnewtauarr)*1e3, self.gaus(np.array(newnewtauarr),T2echo), 'Green',lw = 5, label = "opt T$_2$ = %.d ms"%(T2echo*1e3))
+			plt.xlabel (r'time (ms)', fontsize=30)
 			plt.tick_params (labelsize=25)
 			plt.legend(fontsize = 25)
 			plt.grid(True)
@@ -1370,7 +1362,7 @@ class FullBathDynamics (CentralSpinExp_cluster):
 				print("T2",self.T2echo)
 			
 			else:
-				self.T2echo = 5e-3
+				self.T2echo = 100e-3
 
 			self.values_Az_kHz = pd[0]
 			stat = self.get_overhauser_stat()
@@ -1403,7 +1395,7 @@ class FullBathDynamics (CentralSpinExp_cluster):
 			}
 
 
-	def Hahn_Echo (self, tauarr, phi, do_compare=True):
+	def Hahn_Echo (self, tauarr, phi):
 		'''
 		Caclulates signal for spin echo
 
@@ -1417,7 +1409,6 @@ class FullBathDynamics (CentralSpinExp_cluster):
 		arr_test_clus = []
 		arr_test_clus2 = []
 		count = 0
-		
 		for t in tauarr:
 		
 			print(count/len(tauarr) *100,'%')
