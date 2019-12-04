@@ -233,6 +233,7 @@ class TimeSequence ():
 		'''
 
 		prob, m = self.return_p_fB()
+		print ("Mean: ", m)
 
 		plt.figure(figsize=(20,5))
 		plt.plot (self.beta*1e-6, prob, 'royalblue', linewidth = 3)
