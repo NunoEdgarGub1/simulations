@@ -4,7 +4,7 @@
 # 
 # Created: 2017 
 # Cristian Bonato, c.bonato@hw.ac.uk
-# Dale Scerri, ds32@hw.ac.uk
+# Eleanor Scerri, e.scerri@hw.ac.uk
 #
 # Relevant Literature
 # J. Maze NJP DOI: 10.1088/1367-2630/14/10/103041 [1]
@@ -32,6 +32,7 @@ import tabulate as tb
 import functools as ft
 import logging
 import numba
+import h5py
 import os, time
 import matplotlib as mpl
 from matplotlib import pyplot as plt
@@ -803,12 +804,18 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 			for index in range(self._nCr(self._nr_nucl_spins,2)))
 			)
 
+			#print((self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**self._nr_nucl_spins))
+			#print(Hc)
 
-			return Hms + Hc #+ (self.ZFS-self.gam_el*self.Bz)*ms*np.eye(2**self._nr_nucl_spins)
+			self.Hamiltonian = Hms + Hc 
+
+			return Hms + Hc 
 
 		else:
 		
 			Hms = [sum(np.multiply(self.Larm[ms][j][k],self.In[k]) for k in range(3)) for j in range(self._nr_nucl_spins)]
+
+			self.Hamiltonian = Hms
 
 			return np.array(Hms)
 
@@ -825,7 +832,7 @@ class CentralSpinExperiment (DO.DataObjectHDF5):
 		tau 	[seconds]	free-evolution time Ramsey
 		'''
 		
-		H = self._H_op_int(ms)
+		H = self.Hamiltonian[ms]#self._H_op_int(ms)
 		
 		if self.inter:
 			U = lin.expm(-np.multiply(complex(0,1)*tau,H))
@@ -943,7 +950,27 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		self.Cz_mean = np.mean([Carr[j][2] for j in range(len(self.pair_lst))])
 		
 		return Carr
+	
+	def _dgm (self, ms, m):
+		'''
+		Constructs the dg matrix ([2]) for the correct nuc-nuc inter. in the secular approx.
 		
+		The values of dg should vary 0-15 for nuclei close to spin
+		
+		Input:
+		
+		ms  [0/1]	:electron spin state
+		m,n [int]	:nuclear spins m and n
+		
+		'''
+
+		dgm = -(2-3*ms)*self.gam_el/(self.gam_n*self.ZFS) * \
+				np.array([[self.dC_list[0][0][m],self.dC_list[0][1][m],self.dC_list[0][2][m]],
+						  [self.dC_list[1][0][m],self.dC_list[1][1][m],self.dC_list[1][2][m]],
+						  [0,0,0]])
+
+		return dgm
+
 	def _dCmn (self, ms, m, n):
 		'''
 		Constructs the dCmn matrix ([2]) for the correct nuc-nuc inter. in the secular approx.
@@ -957,17 +984,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		
 		'''
 		
-		dgm = -(2-3*ms)*self.gam_el/(self.gam_n*self.ZFS) * \
-				np.array([[self.dC_list[0][0][m],self.dC_list[0][1][m],self.dC_list[0][2][m]],
-						  [self.dC_list[1][0][m],self.dC_list[1][1][m],self.dC_list[1][2][m]],
-						  [0,0,0]])
-		
-		dgn = -(2-3*ms)*self.gam_el/(self.gam_n*self.ZFS) * \
-				np.array([[self.dC_list[0][0][n],self.dC_list[0][1][n],self.dC_list[0][2][n]],
-						  [self.dC_list[1][0][n],self.dC_list[1][1][n],self.dC_list[1][2][n]],
-						  [0,0,0]])
-		
-		dCmn = -((self.ZFS*self.gam_n/self.gam_el)**2 / (self.ZFS*(2-3*ms))) * (dgm.T).dot(dgn)
+		dCmn = -((self.ZFS*self.gam_n/self.gam_el)**2 / (self.ZFS*(2-3*ms))) * (self._dgm (ms, m).T).dot(self._dgm (ms, n))
 		
 		return dCmn
 
@@ -1090,6 +1107,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		self.log.debug ('unsorted index array', self._ind_arr_unsrt)
 		self.log.debug ('grouped', self._grp_lst)
 		self.log.debug ('nuc-nuc coupling strength', Cmer_arr)
+		print(self.pair_lst)
 
 	def gaus(self,x,sigma):
 		return np.exp(-(2*x/sigma)**3)
@@ -1163,7 +1181,7 @@ class CentralSpinExp_cluster (CentralSpinExperiment):
 		print('Group list', self._grp_lst, self._ind_arr_unsrt)
 		
 		# Creates finer time array for analytical signal
-		tau_ind_spins = np.linspace(tauarr[0],tauarr[-1],len(tauarr)*1e2)
+		tau_ind_spins = np.linspace(tauarr[0],tauarr[-1],len(tauarr)*1e3)
 		
 		print('Calculating full Hahn')
 		# Calculate analytical signal (i.e. Hahn Echo without nuclear-nuclear interactions)
@@ -1270,16 +1288,29 @@ class FullBathDynamics (CentralSpinExp_cluster):
 	def __init__ (self, nr_spins, auto_save=True):
 		CentralSpinExperiment.__init__ (self=self, nr_spins=nr_spins, auto_save = auto_save)
 
-	def generate_bath (self, concentration = .1, hahn_tauarr = np.linspace(0,2e-2,10), hf_approx = False, do_plot = False, name = '', excl_save = False, do_hahn = True):
+	def generate_bath (self, concentration = .1, hahn_tauarr = np.linspace(0,2e-2,10), hf_approx = False, do_plot = False, name = '', excl_save = False, do_hahn = True, polarized = False, 
+		H_reuse = False, folder_reuse = None, batch_reuse = 0, nbath_reuse = 0):
 		'''
 		Sets up spin bath and external field
 
 		Input:
 		concentration 	[float]		: concnetration of nuclei with I>0
 		hf_approx       [boolean]   : high Bz field approximation: neglects Azx and Azy components
-		
 		clus			[boolean]	: apply corrections to HF vector due to secular approximation
 									  in disjoint cluster method c.f. DOI:10.1103/PhysRevB.78.094303
+        nr_spins        [int]       : number of nuclear spins in the bath
+        concentration   [float]     : concentration of spins in the lattice
+        cluster_size    [int]       : size of clusters in case clustering algorithm is applied
+        Bx, By, Bz      [floats].   : Cartesian components of applied magnetic field
+        inter           [bool]      : set to True for nuclear-nuclear interactions
+        polarized       [bool]      : set to True if starting from polarized bath
+        H_reuse:        [bool]      : set to True if reusing saved bath in:
+            folder_reuse  [string]: path to folder in which reused. bath data is stored
+        with either:
+            batch_reuse      [int]: batch in folder to reuse (deprecated)
+            nbath_reuse      [int]: bath to reuse
+
+        store_evol_dict [bool]: store all steps of bath evolution in a dictionary?
 									  		
 		'''
 
@@ -1315,7 +1346,30 @@ class FullBathDynamics (CentralSpinExp_cluster):
 				for k in range(3):
 					self.In_tens[j].append(self.kron_test(self.kron_test(self.In[k],2**j),2**(self._nr_nucl_spins-(j+1)), reverse=True))#append(np.kron(np.kron(Q1,self.In[k]),Q2))
 
-			self._curr_rho = np.diag([2**-self._nr_nucl_spins for j in range(2**self._nr_nucl_spins)])
+			if polarized:
+				self._curr_rho = np.diag([1*(j==0) for j in range(2**self._nr_nucl_spins)])
+			else:
+				self._curr_rho = np.diag([2**-self._nr_nucl_spins for j in range(2**self._nr_nucl_spins)])
+
+			if H_reuse:
+				os.chdir(folder_reuse)
+				for f in next(os.walk('.'))[1]:
+					if 'batch_%d'%batch_reuse in f and not any(['batch_'+str(j) in f for j in [str(batch_reuse)+str(j) for j in range(10)]]) and 'original' in f:
+						filename = folder_reuse + '/' + f + '/' + f + '.hdf5'
+						break
+				
+				data = h5py.File(filename,'r')
+
+				getkey = 'Hamiltonian'
+
+				bath = data['nbath_%d'%nbath_reuse]
+				self.Hamiltonian = bath['Hamiltonian'].value
+				self.over_op = bath['over_op'].value
+				print('Reusing Hamiltonian from bath %d in batch %d'%(nbath_reuse, batch_reuse))
+
+			else:
+				self.Hamiltonian = [self._H_op_int(0),self._H_op_int(1)]
+				self.over_op = self._overhauser_op()
 					
 			#Run group algo for next step
 			self._group_algo()
@@ -1362,7 +1416,7 @@ class FullBathDynamics (CentralSpinExp_cluster):
 				print("T2",self.T2echo)
 			
 			else:
-				self.T2echo = 100e-3
+				self.T2echo = 100e-3#500e-3
 
 			self.values_Az_kHz = pd[0]
 			stat = self.get_overhauser_stat()
@@ -1376,11 +1430,14 @@ class FullBathDynamics (CentralSpinExp_cluster):
 		print('generated bath')
 
 
-	def reset_bath_unpolarized (self, do_plot = True):
+	def reset_bath_unpolarized (self, do_plot = True, polarized = False):
 
 		self.log.debug ("Reset bath...")
 		self._evol_dict = {}
-		self._curr_rho = np.eye(2**self._nr_nucl_spins)/np.trace(np.eye(2**self._nr_nucl_spins))
+		if polarized:
+			self._curr_rho = np.diag([1*(j==0) for j in range(2**self._nr_nucl_spins)])
+		else:
+			self._curr_rho = np.eye(2**self._nr_nucl_spins)/np.trace(np.eye(2**self._nr_nucl_spins))
 
 		pd = np.real(self.get_probability_density())
 		self.values_Az_kHz = pd[0]
@@ -1435,9 +1492,9 @@ class FullBathDynamics (CentralSpinExp_cluster):
 	def Ramsey (self, tau,  phi, flip_prob = 0, t_read = 0):
 		'''
 		Performs a single Ramsey experiment:
-		(1) Calculates tr(U1* U0 rho_block) for each dum density matrix
+		(1) Calculates tr(U1* U0 rho_block) for density matrix
 		(2) Multiplies results to get probability of getting ms=0 or 1
-		(3) updates the sub density matrices depending on the measurement outcome in (2), and constructs new density matrix
+		(3) Constructs new density matrix
 
 		Input: 
 		tau  [s]					: free evolution time
@@ -1528,9 +1585,30 @@ class FullBathDynamics (CentralSpinExp_cluster):
 				'outcome': ms,
 			}
 		
-		return ms
+		return ms, sig.real
+
+
+	def Ramsey_plot (self, tau, phi=0):
+		sig = 1
+
+		U_in = [self._U_op_int(0, tau), self._U_op_int(1, tau)]
+		U0 = np.multiply(np.exp(-complex(0,1)*phi/2), U_in[0])
+		U1 = np.multiply(np.exp(complex(0,1)*phi/2), U_in[1])
+		sig = np.trace(U0.dot(self._curr_rho.dot(U1.conj().T)))
+
+		return sig
+
 
 	def FreeEvo (self, ms, tau):
+
+		'''
+		Simulate free evolution and update current density matrix.
+
+		Input: 
+		ms   [int]  : Ramsey result prior to free evolution
+		tau  [s]	: free evolution time
+
+		'''
 		
 		#Propagate sub density matrices based on Ramsey result. Then calculate full density matrix
 		U = self._U_op_int(ms, tau)
@@ -1539,9 +1617,6 @@ class FullBathDynamics (CentralSpinExp_cluster):
 
 		ms = float('nan') #mt.nan
 		self.msArr.append(ms)
-		
-		#now = time.time()
-		#print 'Ram', now-program_starts
 		
 		# update evolution dictionary
 		self._curr_step += 1
@@ -1556,6 +1631,7 @@ class FullBathDynamics (CentralSpinExp_cluster):
 				'prob_Az': pd[1],
 				'outcome': ms,
 			}
+
 
 	def dynamical_decoupling_errors (self, tauarr, nr_pulses = 8, nr_errors = 1, rate = .1, t_error = 1e-6):
 		'''
@@ -1621,13 +1697,6 @@ class FullBathDynamics (CentralSpinExp_cluster):
 				
 			DD_signal_noerr.append(sig_noerr.real)
 			DD_signal.append(sig.real)
-	
-#		plt.figure (figsize=(10,5))
-#		plt.plot (tauarr, DD_signal_noerr, 'Red', label='Error free')
-#		plt.plot (tauarr, DD_signal, 'Blue', label='With errors')
-#		plt.legend(fontsize=15)
-#		plt.title ('DD signal')
-#		plt.show()
 
 		return DD_signal_noerr, DD_signal
 
@@ -1687,53 +1756,6 @@ class FullBathDynamics (CentralSpinExp_cluster):
 			plt.plot(DD_signal)
 			plt.show()
 
-#		peaks, _ = find_peaks(1-np.array(DD_signal), height=.25)
-#		
-#		terrorlist = np.array([tauarr[rand.sample(range(len(tauarr)), nr_errors)] for j in range(nr_pulses)])#tauarr[peaks]
-#		pran = [ran.choice(range(8), size=1, p=.125*np.ones(8))[0] for j in range(nr_pulses)]
-#		
-#		count = 0
-#		
-#		for t in range(len(tauarr)):
-#
-#			sig = 1
-#
-#			for s in range(self._nr_nucl_spins):
-#			
-#				U0tilde = np.eye(2)
-#				U1tilde = np.eye(2)
-#			
-#				for j in range(nr_pulses):
-#			
-#					if tauarr[t] in terrorlist[j] :
-#						
-#						U0e = [np.multiply((pran[j]==k),self._U_op_int(0, 2*(tauarr[t]+t_error)))+np.multiply((pran[j]!=k),U0[t]) for k in range(8)]
-#						U1e = [np.multiply((pran[j]==k),self._U_op_int(1, 2*(tauarr[t]+t_error)))+np.multiply((pran[j]!=k),U1[t]) for k in range(8)]
-#						U0es = [np.multiply((pran[j]==k),self._U_op_int(0, tauarr[t]+t_error))+np.multiply((pran[j]!=k),U0s[t]) for k in range(8)]
-#						U1es = [np.multiply((pran[j]==k),self._U_op_int(1, tauarr[t]+t_error))+np.multiply((pran[j]!=k),U1s[t]) for k in range(8)]
-#					
-#						#U0ene = U0[t]
-#						#U1ene = U1[t]
-#						#U0esne = U0s[t]
-#						#U1ezne = U1s[t]
-#					
-#						U0tilde = U0tilde.dot(U0e[0][s].dot(U1e[1][s]).dot(U0e[2][s]).dot(U1e[3][s]).dot(U0e[4][s]).dot(U1e[5][s]).dot(U0e[6][s]).dot(U1e[7][s]))
-#						U1tilde = U1tilde.dot(U1e[0][s].dot(U0e[1][s]).dot(U1e[2][s]).dot(U0e[3][s]).dot(U1e[4][s]).dot(U0e[5][s]).dot(U1e[6][s]).dot(U0e[7][s]))
-#						
-#					else:
-#					
-#						U0e = U0[t]
-#						U1e = U1[t]
-#						U0es = U0s[t]
-#						U1es = U1s[t]
-#							
-#						U0tilde = U0tilde.dot(U0e[s].dot(U1e[s]).dot(U0e[s]).dot(U1e[s]).dot(U0e[s]).dot(U1e[s]).dot(U0e[s]).dot(U1e[s]))
-#						U1tilde = U1tilde.dot(U1e[s].dot(U0e[s]).dot(U1e[s]).dot(U0e[s]).dot(U1e[s]).dot(U0e[s]).dot(U1e[s]).dot(U0e[s]))
-#
-#				sig *= .5*np.trace(U1tilde.dot(U0tilde.conj().T))
-#
-#			DD_signal_error.append((1+sig)/2)
-
 		
 		
 		plt.figure (figsize=(10,5))
@@ -1756,6 +1778,7 @@ class FullBathDynamics (CentralSpinExp_cluster):
 		
 		return SD
 
+
 	def _op_mean(self, Op):
 		'''
 		Calculates the mean of operator Op with density matric rho
@@ -1776,36 +1799,17 @@ class FullBathDynamics (CentralSpinExp_cluster):
 		Does not admit clustering due to sum over different clusters having different dimensions
 		
 		Output:
-		self._over_op  [list] :  list of Overhauser operator Cartesian components
+		self.over_op  [list] :  list of Overhauser operator Cartesian components
 		
 		'''
 
-		self._over_op = []
+		over_op = []
 		B = (self.gam_n/(2*np.pi))*np.array([self.Bx,self.By,self.Bz])
 		
 		for j in range(3):
-			self._over_op.append(sum(self.HFvec[k][j]*self.In_tens[k][j] for k in range(self._nr_nucl_spins)))
+			over_op.append(sum(self.HFvec[k][j]*self.In_tens[k][j] for k in range(self._nr_nucl_spins)))
 		
-		return self._over_op
-		
-	def _overhauser_op_test(self):
-		
-		'''
-		Creates Overhauser operator for updating probability distribution.
-		Does not admit clustering due to sum over different clusters having different dimensions
-		
-		Output:
-		self._over_op  [list] :  list of Overhauser operator Cartesian components
-		
-		'''
-
-		self._over_op = []
-		B = (self.gam_n/(2*np.pi))*np.array([self.Bx,self.By,self.Bz])
-		
-		for j in range(3):
-			self._over_op.append(sum((B[j]+self.HFvec[k][j])*self.In_tens[k][j] for k in range(self._nr_nucl_spins)))
-		
-		return self._over_op
+		return over_op
 
 
 	def get_probability_density(self):
@@ -1818,11 +1822,9 @@ class FullBathDynamics (CentralSpinExp_cluster):
 		eigvals       [kHz]: sorted Az list
 		eigvec_prob        : Tr(|Az><Az| rho) list sorted according to Az list
 		
-		Note:
-		I believe this is what's being shown in Fig.1 of DOI: 10.1103/PhysRevA.74.032316, although they start from a Gaussian distribution. Discuss.
 		'''
 		
-		eigvals, eigvecs = np.linalg.eig(self._overhauser_op()[2])
+		eigvals, eigvecs = np.linalg.eig(self.over_op[2])
 		eigvecs = [x for (y,x) in sorted(zip(eigvals,eigvecs), key=lambda pair: pair[0], reverse=True)]
 		eigval_prob = multiply((2*np.sqrt(np.pi))**-1 * 1e-3, sorted(eigvals))#multiply((2*np.pi)**-1 * 1e-3, sorted(eigvals))
 		
@@ -1836,25 +1838,17 @@ class FullBathDynamics (CentralSpinExp_cluster):
 
 
 		return eigval_prob, eigvec_prob
+
 		
 	def get_values_Az (self):
 		return self.values_Az_kHz
+
 
 	def get_histogram_Az (self, nbins = 50):
 		hist, bin_edges = np.histogram (self.get_values_Az(), nbins)
 		bin_ctrs = 0.5*(bin_edges[1:]+bin_edges[:-1])
 		return hist, bin_ctrs
-		
-	def plot_curr_probability_density (self, title = ''):
-		az, pd = np.real(self.get_probability_density())
 
-		plt.figure (figsize = (10,6))
-		plt.plot (az, pd, 'o', color = 'RoyalBlue')
-		plt.xlabel ('(kHz)', fontsize = 18)
-		plt.xlabel ('frequency hyperfine (kHz)', fontsize=18)
-		plt.ylabel ('probability', fontsize=18)
-		plt.title (title, fontsize=18)
-		plt.show()
 
 	def get_overhauser_stat (self, component=None):
 		'''
@@ -1864,23 +1858,23 @@ class FullBathDynamics (CentralSpinExp_cluster):
 		component [int]: 1,2,3
 
 		Output:
-		mean, standard_deviation [int]
+		m, s [int] : mean and standard deviation
 		'''
 
 		if component in [0,1,2]:
-			return self._op_mean(self._overhauser_op()[component]), self._op_sd(self._overhauser_op()[component])
+			return self._op_mean(self.over_op[component]), self._op_sd(self.over_op[component])
 
 		else:
 			m = np.zeros(3)
 			s = np.zeros(3)
 			for j in range(3):
-				m[j] = np.real(self._op_mean(self._overhauser_op()[j]))
-				s[j] = np.real(self._op_sd(self._overhauser_op()[j]))
+				m[j] = np.real(self._op_mean(self.over_op[j]))
+				s[j] = np.real(self._op_sd(self.over_op[j]))
 
 			return m, s
 
 
-	def plot_bath_evolution (self):
+	def plot_bath_evolution (self, folder_extension, rep):
 
 		if self._store_evol_dict:
 
@@ -1893,16 +1887,14 @@ class FullBathDynamics (CentralSpinExp_cluster):
 			M = np.zeros ([len(y), self._curr_step+1])
 
 			for j in range(self._curr_step+1):
-				M [:, j] = np.ndarray.transpose(self._evol_dict[str(j)]['prob_Az'])
+				M [:, j] = np.ndarray.transpose(self._evol_dict[str(j)]['prob_Az']/max(self._evol_dict[str(j)]['prob_Az']))
 
-			plt.figure (figsize = (15, 8));
-			plt.pcolor (X, Y, M)
-			plt.xlabel ('step number', fontsize=22)
-			plt.ylabel ('Az (kHz)', fontsize=22)
-			for j in y:
-				plt.axhline(j,c='r',alpha=0.1,ls=':')
-			plt.colorbar(orientation='vertical')
-			plt.show()
+
+			if do_save:
+			 	plt.savefig(self._work_folder+time.strftime ('%Y%m%d_%H%M%S')+str(self._curr_step)+'.png')
+			 	plt.close()
+			if do_plot:
+				plt.show()
 
 		else:
 
