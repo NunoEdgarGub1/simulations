@@ -21,7 +21,7 @@ class TimeSequence ():
 		self.nr_time_steps = nr_time_steps
 		self.plot_idx = 0
 
-	def set_msmnt_params (self, G, F, N=6, tau0=20e-9, t_read=10e-6, T2 = 1e-6, fid0=0.88, fid1=1.):
+	def set_msmnt_params (self, G, F, N=6, tau0=20e-9, T2 = 1e-6, fid0=0.88, fid1=1.):
 
 		'''
 		Set measurement parameters
@@ -38,22 +38,22 @@ class TimeSequence ():
 		# Experimental parameters
 		self.N = N
 		self.tau0 = tau0
-		self.t_read = t_read
 		self.T2 = T2
 		self.fid0 = fid0
 		self.fid1 = fid1
 		self.F = F
 		self.G = G
 		self.K = N-1
-		self.conv = False
 
 		# Quantities required for computation (ex: discretization space)
 		self.points = 2**(self.N+1)+3
 		self.discr_steps = 2*self.points+1
-		self.fB_max = 1./(tau0)
+		self.fB_max = 1./(2*tau0)
 		self.n_points = 2**(self.N+1)
-		self.beta = np.linspace (-self.fB_max, self.fB_max, self.discr_steps)
+		self.beta = np.linspace (-self.fB_max, self.fB_max, self.n_points+1)
+		self.beta = self.beta[:-1]
 		self.init_apriori()
+
 
 	def set_magnetic_field (self, fB0, dfB):
 		self.fB = np.zeros (self.nr_time_steps)
@@ -71,35 +71,8 @@ class TimeSequence ():
 		#p_k is the probability distribution in Fourier space
 		self.p_k = np.zeros (self.discr_steps)+1j*np.zeros (self.discr_steps)
 		self.p_k[self.points] = 1/(2.*np.pi)
-	
-	def conv_circ(self, signal1, signal2):
 
-		'''
-		test circular convolution
-		
-		'''
-		conv = np.real(np.fft.ifft( np.fft.fft(signal1)*np.fft.fft(signal2) ))
-    
-		return np.roll(conv,int(len(conv)/2))
-	
-	def bayesian_diffuse(self, T2_est = 1e-3, tf = 1e-3):
-
-		df = self.beta[-1]-self.beta[-2]
-		tau_arr = np.linspace(0,tf,self.discr_steps)
-		
-		Hahn = np.exp(-(2*tau_arr/T2_est)**3)
-		Hahn_FT = np.fft.fft(Hahn)
-		
-		Hahn_kspace = np.fft.fftshift(np.fft.fft(Hahn_FT, self.discr_steps))
-	
-		p = np.copy(self.p_k)
-		p *= Hahn_kspace
-		p = (p/np.sum(np.abs(p)**2)**0.5)
-		self.p_k = p/(2*np.pi*np.real(p[self.points]))
-		print('CONVOLVED', T2_est)
-		self.conv = True
-	
-	def bayesian_update(self, m_n, phase_n, t_n, T2_track = False, T2_est = 1e-3, tf = 1e-3, repetition = None, do_plot=False, free_evo=False, c_sig = False):
+	def bayesian_update(self, m_n, phase_n, t_n,repetition = None, do_plot=False):
 
 		'''
 		Performs the Bayesian update in Fourier space
@@ -110,70 +83,50 @@ class TimeSequence ():
 
 		do_plot [bool]		DEBUG: plot probability distribution before and after Bayesian update
 		'''
-		
+
 		if do_plot:
 			y_old, b_mean = self.return_p_fB()
 			y_old = y_old/np.sum(y_old)
 			m_old = max(y_old)
-		
-		if free_evo:
-			if m_n==0:
-				self.bayesian_diffuse(T2_est = T2_est, tf = tf)
 
-		else:
-			self.conv = False
-			p_old = np.copy(self.p_k)
-			
-			if c_sig:
-				p0 = p_old*((1-m_n)-((-1)**m_n)*(self.fid0+1.-self.fid1)/2.)
-				p1 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(1j*(phase_n))*np.roll(p_old, shift = -t_n))
-				p2 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(-1j*(phase_n))*np.roll(p_old, shift = +t_n))
-			
-			else:
-				p0 = p_old*.5*(1 + ((-1)**m_n)*(self.fid0-self.fid1))
-				p1 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(1j*(np.pi+phase_n))*np.roll(p_old, shift = -t_n))
-				p2 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(-1j*(np.pi+phase_n))*np.roll(p_old, shift = +t_n))
-			
-			p = p0+p1+p2
-			p = (p/np.sum(np.abs(p)**2)**0.5)
-			p = p/(2*np.pi*np.real(p[self.points]))
-			self.p_k = np.copy (p)
+		p_old = np.copy(self.p_k)
+		p0 = p_old*((1-m_n)-((-1)**m_n)*(self.fid0+1.-self.fid1)/2.) 
+		p1 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(1j*(phase_n))*np.roll(p_old, shift = -t_n)) 
+		p2 = ((-1)**m_n)*(self.fid0-1.+self.fid1)*0.25*(np.exp(-1j*(phase_n))*np.roll(p_old, shift = +t_n)) 
+		p = p0+p1+p2
+		p = (p/np.sum(np.abs(p)**2)**0.5)
+		p = p/(2*np.pi*np.real(p[self.points]))
+		self.p_k = np.copy (p)
 
-			if do_plot:
+		if do_plot:
 
-				p0 = 0.5-0.5*np.cos(2*np.pi*self.beta*t_n*self.tau0+phase_n)
-				p1 = 0.5+0.5*np.cos(2*np.pi*self.beta*t_n*self.tau0+phase_n)
+			p0 = 0.5-0.5*np.cos(2*np.pi*self.beta*t_n*self.tau0+phase_n)
+			p1 = 0.5+0.5*np.cos(2*np.pi*self.beta*t_n*self.tau0+phase_n)
+			cb_min = np.min(self.curr_fB_array)
+			cb_max = np.max(self.curr_fB_array)
 
-				try:
-					cb_min = np.min(self.curr_fB_array)
-					cb_max = np.max(self.curr_fB_array)
-					fom = self.figure_of_merit()
-				except:
-					pass
+			fom = self.figure_of_merit()
+			y, b_mean = self.return_p_fB()
+			y = y/np.sum(y)
+			m = max(y)
 
-				y, b_mean = self.return_p_fB()
-				y = y/np.sum(y)
-				m = max(y)
+			massimo = max([m_old, m])
 
-				massimo = max([m_old, m])
+			fig = plt.figure(figsize = (10,4))
+			plt.plot (self.beta*1e-6, y_old, '--', color='dimgray', linewidth = 2)
+			plt.axvspan (cb_min*1e-6, cb_max*1e-6, alpha=0.5, color='green')
+			plt.plot (self.beta*1e-6, y, 'k', linewidth=4)
+			plt.fill_between (self.beta*1e-6, 0, massimo*p0/max(p0), color='crimson', alpha = 0.15)
+			plt.fill_between (self.beta*1e-6, 0, massimo*p1/max(p1), color='RoyalBlue', alpha = 0.15)
+			plt.axis([b_mean*1e-6-0.5,b_mean*1e-6+0.5, 0, massimo*1.1])
+			plt.title ('Bayesian update, res = '+str(m_n)+' -- fom (red-curve): '+str(int(fom)), fontsize=15)
+			#fig.savefig ('D:/Research/WorkData/adptv_tracking_sim/figure_protocollo/'+str(self.plot_idx)+'_bayesian_update.svg', dpi=20)
+			#fig.savefig ('D:/Research/WorkData/adptv_tracking_sim/figure_protocollo/'+str(self.plot_idx)+'_bayesian_update.png', dpi=50)
+			self.plot_idx += 1
+			plt.show()
 
-				fig = plt.figure(figsize = (10,4))
-				plt.plot (self.beta*1e-6, y_old, '--', color='dimgray', linewidth = 2)
-				try:
-					plt.axvspan (cb_min*1e-6, cb_max*1e-6, alpha=0.5, color='green')
-				except:
-					pass
-				plt.plot (self.beta*1e-6, y, 'k', linewidth=4)
-				plt.fill_between (self.beta*1e-6, 0, massimo*p0/max(p0), color='crimson', alpha = 0.15)
-				plt.fill_between (self.beta*1e-6, 0, massimo*p1/max(p1), color='RoyalBlue', alpha = 0.15)
-				plt.axis([b_mean*1e-6-0.5,b_mean*1e-6+0.5, 0, massimo*1.1])
-				plt.title ('Bayesian update, res = '+str(m_n)+' -- fom (red-curve): '+str(int(fom)), fontsize=15)
-				#fig.savefig ('D:/Research/WorkData/adptv_tracking_sim/figure_protocollo/'+str(self.plot_idx)+'_bayesian_update.svg', dpi=20)
-				#fig.savefig ('D:/Research/WorkData/adptv_tracking_sim/figure_protocollo/'+str(self.plot_idx)+'_bayesian_update.png', dpi=50)
-				self.plot_idx += 1
-				plt.show()
 
-	def return_p_fB (self, T2_track = False, T2_est = 1e-3, free_evo = False, tf = 1e-3):
+	def return_p_fB (self):
 
 		'''
 		Returns probability distribution in real space
@@ -183,19 +136,17 @@ class TimeSequence ():
 		m 		[float]		average value of probability distribution
 		'''
 
-		############## Shouldn't this be ifft???
-		y = np.fft.fftshift(np.abs(np.fft.fft(self.p_k, self.discr_steps))**2)
-		
+		self.renorm_p_k()
+		y = np.fft.fftshift(np.abs(np.fft.fft(self.p_k, self.n_points))**2)
 		p_fB = y/np.sum(np.abs(y))
 		m = np.sum(self.beta*p_fB)
 		return p_fB, m
 
 	def renorm_p_k (self):
-		# self.p_k = self.p_k/(np.sum(np.abs(self.p_k)**2)**0.5)
-		# self.p_k = self.p_k/(2*np.pi*np.real(self.p_k[self.points]))
-		self.p_k = self.p_k/(2*np.pi*np.sum(np.abs(self.p_k)**2)**0.5)
+		self.p_k=self.p_k/(np.sum(np.abs(self.p_k)**2)**0.5)
+		self.p_k = self.p_k/(2*np.pi*np.real(self.p_k[self.points]))
 
-	def return_std (self, verbose=False):
+	def return_std (self, do_print=False):
 
 		'''
 		Returns:
@@ -204,11 +155,10 @@ class TimeSequence ():
 		'''
 
 		self.renorm_p_k()
-		print ("|p_(-1)| = ", np.abs(self.p_k[self.points-1]))
-		Hvar = (np.abs(self.p_k[self.points-1]))**(-2)-1
+		Hvar = (2*np.pi*np.abs(self.p_k[self.points-1]))**(-2)-1
 		std_H = ((Hvar**0.5)/(2*np.pi*self.tau0))
 		fom = self.figure_of_merit()
-		if verbose:
+		if do_print:
 			print ("Std (Holevo): ", std_H*1e-3 , ' kHz --- fom = ', fom)
 		return  std_H, fom
 
@@ -233,7 +183,6 @@ class TimeSequence ():
 		'''
 
 		prob, m = self.return_p_fB()
-		print ("Mean: ", m)
 
 		plt.figure(figsize=(20,5))
 		plt.plot (self.beta*1e-6, prob, 'royalblue', linewidth = 3)
@@ -358,7 +307,7 @@ class TimeSequence_overhead (TimeSequence):
 				self.bayesian_update (m_n = m_res, phase_n = phase, t_n = 2**k)
 
 		if do_debug:
-			self.plot_probability_distr(zoom=True)
+			self.plot_probability_distr(zoom=False)
 
 	def ramsey (self, t=0., theta=0.):
 
@@ -377,9 +326,8 @@ class TimeSequence_overhead (TimeSequence):
 		A = 0.5*(self.fid0 + 1.-self.fid1)
 		B = 0.5*(1.-self.fid1 - self.fid0)		
 
-		Bp = np.exp(-(t/self.T2)**2)*np.cos(self.curr_acc_phase+theta)
-		p0 = (1-A)-B*Bp
-		p1 = A+B*Bp
+		p0 = (1-A)-B*np.exp(-(t/self.T2)**2)*np.cos(self.curr_acc_phase+theta)
+		p1 = A+B*np.exp(-(t/self.T2)**2)*np.cos(self.curr_acc_phase+theta)
 		np.random.seed()
 		result = np.random.choice (2, 1, p=[p0, p1])
 		return result[0]	
@@ -619,7 +567,6 @@ class TimeSequence_overhead (TimeSequence):
 
 
 	def simulate(self, track, do_save = False, do_plot = False, kappa = None, do_debug=False):
-	
 		self.k_array = self.K-np.arange(self.K+1)
 		self.init_apriori ()
 

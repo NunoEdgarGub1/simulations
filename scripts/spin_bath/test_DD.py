@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from importlib import reload
-sys.path.append (folder)
+import sys
 from simulations.libs.spin import nuclear_spin_bath as NBath
 reload (NBath)
 
@@ -23,20 +23,21 @@ print ("------- CLUSTER SIZE: ", clus_size)
 exp.generate_bath (concentration = 0.011, name = 'bath1')
 #exp.print_nuclear_spins()
 
-for B in [1, 100, 400, 1000, 5000]:
+for B in [400]:
     exp.set_thresholds (A = 500e3, sparse = 10)
     exp.set_magnetic_field (Bz=B*1e-4, Bx=0)
     print ("------- MAGNETIC FIELD: ", B, " gauss")
     #exp.FID_indep_Nspins (tau = np.linspace (0, 30e-6, 1000))
 
     tau_max= 5.e-3
-    ind = exp.Hahn_echo_indep_Nspins (S1=1, S0=0, tau = np.linspace (0, tau_max, 100000), do_plot=False)
-    nr_points_hahn = 3
-    clus = exp.Hahn_echo (tau = np.linspace (0, tau_max, nr_points_hahn), phi = 0, do_plot = False)
+    ind = exp.dynamical_decoupling_indep_Nspins (S1=1, S0=0, tau = np.linspace (t0, t1, 10000), nr_pulses = 32)
+    #ind = exp.Hahn_echo_indep_Nspins (S1=1, S0=0, tau = np.linspace (0, tau_max, 100000), do_plot=False)
+    #nr_points_hahn = 3
+    #clus = exp.Hahn_echo (tau = np.linspace (0, tau_max, nr_points_hahn), phi = 0, do_plot = False)
 
     plt.figure (figsize = (15,8))
     plt.plot (1e6*np.linspace (0, tau_max, 100000), ind, color = 'crimson')
-    plt.plot (1e6*np.linspace (0, tau_max, nr_points_hahn), clus, color = 'royalblue')
+    #plt.plot (1e6*np.linspace (0, tau_max, nr_points_hahn), clus, color = 'royalblue')
     plt.show()
 
 
