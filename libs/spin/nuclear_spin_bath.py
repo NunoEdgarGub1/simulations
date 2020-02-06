@@ -237,32 +237,28 @@ class NSpinBath ():
 	        phi = np.asarray([phi_s for r_s,Ap_s,Ao_s,Axx_s,Ayy_s,Axy_s,Ayx_s,Axz_s,Ayz_s,Azx_s,Azy_s,x_s,y_s,z_s,theta_s,phi_s in zipped])    
 	    
 	    # here we choose the grid points that contain a carbon 13 spin
-	    Sel = []
-	    while(len(Sel)<N):
-	        lst_sel=[sel for sel in np.where(np.random.rand(int(L_size/2)) < conc)[0].tolist() if sel not in Sel]
-	        Sel+=lst_sel
-
-	    Sel = (np.array(Sel)[:N],)
-	    Ap_NV =[ Ap[u] for u in Sel]
-	    Ao_NV =[ Ao[u] for u in Sel]
-	    Axx_NV =[ Axx[u] for u in Sel]
-	    Ayy_NV =[ Ayy[u] for u in Sel]
-	    Axy_NV =[ Axy[u] for u in Sel]
-	    Ayx_NV =[ Ayx[u] for u in Sel]
-	    Axz_NV =[ Axz[u] for u in Sel]
-	    Ayz_NV =[ Ayz[u] for u in Sel]
-	    Azx_NV =[ Azx[u] for u in Sel]
-	    Azy_NV =[ Azy[u] for u in Sel]        
-	    x_NV = [ x[u] for u in Sel]
-	    y_NV = [ y[u] for u in Sel]
-	    z_NV = [ z[u] for u in Sel]          
-	    r_NV = [ r[u] for u in Sel]
-
-	    theta_NV = [ theta[u] for u in Sel]
-	    phi_NV = [ phi[u] for u in Sel]
-	    # NV_list.append(A_NV[0]) #index 0 is to get rid of outher brackets in A_NV0
-	    T2_h = sum(Ap_NV[0][u]**2 for u in range(len(Ap_NV[0])))**-0.5
-	    T2_l = sum(Ap_NV[0][u]**2 + Ao_NV[0][u]**2 for u in range(len(Ap_NV[0])))**-0.5
+	    for p in range(N):
+	        Sel = np.where(np.random.rand(int(L_size/2)) < conc)
+	        Ap_NV =[ Ap[u] for u in Sel]
+	        Ao_NV =[ Ao[u] for u in Sel]
+	        Axx_NV =[ Axx[u] for u in Sel]
+	        Ayy_NV =[ Ayy[u] for u in Sel]
+	        Axy_NV =[ Axy[u] for u in Sel]
+	        Ayx_NV =[ Ayx[u] for u in Sel]
+	        Axz_NV =[ Axz[u] for u in Sel]
+	        Ayz_NV =[ Ayz[u] for u in Sel]
+	        Azx_NV =[ Azx[u] for u in Sel]
+	        Azy_NV =[ Azy[u] for u in Sel]        
+	        x_NV = [ x[u] for u in Sel]
+	        y_NV = [ y[u] for u in Sel]
+	        z_NV = [ z[u] for u in Sel]          
+	        r_NV = [ r[u] for u in Sel]
+	        
+	        theta_NV = [ theta[u] for u in Sel]
+	        phi_NV = [ phi[u] for u in Sel]
+	        # NV_list.append(A_NV[0]) #index 0 is to get rid of outher brackets in A_NV0
+	        T2_h = sum(Ap_NV[0][u]**2 for u in range(len(Ap_NV[0])))**-0.5
+	        T2_l = sum(Ap_NV[0][u]**2 + Ao_NV[0][u]**2 for u in range(len(Ap_NV[0])))**-0.5
 	
 	    self._nr_nucl_spins = len(Ap_NV[0])
 	    self.log.info ("Created "+str(self._nr_nucl_spins)+" nuclear spins in the lattice.")
